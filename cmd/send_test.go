@@ -20,10 +20,7 @@ const (
 	sendCmd     = "send"
 	sentAt      = 1790000000000
 	aliceNumber = "+15550101"
-	aliceACI    = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
-	bobACI      = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
 	carolACI    = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
-	testGroupID = "Z3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXA="
 )
 
 var errUnreachable = errors.New("recipient unreachable")
@@ -38,7 +35,7 @@ func sendFake() *signaltest.Fake {
 			{ACI: bobACI, Username: "bob.42"},
 		},
 		Groups: map[string][]signal.Recipient{
-			testGroupID: {{ACI: testAccount().ACI}, {ACI: aliceACI}, {ACI: carolACI}},
+			groupID: {{ACI: testAccount().ACI}, {ACI: aliceACI}, {ACI: carolACI}},
 		},
 	}
 }
@@ -77,7 +74,7 @@ func runSend(t *testing.T, fake *signaltest.Fake, stdin string, args ...string) 
 func TestSend(t *testing.T) {
 	t.Parallel()
 
-	args := []string{sendCmd, aliceNumber, "@bob.42", app.SelfRecipient, "-m", "hello", "--group", testGroupID}
+	args := []string{sendCmd, aliceNumber, "@bob.42", app.SelfRecipient, "-m", "hello", "--group", groupID}
 
 	for _, format := range []string{"plain", "json"} {
 		t.Run(format, func(t *testing.T) {
@@ -93,7 +90,7 @@ func TestSend(t *testing.T) {
 			golden(t, "send_"+format, out)
 
 			sent := fake.Sent()
-			if len(sent) != 2 || sent[0].Body != "hello" || sent[1].GroupID != testGroupID {
+			if len(sent) != 2 || sent[0].Body != "hello" || sent[1].GroupID != groupID {
 				t.Errorf("sent %+v", sent)
 			}
 		})
@@ -113,7 +110,7 @@ func TestSendPartialFailure(t *testing.T) {
 			unknown := app.GroupPrefix + strings.Repeat("A", 43) + "="
 
 			out, err := runSend(t, fake, "", "-o", format, sendCmd, "-m", "hello",
-				aliceNumber, "@bob.42", app.GroupPrefix+testGroupID, unknown)
+				aliceNumber, "@bob.42", app.GroupPrefix+groupID, unknown)
 			if !errors.Is(err, app.ErrSendFailed) {
 				t.Fatalf("got %v, want ErrSendFailed", err)
 			}

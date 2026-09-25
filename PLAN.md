@@ -372,13 +372,33 @@ requests are queued, which also blocks responses to our requests (like CDSI cred
 
 #### 3.3 Send: text
 
-- [ ] `send <recipient>... -m <text>` to one or more contacts
-- [ ] `--stdin` reads the body from stdin
-- [ ] `--group <id>` sends to a group (sender keys via signalmeow)
-- [ ] Note-to-self and sync-sent transcript to our other devices
-- [ ] Output: timestamp per recipient, per-recipient success/failure; non-zero exit if any failed
+- [x] `send <recipient>... -m <text>` to one or more contacts (`app.Send`: parses and resolves all
+      recipients first; if one is invalid or not on Signal, nothing is sent. One timestamp for all
+      recipients; `app.WithClock`/`cmd.WithClock` fix it in tests)
+- [x] `--stdin` reads the body from stdin (trailing newlines stripped; excludes `-m`; an empty
+      body fails with `app.ErrEmptyMessage`)
+- [x] `--group <id>` sends to a group (sender keys via signalmeow) (repeatable; `group:<id>`
+      arguments work too; `SendGroupMessage`, and a group we have no master key for fails with
+      `signal.ErrUnknownGroup`)
+- [x] Note-to-self and sync-sent transcript to our other devices (signalmeow sends the
+      `SyncMessage.Sent` transcript after every send; a note-to-self is only that transcript, as
+      in signal-cli; our profile key goes into every data message)
+- [x] Output: timestamp per recipient, per-recipient success/failure; non-zero exit if any failed
+      (plain table RECIPIENT/TIMESTAMP/STATUS/DETAILS, JSON `send` document in `docs/json.md`;
+      group members are listed per group, and a failed member counts as a failure. Results are
+      printed first, then `app.ErrSendFailed` gives exit 1; an unlinked device gives exit 3)
 
-**Done when:** text arrives on the phone for 1:1, group and note-to-self sends.
+**Done when:** text arrives on the phone for 1:1, group and note-to-self sends. (Done with the fake
+and unit tests; not yet verified against the live server.)
+
+Notes: `send` connects with `signal.SendOnly()` (`Connect` takes `ConnectOption`s). In that mode
+the handler returns false for every incoming event, so the envelope stays on the server (signalmeow
+keeps the decrypted plaintext in its buffer) and comes with the next `receive`, and the websocket
+read loop never blocks (the 256-request stall from 3.2). Connection events are only recorded; a
+connection lost for good fails the next `Send`. signalmeow logs each deferred envelope as an error,
+which the log bridge demotes to debug. Open: messages carry no disappearing-message timer
+(`ExpireTimer`) because we don't track it per chat yet; untested whether the phone handles
+same-timestamp sync transcripts across several chats well.
 
 #### 3.4 Send: rich content
 
