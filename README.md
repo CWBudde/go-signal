@@ -41,6 +41,10 @@ Logs are written to stderr. Stdout is reserved for command output.
 | 0    | Success                                                                                   |
 | 1    | Any other error                                                                           |
 | 3    | This device was unlinked from the account (e.g. on the phone): delete its data and relink |
+| 130  | Forced exit by a second SIGINT (143 for SIGTERM) while shutting down                      |
+
+The first SIGINT/SIGTERM (Ctrl-C) shuts down gracefully: `receive --follow` stops, acknowledges the
+messages it has printed and exits with 0. A second signal exits right away.
 
 After an unlink is detected, the account is marked as unlinked and later commands fail with code 3
 right away. `go-signal account unlink --yes` then deletes the local data, and `go-signal link`

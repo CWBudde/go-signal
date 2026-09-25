@@ -21,14 +21,17 @@ type Client interface {
 	Account(ctx context.Context) (Account, error)
 
 	// Connect starts receiving for the selected account. Events are delivered on Events until
-	// Close. Connection changes arrive there as *Connection events. When the server logs the
+	// Close. Connection changes arrive there as *Connection events; the client reconnects on its
+	// own and reports StateFailed once it gives up. The connection outlives ctx (it only bounds
+	// the setup), so that Close can shut it down gracefully. When the server logs the
 	// device out (it was unlinked on the phone), the account is marked as unlinked and a
 	// StateLoggedOut event carries UnlinkedError. On an account already marked, Connect fails
 	// with it right away, without contacting the server.
 	Connect(ctx context.Context) error
 
-	// Events returns the channel of incoming events. It is closed by Close. An event counts as
-	// handled (and is acked to the server) once it has been read from the channel.
+	// Events returns the channel of incoming events. It is unbuffered and closed by Close. An
+	// event counts as handled (and is acked to the server) once it has been read from the
+	// channel; events not read before Close are delivered again next time.
 	Events() <-chan Event
 
 	// Send sends a message. Only valid after Connect.
@@ -47,7 +50,9 @@ type Client interface {
 	// accounts.json.
 	Unlink(ctx context.Context, opts UnlinkOptions) (Account, error)
 
-	// Close disconnects and releases the store.
+	// Close shuts down gracefully: it waits for in-flight sends (later ones fail with
+	// ErrClosed), makes sure the acks of events read from Events reach the server, disconnects
+	// and releases the store.
 	Close() error
 }
 

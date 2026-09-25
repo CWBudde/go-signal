@@ -11,6 +11,7 @@ import (
 	ossignal "os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -34,19 +35,74 @@ const (
 	// ExitUnlinked means the device was unlinked from the account (signal.ErrDeviceUnlinked):
 	// retrying won't help; delete the local data and link again.
 	ExitUnlinked = 3
+	// exitSignalBase + the signal number is the exit code after a forced exit (second signal).
+	exitSignalBase = 128
 )
 
 // Execute builds the command tree, runs it and exits with ExitCode of its error.
+// SIGINT/SIGTERM cancel the command's context so that it can shut down gracefully; a second
+// signal exits right away.
 func Execute() {
-	ctx, stop := ossignal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	sigs := make(chan os.Signal, 1)
+	ossignal.Notify(sigs, os.Interrupt, syscall.SIGTERM)
+
+	ctx, cancel := SignalContext(context.Background(), sigs, func(sig os.Signal) {
+		slog.Warn("forced exit", "signal", sig.String())
+		os.Exit(signalExitCode(sig))
+	})
 	err := NewRootCmd().ExecuteContext(ctx)
 
-	stop()
+	ossignal.Stop(sigs)
+	cancel()
 
 	if err != nil {
 		slog.Error("command failed", "error", err)
 		os.Exit(ExitCode(err))
 	}
+}
+
+// SignalContext returns a context that is cancelled by the first signal on sigs. The second
+// signal calls force, which is meant to exit the process when the graceful shutdown hangs. The
+// returned stop function cancels the context and stops watching sigs.
+func SignalContext(
+	parent context.Context, sigs <-chan os.Signal, force func(os.Signal),
+) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(parent)
+	stopped := make(chan struct{})
+
+	go func() {
+		select {
+		case sig := <-sigs:
+			slog.Debug("shutting down; signal again to force", "signal", sig.String())
+			cancel()
+		case <-stopped:
+			return
+		}
+
+		select {
+		case sig := <-sigs:
+			force(sig)
+		case <-stopped:
+		}
+	}()
+
+	var once sync.Once
+
+	return ctx, func() {
+		once.Do(func() {
+			cancel()
+			close(stopped)
+		})
+	}
+}
+
+// signalExitCode is the conventional exit code of a process killed by sig (130 for SIGINT).
+func signalExitCode(sig os.Signal) int {
+	if num, ok := sig.(syscall.Signal); ok {
+		return exitSignalBase + int(num)
+	}
+
+	return ExitFailure
 }
 
 // ExitCode maps the error of a command to the process exit code.

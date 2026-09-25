@@ -28,6 +28,9 @@ var ErrAccountInUse = store.ErrAccountInUse
 // ErrNotConnected is returned by operations that need Connect first.
 var ErrNotConnected = errors.New("client is not connected")
 
+// ErrClosed is returned by operations started after Close.
+var ErrClosed = errors.New("client is closed")
+
 // ErrNotImplemented marks facade operations that a later phase fills in.
 var ErrNotImplemented = errors.New("not implemented yet")
 

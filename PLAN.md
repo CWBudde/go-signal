@@ -15,15 +15,16 @@ Legend: `[x]` done · `[ ]` open
 
 ## 1. Decisions
 
-| Date       | Decision                                                                                                                            |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-09-25 | Crypto and protocol come from `go.mau.fi/mautrix-signal/pkg/signalmeow` + `libsignalgo` (CGO → `libsignal_ffi.a`). See §1.1.        |
-| 2026-09-25 | License: **AGPL-3.0** (required by signalmeow).                                                                                     |
-| 2026-09-25 | **No strict drop-in compatibility.** Idiomatic CLI (noun-verb subcommands, kebab-case), with our own documented JSON output.        |
-| 2026-09-25 | Priority: **plain CLI send/receive** first. The daemon/JSON-RPC is deferred.                                                        |
-| 2026-09-25 | **Linked device only.** Primary registration (`register`/`verify`) is deferred indefinitely.                                        |
-| 2026-09-25 | Pinned `go.mau.fi/mautrix-signal v0.2609.0`, which expects **libsignal `v0.102.2`**; `third_party/libsignal` is pinned to that tag. |
-| 2026-09-25 | **MCP server** (`go-signal mcp serve`) in the same binary, after contacts/groups and before release. See Phase 5.                   |
+| Date       | Decision                                                                                                                                                      |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-09-25 | Crypto and protocol come from `go.mau.fi/mautrix-signal/pkg/signalmeow` + `libsignalgo` (CGO → `libsignal_ffi.a`). See §1.1.                                  |
+| 2026-09-25 | License: **AGPL-3.0** (required by signalmeow).                                                                                                               |
+| 2026-09-25 | **No strict drop-in compatibility.** Idiomatic CLI (noun-verb subcommands, kebab-case), with our own documented JSON output.                                  |
+| 2026-09-25 | Priority: **plain CLI send/receive** first. The daemon/JSON-RPC is deferred.                                                                                  |
+| 2026-09-25 | **Linked device only.** Primary registration (`register`/`verify`) is deferred indefinitely.                                                                  |
+| 2026-09-25 | Pinned `go.mau.fi/mautrix-signal v0.2609.0`, which expects **libsignal `v0.102.2`**; `third_party/libsignal` is pinned to that tag.                           |
+| 2026-09-25 | **MCP server** (`go-signal mcp serve`) in the same binary, after contacts/groups and before release. See Phase 5.                                             |
+| 2026-09-25 | Later stage: **pure-Go backend** from a fork of `GoCodeAlone/libsignal-go` plus zkgroup/attestation/HPKE ports, behind a `purego` build tag. See Phases 7–10. |
 
 ### 1.1 Why signalmeow
 
@@ -64,7 +65,7 @@ Consequences:
   linking; we don't yet.
 - **Acks.** The handler's return value decides whether the envelope is acked, and acks go out
   asynchronously, so closing right after the handler returns can lose the ack. The spike sleeps
-  1 s; Phase 3.1 needs a proper drain.
+  1 s; Phase 3.1 needs a proper drain. (Done in 3.1: a keepalive round trip flushes the acks.)
 - **Gaps.** No QR refresh (the server drops the provisioning socket after ~60 s; the bridge
   reprovisions every 45 s). The DB file was created 0644 (fixed in Phase 2.2). Linking with
   `allowBackup=false` skips message history transfer.
@@ -210,8 +211,8 @@ tested.)
 with `CGO_ENABLED=0`. (Done; `link` verified up to the QR code against the live server.)
 
 Notes: the real client's handler blocks until the consumer reads the event from `Events()`, and
-only then acks the envelope, so unread events are redelivered next time. `Close` still waits 1 s
-for pending acks when anything was acked (Phase 3.1 replaces that). `-a` already selects by
+only then acks the envelope, so unread events are redelivered next time. `Close` drains the
+connection (Phase 3.1). `-a` already selects by
 number or ACI (`ErrAccountNotFound`); the multi-account rules followed in 2.3.
 
 #### 2.2 Data-dir layout and permissions
@@ -307,13 +308,35 @@ When signalmeow clears the credentials of a logged-out device, `account show` fa
 
 #### 3.1 Connection lifecycle
 
-- [ ] Root context cancelled on SIGINT/SIGTERM; second signal forces exit
-- [ ] Connect/disconnect in the facade with bounded retries and backoff for transient errors
-- [ ] Graceful shutdown: drain in-flight sends, ack received envelopes, close the db cleanly
-- [ ] `-v` logs connection state transitions via slog
+- [x] Root context cancelled on SIGINT/SIGTERM; second signal forces exit (`cmd.SignalContext`;
+      the forced exit uses code 128 + signal, e.g. 130 for SIGINT. An interrupted `receive` ends
+      normally with 0)
+- [x] Connect/disconnect in the facade with bounded retries and backoff for transient errors
+      (a `supervisor` watches the receive loops: signalmeow's websockets retry transient errors
+      themselves, 10 s growing to 1 min; after a fatal error such as an unexpected 4xx, the
+      supervisor restarts the loops on a fresh signalmeow client with exponential backoff, 2 s up to
+      1 min, and gives up after 5 failed attempts with a final `StateFailed` event wrapping
+      `signal.ErrConnectionFailed`)
+- [x] Graceful shutdown: drain in-flight sends, ack received envelopes, close the db cleanly
+      (`Close` refuses new sends (`ErrClosed`) and waits up to 5 s for running ones, stops handing
+      out events, flushes the acks with a `GET /v1/keepalive` round trip, then closes the
+      websockets and only then the database. The loops run on a context detached from the
+      command's, so Ctrl-C no longer cuts them mid-ack)
+- [x] `-v` logs connection state transitions via slog (`connection state` / `reconnecting` at
+      debug level)
 
 **Done when:** Ctrl-C during `receive --follow` exits within ~1 s without losing acked messages,
-and a dropped network connection is recovered automatically.
+and a dropped network connection is recovered automatically. (Done with the fake and unit tests
+for the supervisor; not yet verified against the live server.)
+
+Notes: `Events` is unbuffered now, so an event is only acked once the consumer took it; before,
+up to 64 buffered events were acked but lost on exit. A lost ack is harmless: signalmeow keeps
+the hash of every handled envelope in its event buffer and drops a redelivered one. The ack
+flush matters because signalmeow clears that buffer entry (a DB write) after the handler
+returns, on the loops' context, so closing too early caused duplicates. The keepalive response
+only proves that requests queued before it were written; an ack whose buffer update takes longer
+than the round trip could still miss it. signalmeow notices a silently dead connection only after
+5 failed pings (about 2.5 min). `receive --follow` (from 3.6) landed here for the Done-when test.
 
 #### 3.2 Recipient resolution
 
@@ -358,7 +381,7 @@ numbers give a clear "not on Signal" error.
 #### 3.6 Receive: modes
 
 - [ ] One-shot: drain queued messages, exit after `--timeout` of inactivity or `--max N` events
-- [ ] `--follow`: stream until cancelled
+- [x] `--follow`: stream until cancelled (landed with 3.1; `-f`, excludes `--timeout`)
 - [ ] Exit codes: 0 on normal end, distinct code for "unlinked" (from 2.5: `cmd.ExitUnlinked` = 3)
 
 **Done when:** `receive` works in cron (one-shot) and as a long-running process (`--follow`).
@@ -536,6 +559,211 @@ restriction each have tests that prove the rejection.
 
 **Done when:** a new user can install from a release and link + send by following the README.
 
+### Phase 7 — Pure-Go backend: forks and protocol core
+
+Phases 7–10 are a later stage: a pure-Go libsignal backend.
+
+Goal: build with `CGO_ENABLED=0`, so there's no Rust toolchain, no `libsignal_ffi.a` and no musl
+dance, and cross-compiling works like any other Go program. This starts after Phase 6. Until
+Phase 10 flips the default, the CGO backend stays the default and the reference.
+
+Starting point: [`GoCodeAlone/libsignal-go`](https://github.com/GoCodeAlone/libsignal-go) (AGPL-3.0,
+pure Go, wire-compatible with libsignal v0.96.4). It covers curve/XEdDSA, Kyber1024, PQXDH, the
+Double Ratchet, SPQR, sender keys, sealed sender v1/v2, AES-256-GCM-SIV, fingerprints, account keys
+and usernames. What signalmeow needs from `libsignalgo` but libsignal-go doesn't have
+(evaluated 2026-09-25):
+
+| Gap                                              | Upstream crate(s)                              | signalmeow uses it for                   |
+| ------------------------------------------------ | ---------------------------------------------- | ---------------------------------------- |
+| zkgroup (credentials, ciphertexts, endorsements) | `zkgroup`, `zkcredential`, `poksho` (~20k LOC) | groups v2, profiles, group send tokens   |
+| SGX attestation + Noise NK / NKhfs               | `attest` (`dcap`, `cds2`, `sgx_session`)       | contact discovery (`NewCDS2ClientState`) |
+| HPKE seal/open on identity keys                  | `protocol` (hpke)                              | our `hpke.go` (device creation time)     |
+| Delta v0.96.4 → our pinned v0.102.2              | all                                            | protocol changes since the fork's pin    |
+
+Integration seam: `libsignalgo` sits in the same Go module as `signalmeow`
+(`go.mau.fi/mautrix-signal`), so there's no way to swap it out from the outside. We'll use two
+forks. The first is `cwbudde/libsignal-go`, which gets the new implementations. The second is
+`cwbudde/mautrix-signal`, a thin fork whose **only** change is under `pkg/libsignalgo`: the
+existing CGO files get `//go:build !purego`, and new `//go:build purego` files implement the same
+exported API on top of libsignal-go. Keeping the mautrix fork to one package keeps rebases cheap,
+and the shim can be offered upstream later.
+
+#### 7.1 Fork and re-pin libsignal-go
+
+- [ ] Fork to `github.com/cwbudde/libsignal-go` and rename the module path (a `replace` directive
+      would break `go install` for users). Keep `GoCodeAlone` as the `upstream` remote and merge
+      from it regularly.
+- [ ] Re-pin its Rust compat harness (`compat/rust-harness`) from v0.96.4 to the libsignal tag in
+      `third_party/libsignal` (v0.102.2). Regenerate the vectors, then port whatever the drift
+      breaks.
+- [ ] Point the fork's `upstream-pin` workflow at _our_ pin (the version libsignalgo expects), not
+      at upstream's latest
+- [ ] Record the fork policy (what we change, how we merge from upstream) in the fork's
+      `decisions/`
+
+**Done when:** the fork's CI, including live Rust↔Go interop, is green against v0.102.2.
+
+#### 7.2 mautrix-signal fork and build tag
+
+- [ ] Fork to `github.com/cwbudde/mautrix-signal`, with a `purego` branch rebased on the tag we pin
+- [ ] Add `//go:build !purego` to every CGO file in `pkg/libsignalgo`, then add a
+      `libsignalgo_purego.go` skeleton that declares the full exported API (the ~124 symbols
+      signalmeow uses) returning `ErrNotImplemented`. With that, `go build -tags purego` compiles.
+- [ ] go-signal: a `just build-purego` recipe (`CGO_ENABLED=0 go build -tags purego`). Our own CGO
+      files (`internal/signal/libsignal.go`, `hpke.go`) get pure counterparts behind the same tag.
+- [ ] Decide how go-signal consumes the fork: always require the fork (simple; the CGO build uses
+      it too), or use a `replace` only in a purego build. Record the choice in §1.
+
+**Done when:** `CGO_ENABLED=0 go build -tags purego ./...` produces a binary, and the CGO build
+is unchanged.
+
+#### 7.3 Shim: protocol core onto libsignal-go
+
+- [ ] Keys and addresses: `PrivateKey`, `PublicKey`, `IdentityKey(Pair)`, `KyberKeyPair`,
+      `ServiceID`/`Address`, `GenerateRandomness`
+- [ ] Prekeys and records: `PreKeyRecord`, `SignedPreKeyRecord`, `KyberPreKeyRecord`,
+      `PreKeyBundle`, `SessionRecord`, `SenderKeyRecord`. The serialized forms must be
+      **byte-identical** to the CGO backend, so that one DB works with either backend.
+- [ ] Store interfaces (`SessionStore`, `IdentityKeyStore`, `PreKeyStore`, `SignedPreKeyStore`,
+      `KyberPreKeyStore`, `SenderKeyStore`) mapped onto libsignal-go's store interfaces, with no
+      callback trampolines
+- [ ] Session cipher (`Encrypt`, `Decrypt`, `DecryptPreKey`, `ProcessPreKeyBundle`), group cipher
+      and SKDM, sealed sender (`SealedSenderEncrypt`, `SealedSenderMultiRecipientEncrypt`,
+      `SealedSenderDecryptToUSMC`, `SenderCertificate`), `DecryptionErrorMessage`,
+      `PlaintextContent`
+- [ ] Account entropy pool, `BackupKey`/`BackupID`/`MessageBackupKey`, `AccessKey`, AES-GCM-SIV,
+      fingerprints
+- [ ] `InitLogger`/`Version` as thin stubs. `Version` reports the libsignal-go version and our pin.
+- [ ] Differential tests in go-signal (`cgo` build tag): run libsignal-go and the CGO libsignalgo
+      on the same inputs, and require equal serialized records and mutual decryptability in both
+      directions
+
+**Done when:** a purego build links a device and does 1:1 send/receive against the live server,
+and a DB created with the CGO build keeps working with the purego build (and the other way round).
+
+### Phase 8 — zkgroup in pure Go (in the libsignal-go fork)
+
+Port `poksho`, `zkcredential` and the client side of `zkgroup` at the pinned version. The APIs
+take explicit 32-byte `randomness`, so every step is deterministic and can be checked against
+vectors. Server-side issuance is ported too, **for tests only** (it lives in `internal/` or
+`_test` code), so that round-trips can run without Rust. Every subphase gets committed vectors
+from the Rust harness plus live interop: Go creates, Rust verifies, and the other way round.
+
+#### 8.1 poksho
+
+- [ ] SHO (`ShoHmacSha256`, `ShoSha256`), scalar/point helpers on `ristretto255`
+- [ ] Statement/proof engine (`statement.rs`, `proof.rs`), `sign`
+- [ ] Vectors from `rust/poksho` tests. Constant-time review of scalar handling.
+
+**Done when:** poksho proofs made in Go verify in Rust and the other way round.
+
+#### 8.2 zkgroup crypto layer
+
+- [ ] `uid_struct`/`uid_encryption`, `profile_key_struct`/`profile_key_encryption`,
+      `profile_key_commitment`, `timestamp_struct`
+- [ ] `credentials` (KVAC), `signature`, `proofs`, `profile_key_credential_request`
+- [ ] `zkcredential`: attributes, credentials, issuance, presentation, endorsements
+
+**Done when:** crypto-layer vectors match byte for byte.
+
+#### 8.3 zkgroup API: groups and profiles
+
+- [ ] `ServerPublicParams` (deserialize, `VerifySignature`, `NotarySignature`)
+- [ ] `GroupMasterKey` → `GroupSecretParams`/`GroupPublicParams`/`GroupIdentifier`,
+      `UUIDCiphertext` and `ProfileKeyCiphertext` encrypt/decrypt
+- [ ] `ProfileKey` (commitment, version, access key), `ProfileKeyCredentialRequestContext`,
+      `ExpiringProfileKeyCredential(Response)`, `ProfileKeyCredentialPresentation`
+- [ ] `AuthCredentialWithPni` (receive response, create presentation)
+
+**Done when:** a purego build lists groups (Phase 4.2) and fetches profiles against the live
+server.
+
+#### 8.4 Group send endorsements
+
+- [ ] `GroupSendEndorsementsResponse` (receive/verify), `GroupSendEndorsement` (combine, remove),
+      `GroupSendFullToken`, expiry handling
+- [ ] Shim wiring for multi-recipient sealed-sender group sends
+
+**Done when:** a purego build sends to a group using endorsements (no fallback to per-recipient
+sends).
+
+### Phase 9 — Enclaves, HPKE and the version delta
+
+#### 9.1 Noise
+
+- [ ] `Noise_NK_25519_ChaChaPoly_SHA256` and `Noise_NKhfs_25519+Kyber1024_ChaChaPoly_SHA256`
+      (hybrid forward secrecy with Kyber). Check whether an existing Go Noise library can be
+      extended for `hfs`; otherwise write a minimal handshake that only supports these two
+      patterns.
+- [ ] Vectors from libsignal's `snow`-based implementation (`attest/src/snow_resolver.rs`)
+
+**Done when:** Go↔Rust handshakes interoperate for both patterns.
+
+#### 9.2 SGX DCAP attestation
+
+- [ ] Quote v3 parsing, PCK certificate chain up to the pinned Intel SGX root CA, CRL checks
+- [ ] TCB info and QE identity verification, TCB status policy identical to `attest/src/dcap`
+- [ ] MRENCLAVE/config checks against the enclave constants of the pinned version, and evidence
+      expiry
+- [ ] Use upstream's recorded attestation blobs (`rust/attest/tests/data`) as positive **and**
+      negative vectors (tampered quote, expired collateral, wrong measurement)
+
+**Done when:** every upstream attestation test case gives the same accept/reject result in Go.
+
+#### 9.3 CDSI client state
+
+- [ ] `SGXClientState`/`CDS2ClientState`: initial request, `CompleteHandshake`,
+      `EstablishedSend`/`EstablishedRecv`, wired into the shim
+
+**Done when:** a purego build resolves a phone number through contact discovery (Phase 3.2).
+
+#### 9.4 HPKE and leftovers
+
+- [ ] HPKE seal/open with libsignal's suite (DHKEM-X25519, HKDF-SHA256, AES-256-GCM). Use the
+      standard library's `crypto/hpke` (Go 1.26) if it covers the suite; otherwise port it. This
+      replaces `hpke.go` in purego builds.
+- [ ] Sweep: any `libsignalgo` symbol still returning `ErrNotImplemented` gets implemented or
+      listed as a known gap in the fork's scope matrix
+
+**Done when:** `grep ErrNotImplemented` in the shim finds nothing, and `devices list` shows
+creation times in a purego build.
+
+### Phase 10 — Hardening and switch-over
+
+#### 10.1 CI
+
+- [ ] `test-purego` job: `CGO_ENABLED=0` build and tests (no `-race`, which needs cgo), plus the
+      fork's vectors
+- [ ] Differential job (CGO): Phase 7.3 differential tests, extended to zkgroup and HPKE
+- [ ] Release matrix builds purego binaries for linux/darwin/windows × amd64/arm64 without
+      per-OS runners
+
+**Done when:** both backends are green on every PR.
+
+#### 10.2 Security hardening
+
+- [ ] Go native fuzzing for every parser (wire messages, records, certificates, quotes, zkgroup
+      serializations) in the fork
+- [ ] Constant-time review of secret-dependent code paths. Document the zeroization posture.
+- [ ] Opt-in staging integration suite (`-tags integration,purego`): link, 1:1, group send,
+      profile fetch, CDSI
+- [ ] Consider an external review of the zkgroup and attestation ports before flipping the default
+
+**Done when:** fuzzers run in CI (short budget) and the integration suite passes on staging.
+
+#### 10.3 Default flip
+
+- [ ] Release binaries are built with `purego`. The CGO backend stays available (`-tags cgo`
+      builds, and the differential CI job keeps it honest).
+- [ ] Phase 6.2 (musl + static CGO link) is superseded for release builds. Update the README
+      install and build docs, and drop Rust from the release workflow.
+- [ ] `version` reports the backend (`purego`/`cgo`) and the libsignal-go fork version
+- [ ] Update procedure for a mautrix-signal bump: rebase the `purego` branch, re-pin the fork's
+      harness to the new libsignal tag, port the drift. Document it in `docs/maintenance.md`.
+
+**Done when:** a tagged release ships pure-Go binaries only, and a fresh clone builds with
+`go build -tags purego` and nothing else installed.
+
 ### Later / on demand
 
 - [ ] Daemon mode: long-running `receive --follow` with a local API (unix socket / HTTP + SSE)
@@ -553,17 +781,21 @@ restriction each have tests that prove the rejection.
 - Unit tests: command wiring (`cmd.NewRootCmd()` + `SetArgs`) and renderers, with the
   `internal/signal` facade behind an interface so that most tests run without CGO against a fake
 - Golden files for JSON output
+- Pure-Go backend (Phases 7–10): Rust-generated vectors and live Rust↔Go interop in the
+  libsignal-go fork; differential CGO-vs-purego tests in go-signal
 - MCP server tests through the SDK's in-memory transport against the fake facade
 - Opt-in integration tests (`-tags integration`) against Signal **staging** with a dedicated test
   account. Never against live in CI.
 
 ## 6. Risks
 
-| Risk                                                         | Mitigation                                                                                   |
-| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
-| Signal server/protocol changes break us                      | Track mautrix-signal releases; Renovate/Dependabot; the facade limits how far changes spread |
-| libsignal version drift between the Go bindings and the `.a` | Pin the submodule to the SHA mautrix uses; fail the build if the versions differ             |
-| CGO complicates builds and CI                                | Cache the Rust build; provide prebuilt `libsignal_ffi.a` artifacts; static musl release      |
-| Linked devices get unlinked after ~30 days offline           | Document it; `receive` periodically (e.g. systemd timer) to keep the link alive              |
-| Signal ToS / unofficial client                               | Same position as signal-cli. Document it and don't spam.                                     |
-| Prompt injection via incoming messages (MCP)                 | Recipient allowlist, `--read-only`, attach-dir restriction, no automatic read receipts       |
+| Risk                                                         | Mitigation                                                                                                |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| Signal server/protocol changes break us                      | Track mautrix-signal releases; Renovate/Dependabot; the facade limits how far changes spread              |
+| libsignal version drift between the Go bindings and the `.a` | Pin the submodule to the SHA mautrix uses; fail the build if the versions differ                          |
+| CGO complicates builds and CI                                | Cache the Rust build; provide prebuilt `libsignal_ffi.a` artifacts; static musl release                   |
+| Linked devices get unlinked after ~30 days offline           | Document it; `receive` periodically (e.g. systemd timer) to keep the link alive                           |
+| Signal ToS / unofficial client                               | Same position as signal-cli. Document it and don't spam.                                                  |
+| Prompt injection via incoming messages (MCP)                 | Recipient allowlist, `--read-only`, attach-dir restriction, no automatic read receipts                    |
+| Bugs in the pure-Go crypto ports (zkgroup, attestation)      | Vectors + interop + differential tests, fuzzing, CGO stays default until Phase 10.3                       |
+| Two forks drift from upstream (libsignal-go, mautrix-signal) | mautrix fork limited to `pkg/libsignalgo`; harness pinned to our libsignal tag; documented bump procedure |

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -19,12 +20,14 @@ import (
 	mstore "go.mau.fi/mautrix-signal/pkg/signalmeow/store"
 )
 
-// ackGrace gives signalmeow time to ack the last envelopes before the websockets close.
-// Phase 3.1 replaces it with a proper drain.
-const ackGrace = time.Second
-
-// eventBuffer decouples signalmeow's receive loop from a slow consumer.
-const eventBuffer = 64
+const (
+	// ackFlushTimeout bounds the keepalive round trip that flushes pending acks on Close.
+	ackFlushTimeout = 2 * time.Second
+	// sendDrainTimeout bounds how long Close waits for in-flight sends.
+	sendDrainTimeout = 5 * time.Second
+	// keepalivePath is the Signal server's no-op websocket request.
+	keepalivePath = "/v1/keepalive"
+)
 
 var (
 	errUnexpectedState = errors.New("unexpected provisioning state")
@@ -43,11 +46,12 @@ func Open(_ context.Context, opts Options) (Client, error) {
 	}
 
 	return &meowClient{
-		opts:   opts,
-		log:    log,
-		zlog:   NewZerologBridge(log),
-		dir:    dir,
-		events: make(chan Event, eventBuffer),
+		opts: opts,
+		log:  log,
+		zlog: NewZerologBridge(log),
+		dir:  dir,
+		// Unbuffered: an event is only acked once the consumer has taken it.
+		events: make(chan Event),
 		done:   make(chan struct{}),
 	}, nil
 }
@@ -63,16 +67,30 @@ type meowClient struct {
 	dataACI string
 	lock    *store.Lock
 
-	cli    *signalmeow.Client
-	ownACI string
-	// account is the connected account; it is set before the receive loops start.
-	account Account
-	events  chan Event
-	done    chan struct{} // closed by Close; unblocks pending emits
+	// connDevice, ownACI and account belong to the connected account; they are set before the
+	// receive loops start.
+	connDevice *mstore.Device
+	ownACI     string
+	account    Account
 
-	// mu guards events against being closed while an emit is in flight.
-	mu        sync.RWMutex
-	closed    bool
+	// cli runs the current receive loops; the supervisor replaces it on a restart.
+	cliMu sync.Mutex
+	cli   *signalmeow.Client
+
+	// cancelLoops ends the receive loops' context and stopSupervisor the supervisor's, which
+	// closes supervised on exit. They are set by Connect.
+	cancelLoops    context.CancelFunc
+	stopSupervisor context.CancelFunc
+	supervised     chan struct{}
+
+	events chan Event
+	done   chan struct{} // closed by Close; unblocks pending emits
+
+	// mu guards closing, so that no handler or send starts once Close waits for them.
+	mu        sync.Mutex
+	closing   bool
+	handling  sync.WaitGroup
+	sending   sync.WaitGroup
 	closeOnce sync.Once
 	acked     atomic.Bool
 }
@@ -132,7 +150,7 @@ func (c *meowClient) Account(ctx context.Context) (Account, error) {
 }
 
 func (c *meowClient) Connect(ctx context.Context) error {
-	if c.cli != nil {
+	if c.cancelLoops != nil {
 		return errAlreadyStarted
 	}
 
@@ -160,18 +178,23 @@ func (c *meowClient) Connect(ctx context.Context) error {
 		}
 	}
 
+	c.connDevice = device
 	c.ownACI = device.ACI.String()
 	c.account = acc
-	c.cli = signalmeow.NewClient(device, c.zlog, c.handle)
 
-	statuses, err := c.cli.StartReceiveLoops(ctx)
+	// The loops outlive ctx: cancelling the command must not cut the websockets before Close
+	// has drained them.
+	loopCtx, cancelLoops := context.WithCancel(context.WithoutCancel(ctx))
+
+	statuses, err := c.startLoops(loopCtx)
 	if err != nil {
-		c.cli = nil
+		cancelLoops()
 
 		return fmt.Errorf("connect: %w", err)
 	}
 
-	go c.forwardStatuses(statuses)
+	c.cancelLoops = cancelLoops
+	c.supervise(loopCtx, statuses)
 
 	return nil
 }
@@ -181,41 +204,206 @@ func (c *meowClient) Events() <-chan Event {
 }
 
 func (c *meowClient) Send(context.Context, SendRequest) (SendResult, error) {
-	if c.cli == nil {
+	if c.cancelLoops == nil {
 		return SendResult{}, ErrNotConnected
 	}
+
+	if !c.begin(&c.sending) {
+		return SendResult{}, ErrClosed
+	}
+	defer c.sending.Done()
 
 	return SendResult{}, fmt.Errorf("send: %w (Phase 3.3)", ErrNotImplemented)
 }
 
+// Close shuts down gracefully: it lets in-flight sends finish, stops handing out events (an
+// event the consumer hasn't taken is not acked, so the server delivers it again next time),
+// flushes the acks of delivered events, and only then closes the websockets and the database.
 func (c *meowClient) Close() error {
 	var err error
 
 	c.closeOnce.Do(func() {
-		if c.cli != nil {
-			if c.acked.Load() {
-				time.Sleep(ackGrace)
-			}
+		c.mu.Lock()
+		c.closing = true
+		c.mu.Unlock()
 
-			close(c.done)
-
-			stopErr := c.cli.StopReceiveLoops()
-			if stopErr != nil {
-				c.log.Debug("stop receive loops", "error", stopErr)
-			}
-		} else {
-			close(c.done)
+		if !waitTimeout(&c.sending, sendDrainTimeout) {
+			c.log.Warn("closing with sends still in flight", "timeout", sendDrainTimeout)
 		}
 
-		c.mu.Lock()
-		c.closed = true
+		close(c.done)
+		c.handling.Wait()
+
+		if c.cancelLoops != nil {
+			// No restarts from here on.
+			c.stopSupervisor()
+			<-c.supervised
+
+			c.flushAcks()
+
+			stopErr := c.stopLoops()
+			if stopErr != nil {
+				c.log.Debug("close", "error", stopErr)
+			}
+
+			c.cancelLoops()
+		}
+
 		close(c.events)
-		c.mu.Unlock()
 
 		err = c.release()
 	})
 
 	return err
+}
+
+// startLoops starts receive loops on a new signalmeow client. A fresh client is needed for a
+// restart: signalmeow only reports a status that differs from the last one it reported.
+func (c *meowClient) startLoops(ctx context.Context) (<-chan loopStatus, error) {
+	cli := signalmeow.NewClient(c.connDevice, c.zlog, c.handle)
+
+	raw, err := cli.StartReceiveLoops(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("start receive loops: %w", err)
+	}
+
+	c.cliMu.Lock()
+	c.cli = cli
+	c.cliMu.Unlock()
+
+	statuses := make(chan loopStatus)
+
+	go func() {
+		defer close(statuses)
+
+		for status := range raw {
+			select {
+			case statuses <- convertLoopStatus(status):
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	return statuses, nil
+}
+
+// stopLoops stops the receive loops of the current signalmeow client, if any.
+func (c *meowClient) stopLoops() error {
+	c.cliMu.Lock()
+	cli := c.cli
+	c.cliMu.Unlock()
+
+	if cli == nil {
+		return nil
+	}
+
+	err := cli.StopReceiveLoops()
+	if err != nil {
+		return fmt.Errorf("stop receive loops: %w", err)
+	}
+
+	return nil
+}
+
+// supervise starts the supervisor of the receive loops (see supervisor).
+func (c *meowClient) supervise(loopCtx context.Context, statuses <-chan loopStatus) {
+	ctx, stop := context.WithCancel(loopCtx)
+	c.stopSupervisor = stop
+	c.supervised = make(chan struct{})
+
+	sup := &supervisor{
+		log: c.log,
+		policy: ReconnectPolicy{
+			MaxAttempts:    defaultMaxAttempts,
+			InitialBackoff: defaultInitialBackoff,
+			MaxBackoff:     defaultMaxBackoff,
+		},
+		start: func() (<-chan loopStatus, error) {
+			return c.startLoops(loopCtx)
+		},
+		stop: c.stopLoops,
+		emit: c.emit,
+		loggedOut: func(cause error) error {
+			return c.markUnlinked(c.account, cause)
+		},
+	}
+
+	go func() {
+		defer close(c.supervised)
+
+		sup.run(ctx, statuses)
+	}()
+}
+
+// begin registers an in-flight handler or send on group. It reports false once Close has
+// started.
+func (c *meowClient) begin(group *sync.WaitGroup) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.closing {
+		return false
+	}
+
+	group.Add(1)
+
+	return true
+}
+
+// flushAcks waits until the acks of delivered events have been written. signalmeow queues an
+// ack right after the handler returned (and after clearing the event from its decryption
+// buffer); requests share the websocket's single writer, so by the time the response to a
+// keepalive request sent now arrives, those acks are on the wire.
+func (c *meowClient) flushAcks() {
+	c.cliMu.Lock()
+	cli := c.cli
+	c.cliMu.Unlock()
+
+	if !c.acked.Load() || cli == nil || !cli.IsConnected() {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.zlog.WithContext(context.Background()), ackFlushTimeout)
+	defer cancel()
+
+	// SendRequest doesn't give up when ctx ends while it waits for the response.
+	ws := cli.AuthedWS
+	flushed := make(chan error, 1)
+
+	go func() {
+		_, err := ws.SendRequest(ctx, http.MethodGet, keepalivePath, nil, nil)
+		flushed <- err
+	}()
+
+	select {
+	case err := <-flushed:
+		if err != nil {
+			c.log.Debug("flush acks", "error", err)
+		}
+	case <-ctx.Done():
+		c.log.Debug("flush acks: no keepalive response", "timeout", ackFlushTimeout)
+	}
+}
+
+// waitTimeout waits for wg and reports false if that takes longer than timeout.
+func waitTimeout(wg *sync.WaitGroup, timeout time.Duration) bool {
+	done := make(chan struct{})
+
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
+	select {
+	case <-done:
+		return true
+	case <-timer.C:
+		return false
+	}
 }
 
 // release closes the account database and releases the lock, if held.
@@ -324,8 +512,14 @@ func (c *meowClient) selectAccount() (Account, error) {
 }
 
 // handle is signalmeow's event handler. Its return value decides whether the envelope is acked,
-// so it only returns true once the event has been handed to the consumer.
+// so it only returns true once the event has been handed to the consumer. Once Close has
+// started, it leaves every envelope for the next run.
 func (c *meowClient) handle(raw events.SignalEvent) bool {
+	if !c.begin(&c.handling) {
+		return false
+	}
+	defer c.handling.Done()
+
 	evt := c.checkLoggedOut(convertEvent(raw, c.ownACI))
 	if evt == nil {
 		c.log.Debug("ignoring event", "type", fmt.Sprintf("%T", raw))
@@ -342,18 +536,9 @@ func (c *meowClient) handle(raw events.SignalEvent) bool {
 	return true
 }
 
-func (c *meowClient) forwardStatuses(statuses <-chan signalmeow.SignalConnectionStatus) {
-	for status := range statuses {
-		c.log.Debug("connection status", "event", status.Event.String(), "error", status.Err)
-
-		if evt := c.checkLoggedOut(convertStatus(status)); evt != nil {
-			c.emit(evt)
-		}
-	}
-}
-
 // checkLoggedOut marks the connected account as unlinked when evt says the server logged the
 // device out, and replaces the event's cause with UnlinkedError. Other events pass through.
+// (Logouts seen by the websockets arrive through the supervisor instead.)
 func (c *meowClient) checkLoggedOut(evt Event) Event {
 	conn, ok := evt.(*Connection)
 	if !ok || conn.State != StateLoggedOut {
@@ -378,13 +563,6 @@ func (c *meowClient) markUnlinked(acc Account, cause error) error {
 
 // emit delivers evt to the consumer. It reports false if the client was closed first.
 func (c *meowClient) emit(evt Event) bool {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	if c.closed {
-		return false
-	}
-
 	select {
 	case c.events <- evt:
 		return true

@@ -121,6 +121,7 @@ const (
 	StateDisconnected
 	StateLoggedOut
 	StateError
+	StateFailed
 )
 
 func (s ConnectionState) String() string {
@@ -133,13 +134,17 @@ func (s ConnectionState) String() string {
 		return "logged-out"
 	case StateError:
 		return "error"
+	case StateFailed:
+		return "failed"
 	default:
 		return "unknown"
 	}
 }
 
-// Connection reports a change of the connection state. StateLoggedOut is final: the device was
-// unlinked or its credentials are no longer valid.
+// Connection reports a change of the connection state. StateDisconnected and StateError are
+// transient: the client reconnects on its own. StateLoggedOut and StateFailed are final: the
+// device was unlinked or its credentials are no longer valid (Err wraps ErrDeviceUnlinked), or
+// the client gave up reconnecting (Err wraps ErrConnectionFailed).
 type Connection struct {
 	State ConnectionState
 	Err   error

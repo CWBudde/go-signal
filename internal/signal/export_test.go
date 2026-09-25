@@ -32,3 +32,8 @@ func HPKESeal(publicKey, plaintext, info, associatedData []byte) ([]byte, error)
 func HPKEOpen(privateKey, ciphertext, info, associatedData []byte) ([]byte, error) {
 	return hpkeOpen(privateKey, ciphertext, info, associatedData)
 }
+
+// ConvertLoopStatus exposes convertLoopStatus to the signal_test package.
+func ConvertLoopStatus(status signalmeow.SignalConnectionStatus) LoopStatus {
+	return convertLoopStatus(status)
+}

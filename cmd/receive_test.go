@@ -2,6 +2,7 @@ package cmd_test
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -28,6 +29,13 @@ func testAccount() *signal.Account {
 func run(t *testing.T, fake *signaltest.Fake, args ...string) (string, error) {
 	t.Helper()
 
+	return runContext(t, t.Context(), fake, args...)
+}
+
+// runContext is run with a context, e.g. to interrupt the command.
+func runContext(t *testing.T, ctx context.Context, fake *signaltest.Fake, args ...string) (string, error) {
+	t.Helper()
+
 	cfgFile := filepath.Join(t.TempDir(), "config.yaml")
 
 	err := os.WriteFile(cfgFile, nil, 0o600)
@@ -37,11 +45,12 @@ func run(t *testing.T, fake *signaltest.Fake, args ...string) (string, error) {
 
 	var out bytes.Buffer
 
+	//nolint:contextcheck // the command gets ctx through ExecuteContext
 	root := cmd.NewRootCmd(cmd.WithClientFactory(fake.Factory), cmd.WithLocation(time.UTC))
 	root.SetOut(&out)
 	root.SetArgs(append([]string{"--config", cfgFile, "--data-dir", t.TempDir()}, args...))
 
-	err = root.Execute()
+	err = root.ExecuteContext(ctx)
 
 	if !fake.AllClosed() {
 		t.Error("client was not closed")
@@ -169,5 +178,103 @@ func TestReceivePassesGlobalFlags(t *testing.T) {
 	opened := fake.Opened()
 	if len(opened) != 1 || opened[0].Account != "+15550199" || opened[0].DataDir == "" {
 		t.Errorf("unexpected client options: %+v", opened)
+	}
+}
+
+// Message bodies in the tests below.
+const (
+	first  = "first"
+	second = "second"
+)
+
+func TestReceiveStopLeavesUnreadEvents(t *testing.T) {
+	t.Parallel()
+
+	fake := &signaltest.Fake{
+		Linked:   []signal.Account{*testAccount()},
+		Incoming: []signal.Event{&signal.Message{Body: first}, &signal.Message{Body: second}},
+	}
+
+	_, err := run(t, fake, "receive", "--timeout", "5s")
+	if err != nil {
+		t.Fatalf("receive: %v", err)
+	}
+
+	// Only what was read counts as delivered (and would be acked).
+	if got := fake.Delivered(); got != 1 {
+		t.Errorf("delivered %d events, want 1", got)
+	}
+}
+
+func TestReceiveFollowUntilInterrupted(t *testing.T) {
+	t.Parallel()
+
+	fake := &signaltest.Fake{
+		Linked: []signal.Account{*testAccount()},
+		Incoming: []signal.Event{
+			&signal.Connection{State: signal.StateConnected},
+			&signal.Message{Body: first},
+			&signal.Connection{State: signal.StateDisconnected},
+			&signal.Connection{State: signal.StateConnected},
+			&signal.Message{Body: second},
+		},
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	go func() {
+		for fake.Delivered() < len(fake.Incoming) {
+			time.Sleep(time.Millisecond)
+		}
+
+		cancel()
+	}()
+
+	start := time.Now()
+
+	out, err := runContext(t, ctx, fake, "receive", "--follow")
+	if err != nil {
+		t.Fatalf("an interrupt should end receive normally: %v", err)
+	}
+
+	if !strings.Contains(out, first) || !strings.Contains(out, second) {
+		t.Errorf("receive --follow stopped early: %q", out)
+	}
+
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Errorf("receive took %v to stop", elapsed)
+	}
+}
+
+func TestReceiveFollowConnectionFailed(t *testing.T) {
+	t.Parallel()
+
+	fake := &signaltest.Fake{
+		Linked: []signal.Account{*testAccount()},
+		Incoming: []signal.Event{
+			&signal.Message{Body: first},
+			&signal.Connection{State: signal.StateFailed},
+		},
+	}
+
+	_, err := run(t, fake, "receive", "--follow")
+	if !errors.Is(err, signal.ErrConnectionFailed) {
+		t.Fatalf("got %v, want ErrConnectionFailed", err)
+	}
+
+	if code := cmd.ExitCode(err); code != cmd.ExitFailure {
+		t.Errorf("exit code %d, want %d", code, cmd.ExitFailure)
+	}
+}
+
+func TestReceiveFollowExcludesTimeout(t *testing.T) {
+	t.Parallel()
+
+	fake := &signaltest.Fake{Linked: []signal.Account{*testAccount()}}
+
+	_, err := run(t, fake, "receive", "--follow", "--timeout", "5s")
+	if err == nil || !strings.Contains(err.Error(), "none of the others can be") {
+		t.Fatalf("got %v, want a flag conflict", err)
 	}
 }

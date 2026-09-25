@@ -29,8 +29,9 @@ type Fake struct {
 	Linked []signal.Account
 	// LinkAs is the account Link creates.
 	LinkAs signal.Account
-	// Incoming is delivered on Events right after Connect, in order. Set it before Factory. A
-	// StateLoggedOut Connection marks the account as unlinked; its Err becomes UnlinkedError.
+	// Incoming is delivered on Events after Connect, in order. Like the real client, Events is
+	// unbuffered, so an event counts as delivered (Delivered) once the consumer has taken it.
+	// A StateLoggedOut Connection marks the account as unlinked; its Err becomes UnlinkedError.
 	Incoming []signal.Event
 	// Devices is what Devices returns for any account.
 	Devices []signal.Device
@@ -46,13 +47,14 @@ type Fake struct {
 	// UnlinkErr makes removing the device on the server fail; Unlink with LocalOnly ignores it.
 	UnlinkErr error
 
-	mu       sync.Mutex
-	opened   []signal.Options
-	sent     []signal.SendRequest
-	connects []string
-	unlinks  []UnlinkCall
-	nextTS   uint64
-	clients  []*client
+	mu        sync.Mutex
+	opened    []signal.Options
+	sent      []signal.SendRequest
+	connects  []string
+	unlinks   []UnlinkCall
+	delivered int
+	nextTS    uint64
+	clients   []*client
 }
 
 // Factory is a signal.Factory that opens clients on f.
@@ -66,7 +68,7 @@ func (f *Fake) Factory(_ context.Context, opts signal.Options) (signal.Client, e
 		return nil, f.OpenErr
 	}
 
-	cli := &client{fake: f, opts: opts, events: make(chan signal.Event, len(f.Incoming))}
+	cli := &client{fake: f, opts: opts, events: make(chan signal.Event), done: make(chan struct{})}
 	f.clients = append(f.clients, cli)
 
 	return cli, nil
@@ -94,6 +96,14 @@ func (f *Fake) Connects() []string {
 	defer f.mu.Unlock()
 
 	return append([]string(nil), f.connects...)
+}
+
+// Delivered returns the number of Incoming events the consumers have taken from Events.
+func (f *Fake) Delivered() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	return f.delivered
 }
 
 // UnlinkCall records a successful Unlink.
@@ -170,7 +180,9 @@ type client struct {
 	fake      *Fake
 	opts      signal.Options
 	events    chan signal.Event
-	connected string // ACI of the connected account
+	done      chan struct{} // closed by Close; stops the feeder
+	fed       chan struct{} // closed when the feeder started by Connect exits
+	connected string        // ACI of the connected account
 	closed    bool
 }
 
@@ -225,13 +237,17 @@ func (c *client) Connect(context.Context) error {
 	c.connected = acc.ACI
 	c.fake.connects = append(c.fake.connects, acc.ACI)
 
+	incoming := make([]signal.Event, 0, len(c.fake.Incoming))
 	for _, evt := range c.fake.Incoming {
 		if conn, ok := evt.(*signal.Connection); ok && conn.State == signal.StateLoggedOut {
 			evt = &signal.Connection{State: signal.StateLoggedOut, Err: c.fake.markUnlinked(acc)}
 		}
 
-		c.events <- evt
+		incoming = append(incoming, evt)
 	}
+
+	c.fed = make(chan struct{})
+	go c.feed(incoming)
 
 	return nil
 }
@@ -316,12 +332,39 @@ func (c *client) Unlink(_ context.Context, opts signal.UnlinkOptions) (signal.Ac
 
 func (c *client) Close() error {
 	c.fake.mu.Lock()
-	defer c.fake.mu.Unlock()
+	if c.closed {
+		c.fake.mu.Unlock()
 
-	if !c.closed {
-		c.closed = true
-		close(c.events)
+		return nil
 	}
 
+	c.closed = true
+	fed := c.fed
+	c.fake.mu.Unlock()
+
+	close(c.done)
+
+	if fed != nil {
+		<-fed
+	}
+
+	close(c.events)
+
 	return nil
+}
+
+// feed delivers incoming on Events until Close.
+func (c *client) feed(incoming []signal.Event) {
+	defer close(c.fed)
+
+	for _, evt := range incoming {
+		select {
+		case c.events <- evt:
+			c.fake.mu.Lock()
+			c.fake.delivered++
+			c.fake.mu.Unlock()
+		case <-c.done:
+			return
+		}
+	}
 }

@@ -170,6 +170,18 @@ func convertStatus(status signalmeow.SignalConnectionStatus) Event {
 	}
 }
 
+// convertLoopStatus maps a status of signalmeow's receive loops for the supervisor. After a
+// fatal error, signalmeow's websockets stop retrying, so the loops have to be restarted.
+func convertLoopStatus(status signalmeow.SignalConnectionStatus) loopStatus {
+	out := loopStatus{Stopped: status.Event == signalmeow.SignalConnectionEventFatalError}
+
+	if conn, ok := convertStatus(status).(*Connection); ok {
+		out.State, out.Err = conn.State, conn.Err
+	}
+
+	return out
+}
+
 // websocketUnauthorized is how signalmeow reports a 401 when opening the websocket. It only maps
 // 403 to a logout and gives up on any other 4xx with an unwrapped error, so the status can only
 // be recognised by its text.

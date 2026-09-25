@@ -220,3 +220,51 @@ func TestConvertStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestConvertLoopStatus(t *testing.T) {
+	t.Parallel()
+
+	//nolint:err113 // signalmeow's websocket errors are dynamic
+	var (
+		transient = errors.New("transient error opening websocket: dial tcp: no route to host")
+		teapot    = fmt.Errorf("unexpected status opening websocket: %v", "418 I'm a teapot")
+	)
+
+	tests := []struct {
+		name string
+		in   signalmeow.SignalConnectionStatus
+		want signal.LoopStatus
+	}{
+		{
+			"connected",
+			signalmeow.SignalConnectionStatus{Event: signalmeow.SignalConnectionEventConnected},
+			signal.LoopStatus{State: signal.StateConnected},
+		},
+		{
+			"disconnected: signalmeow retries",
+			signalmeow.SignalConnectionStatus{Event: signalmeow.SignalConnectionEventDisconnected, Err: transient},
+			signal.LoopStatus{State: signal.StateDisconnected, Err: transient},
+		},
+		{
+			"fatal error: loops stopped",
+			signalmeow.SignalConnectionStatus{Event: signalmeow.SignalConnectionEventFatalError, Err: teapot},
+			signal.LoopStatus{State: signal.StateError, Err: teapot, Stopped: true},
+		},
+		{
+			"clean shutdown",
+			signalmeow.SignalConnectionStatus{Event: signalmeow.SignalConnectionCleanShutdown},
+			signal.LoopStatus{},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := signal.ConvertLoopStatus(test.in)
+			if !reflect.DeepEqual(got, test.want) {
+				t.Errorf("got  %#v\nwant %#v", got, test.want)
+			}
+		})
+	}
+}
