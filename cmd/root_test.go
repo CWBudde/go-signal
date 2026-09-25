@@ -2,6 +2,7 @@ package cmd_test
 
 import (
 	"bytes"
+	"errors"
 	"strings"
 	"testing"
 
@@ -42,5 +43,17 @@ func TestInvalidLogFormat(t *testing.T) {
 	err := root.Execute()
 	if err == nil {
 		t.Fatal("expected error for invalid log format")
+	}
+}
+
+func TestReceiveWithoutAccount(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	root := cmd.NewRootCmd()
+	root.SetArgs([]string{"receive", "--data-dir", t.TempDir(), "--timeout", "5s"})
+
+	err := root.Execute()
+	if !errors.Is(err, signal.ErrNotLinked) && !errors.Is(err, signal.ErrCGORequired) {
+		t.Fatalf("got %v, want ErrNotLinked (cgo) or ErrCGORequired (no cgo)", err)
 	}
 }

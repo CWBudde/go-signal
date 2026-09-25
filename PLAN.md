@@ -23,6 +23,7 @@ Legend: `[x]` done · `[ ]` open
 | 2026-09-25 | Priority: **plain CLI send/receive** first. The daemon/JSON-RPC is deferred.                                                        |
 | 2026-09-25 | **Linked device only.** Primary registration (`register`/`verify`) is deferred indefinitely.                                        |
 | 2026-09-25 | Pinned `go.mau.fi/mautrix-signal v0.2609.0`, which expects **libsignal `v0.102.2`**; `third_party/libsignal` is pinned to that tag. |
+| 2026-09-25 | **MCP server** (`go-signal mcp serve`) in the same binary, after contacts/groups and before release. See Phase 5.                   |
 
 ### 1.1 Why signalmeow
 
@@ -41,6 +42,33 @@ Consequences:
 - **API churn.** signalmeow is built for a bridge. We isolate it behind our own `internal/signal`
   facade so that upstream changes stay in one package.
 
+### 1.2 Spike findings (Phase 1.4)
+
+- **API shape.** `signalmeow.PerformProvisioning(ctx, deviceStore, name, allowBackup)` returns a
+  channel: first the URL, then the `DeviceData` (already persisted via `PutDevice`, plus identity
+  keys, signed/last-resort prekeys and our profile key). Receiving is
+  `NewClient(device, zerolog, handler)` + `StartReceiveLoops(ctx)`, which returns a status channel;
+  events arrive on the handler callback as `events.SignalEvent` (`ChatEvent` wrapping a
+  `signalpb.DataMessage`/`EditMessage`/`TypingMessage`, `Receipt`, `ReadSelf`, `Call`,
+  `DecryptionError`, `ContactList`, `QueueEmpty`, `LoggedOut`, …). Our own sent messages (sync
+  transcripts) come through as `ChatEvent`s too.
+- **Store.** `store.NewStore(dbutil.Database, logger)` + `Upgrade(ctx)` creates its tables with a
+  `signalmeow_version` table (27 migrations at v0.2609.0), so our own tables can sit next to it
+  with a separate `dbutil` version table. One DB holds any number of accounts (keyed by ACI).
+- **Logging.** signalmeow logs through zerolog from the context (`zerolog.Ctx`) and
+  `Client.Log`. `internal/signal.NewZerologBridge` forwards to slog; its info-level chatter is
+  demoted to debug. Cancelled contexts are logged by signalmeow at error level (e.g. Ctrl-C during
+  `link`), so a real facade needs to filter those.
+- **Prekeys.** Linking uploads only signed and last-resort Kyber prekeys; one-time prekeys are
+  generated and uploaded by `keyCheckLoop` on the first connect. The bridge connects right after
+  linking; we don't yet.
+- **Acks.** The handler's return value decides whether the envelope is acked, and acks go out
+  asynchronously, so closing right after the handler returns can lose the ack. The spike sleeps
+  1 s; Phase 3.1 needs a proper drain.
+- **Gaps.** No QR refresh (the server drops the provisioning socket after ~60 s; the bridge
+  reprovisions every 45 s). The DB file is created 0644 (Phase 2.2). Linking with
+  `allowBackup=false` skips message history transfer.
+
 ## 2. Target layout
 
 ```
@@ -49,6 +77,8 @@ cmd/                     Cobra commands (link.go, send.go, receive.go, contacts.
 internal/signal/         facade over signalmeow: Account, Client, events -> our own types
 internal/store/          data-dir layout, SQLite (signalmeow store + our own tables)
 internal/output/         plain / json renderers
+internal/app/            use-case layer shared by the CLI and the MCP server (send, react, list, ...)
+internal/mcp/            MCP server: tool/resource definitions, inbox, safety policy
 third_party/libsignal/   submodule: signalapp/libsignal at the version libsignalgo expects
 reference/signal-cli/    submodule: upstream Java implementation (reference only)
 ```
@@ -74,6 +104,7 @@ go-signal contacts list | show <recipient> | block | unblock
 go-signal groups list | show <id> | leave <id>
 go-signal devices list
 go-signal account show | unlink                 # unlink = remove local data
+go-signal mcp serve [--read-only] [--allow-recipient <r>]...   # MCP server on stdio
 go-signal version
 ```
 
@@ -143,16 +174,20 @@ dependency; items without a dependency on each other can go in parallel.
 
 #### 1.4 Link and receive spike
 
-- [ ] Minimal `internal/store`: open a SQLite db at a hard-coded path under `--data-dir` and run
-      signalmeow's store migrations
-- [ ] `link`: run signalmeow provisioning, print the `sgnl://linkdevice?...` URI and a terminal
+- [x] Minimal `internal/store`: open a SQLite db at a hard-coded path under `--data-dir` and run
+      signalmeow's store migrations (`<data-dir>/signal.db`, mattn/go-sqlite3, WAL + FKs +
+      `busy_timeout`; dir created 0700)
+- [x] `link`: run signalmeow provisioning, print the `sgnl://linkdevice?...` URI and a terminal
       QR code (e.g. `github.com/mdp/qrterminal`), wait for the phone to scan, persist the device
-- [ ] `receive`: connect the websockets, print every incoming event with `%+v`, exit after the
-      first data message or a timeout
-- [ ] Write down findings (API shape, surprises, gaps vs. signal-cli) in §1 or a new §1.2
+- [x] `receive`: connect the websockets, print every incoming event with `%+v`, exit after the
+      first data message or a timeout (`--timeout`, default 1m)
+- [x] Write down findings (API shape, surprises, gaps vs. signal-cli) in §1 or a new §1.2 (see
+      §1.2; to be completed after the phone test)
 
 **Done when:** a phone links the device and a message sent from it shows up in `receive`.
 Spike code may be thrown away; the next phases rebuild it properly.
+(Verified up to the QR code against the live server; the phone scan and receive are not yet
+tested.)
 
 ### Phase 2 — Account and storage
 
@@ -326,9 +361,96 @@ numbers give a clear "not on Signal" error.
 
 **Done when:** an identity change is detected, reported, and blocked for sending until trusted.
 
-### Phase 5 — Packaging and release
+### Phase 5 — MCP server
 
-#### 5.1 Release pipeline
+Expose the account to MCP clients (Claude Code, Claude Desktop, other agents) through
+`go-signal mcp serve`. It uses the same binary, facade and store as the CLI. The server is a
+long-running process that holds the account lock and runs its own receive loop, so it replaces
+the CLI for that account while it is running. SDK: the official
+`github.com/modelcontextprotocol/go-sdk` (evaluate `mark3labs/mcp-go` only if the official SDK
+lacks something we need).
+
+#### 5.1 Shared use-case layer (`internal/app`)
+
+- [ ] Move the logic behind `send`, `react`, `delete`, `contacts`, `groups`, `identities` and
+      `account show` out of `cmd/` into `internal/app` functions that take typed requests and
+      return typed results (no printing, no Cobra)
+- [ ] `cmd/` becomes flag parsing + `internal/app` call + `internal/output` rendering
+- [ ] Recipient resolution, name resolution and trust checks live only in `internal/app`
+
+**Done when:** the CLI behaves as before (golden files unchanged), and `internal/app` has unit
+tests against the fake facade.
+
+#### 5.2 Server skeleton and transport
+
+- [ ] `cmd/mcp.go`: `mcp serve` command; stdio transport; server name/version from `version`
+- [ ] stdout carries only the MCP protocol; all logging goes through slog to stderr (enforce with
+      a test that runs the server and checks stdout contains only JSON-RPC frames)
+- [ ] Account selection (`-a`), lock acquisition and connect happen before the server
+      advertises tools; a locked or unlinked account fails at startup with a clear error
+- [ ] Graceful shutdown on stdin EOF and SIGINT/SIGTERM (reuses 3.1)
+- [ ] Tests via the SDK's in-memory transport against the fake facade (`CGO_ENABLED=0`)
+
+**Done when:** `claude mcp add signal -- go-signal mcp serve` connects and lists the server's
+tools.
+
+#### 5.3 Read-only tools
+
+- [ ] `account_show`, `contacts_list` (with `query`), `contacts_show`, `groups_list`,
+      `groups_show`, `identities_list`
+- [ ] Input/output JSON schemas derived from Go structs; outputs reuse the `docs/json.md` types
+      as structured content, with a short text summary for clients that ignore structured output
+- [ ] Tool annotations: `readOnlyHint: true`
+
+**Done when:** an agent can answer "who is in group X?" and "what is Alice's number?" through the
+tools.
+
+#### 5.4 Inbox: receiving through MCP
+
+MCP is request/response, so incoming messages are buffered by the server and pulled by the client.
+
+- [ ] Background receive loop writes events into our own `inbox` table (bounded retention:
+      `--inbox-max-age`, `--inbox-max-count`)
+- [ ] `messages_list`: filters `chat` (recipient or group), `since` (timestamp/cursor), `limit`;
+      returns a cursor for the next call
+- [ ] `messages_wait`: long-poll for new events with a timeout (capped, e.g. 60 s)
+- [ ] Resources: `signal://chats` and `signal://chat/{id}` (recent messages); support
+      `resources/subscribe` and send `notifications/resources/updated` on new messages
+- [ ] Attachments: metadata only by default; `attachment_get` downloads on demand into a
+      configured dir (reuses 3.7) and returns the path, or small images as image content
+- [ ] `mark_read` tool; read receipts are only sent through it, never automatically
+
+**Done when:** an agent can wait for a message, read it, and fetch its attachment, with no other
+`receive` process running.
+
+#### 5.5 Write tools and safety policy
+
+- [ ] `send_message` (recipients or group, text, attachments from local paths, quote),
+      `react`, `delete_message`
+- [ ] `--read-only`: write tools are not registered at all
+- [ ] `--allow-recipient <r>` (repeatable, also via config): write tools reject other recipients
+      with a sentinel error; default when unset is decided here (all vs. none) and recorded in §1
+- [ ] Attachment paths restricted to `--attach-dir` (no arbitrary file exfiltration)
+- [ ] Tool annotations: `destructiveHint` for `delete_message`, `openWorldHint` for sends
+- [ ] Optional `--confirm` mode using MCP elicitation, where the client supports it
+- [ ] Incoming message text is returned as data with sender metadata; tool descriptions state
+      that message content is untrusted (prompt-injection note in `docs/mcp.md`)
+
+**Done when:** sends work end to end, and the allowlist, read-only mode and attach-dir
+restriction each have tests that prove the rejection.
+
+#### 5.6 Docs and optional HTTP transport
+
+- [ ] `docs/mcp.md`: tool/resource reference, config snippets for Claude Code and Claude Desktop,
+      safety flags, the "one process per account" rule
+- [ ] Optional: streamable HTTP transport (`--listen 127.0.0.1:<port>`, bearer token) for
+      clients that can't spawn a process. This overlaps with the daemon item in "Later".
+
+**Done when:** a new user can wire go-signal into Claude Code by following `docs/mcp.md`.
+
+### Phase 6 — Packaging and release
+
+#### 6.1 Release pipeline
 
 - [ ] release-please config and workflow (conventional commits → changelog + tag)
 - [ ] Tag-triggered release workflow: per-OS/arch runners (linux amd64/arm64 first), reusing the
@@ -338,7 +460,7 @@ numbers give a clear "not on Signal" error.
 
 **Done when:** pushing a tag produces a GitHub release with linux amd64/arm64 binaries.
 
-#### 5.2 Static build
+#### 6.2 Static build
 
 - [ ] musl build of `libsignal_ffi.a` (`x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl`)
 - [ ] Static Go link (`-linkmode external -extldflags -static`, musl-gcc or `zig cc`)
@@ -347,7 +469,7 @@ numbers give a clear "not on Signal" error.
 
 **Done when:** the release ships a fully static linux binary.
 
-#### 5.3 Docs and distribution
+#### 6.3 Docs and distribution
 
 - [ ] Man pages and shell completions via `cobra/doc`, included in release archives
 - [ ] README: install, link, send/receive quickstart, keep-alive note (30-day unlink)
@@ -359,7 +481,8 @@ numbers give a clear "not on Signal" error.
 ### Later / on demand
 
 - [ ] Daemon mode: long-running `receive --follow` with a local API (unix socket / HTTP + SSE)
-      for scripts and bots. Our own API; no signal-cli JSON-RPC compatibility required.
+      for scripts and bots. Our own API; no signal-cli JSON-RPC compatibility required. Build it
+      on the `internal/app` layer and the inbox from Phase 5.
 - [ ] Group management (create, add/remove members, rename), profile updates
 - [ ] Stickers, stories, polls, pinned messages
 - [ ] Import of an existing signal-cli account, to avoid re-linking
@@ -372,6 +495,7 @@ numbers give a clear "not on Signal" error.
 - Unit tests: command wiring (`cmd.NewRootCmd()` + `SetArgs`) and renderers, with the
   `internal/signal` facade behind an interface so that most tests run without CGO against a fake
 - Golden files for JSON output
+- MCP server tests through the SDK's in-memory transport against the fake facade
 - Opt-in integration tests (`-tags integration`) against Signal **staging** with a dedicated test
   account. Never against live in CI.
 
@@ -384,3 +508,4 @@ numbers give a clear "not on Signal" error.
 | CGO complicates builds and CI                                | Cache the Rust build; provide prebuilt `libsignal_ffi.a` artifacts; static musl release      |
 | Linked devices get unlinked after ~30 days offline           | Document it; `receive` periodically (e.g. systemd timer) to keep the link alive              |
 | Signal ToS / unofficial client                               | Same position as signal-cli. Document it and don't spam.                                     |
+| Prompt injection via incoming messages (MCP)                 | Recipient allowlist, `--read-only`, attach-dir restriction, no automatic read receipts       |

@@ -2,12 +2,15 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -19,7 +22,11 @@ var errInvalidLogFormat = errors.New("invalid log format (want text or json)")
 
 // Execute builds the command tree and runs it.
 func Execute() {
-	err := NewRootCmd().Execute()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	err := NewRootCmd().ExecuteContext(ctx)
+
+	stop()
+
 	if err != nil {
 		slog.Error("command failed", "error", err)
 		os.Exit(1)
@@ -65,7 +72,11 @@ messages, and run it as a JSON-RPC daemon for scripts and bots.`,
 		cobra.CheckErr(cfg.BindPFlag(name, flags.Lookup(name)))
 	}
 
-	root.AddCommand(newVersionCmd())
+	root.AddCommand(
+		newLinkCmd(cfg),
+		newReceiveCmd(cfg),
+		newVersionCmd(),
+	)
 
 	return root
 }
