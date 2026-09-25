@@ -1,0 +1,30 @@
+# Build output
+/bin/
+/dist/
+
+# Test binary, built with `go test -c`
+*.test
+
+# Coverage
+*.out
+coverage.txt
+coverage.html
+
+# Go workspace file
+go.work
+go.work.sum
+
+# Local signal data (never commit keys)
+/data/
+*.db
+*.db-wal
+*.db-shm
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*~
+
+# OS
+.DS_Store

@@ -1,3 +1,4 @@
 [submodule "reference/signal-cli"]
 	path = reference/signal-cli
 	url = https://github.com/AsamK/signal-cli.git
+	shallow = true

@@ -1,0 +1,26 @@
+name: test-can-build
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  can-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: "*/*.sum"
+
+      - name: Install just
+        uses: extractions/setup-just@v2
+
+      - name: Test can build
+        run: just test-can-build

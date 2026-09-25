@@ -1,0 +1,54 @@
+# run with treefmt --allow-missing-formatter
+
+[global]
+excludes = [
+  # reference implementation (git submodule)
+  "reference/**",
+  # go.sum & go.mod
+  "go.sum",
+  "go.mod",
+  # gitignore
+  "**/.gitignore",
+  ".gitmodules",
+]
+
+### Misc
+
+[formatter.prettier]
+command = "prettier"
+options = ["-w"]
+includes = ["*.json", "*.md"]
+
+### Go
+
+[formatter.gofumpt]
+command = "gofumpt"
+options = ["-w"]
+includes = ["*.go"]
+
+[formatter.gci]
+command = "gci"
+options = ["-w"]
+includes = ["*.go"]
+priority = 1        # run after gofumpt
+
+### Just
+
+[formatter.just]
+command = "just"
+options = ["--fmt", "--unstable", "--justfile"]
+includes = ["justfile"]
+
+### TOML
+
+[formatter.taplo]
+command = "taplo"
+options = ["fmt"]
+includes = ["*.toml"]
+
+### YAML
+
+[formatter.yamlfmt]
+command = "yamlfmt"
+options = ["format", "-"]
+includes = ["*.yaml", "*.yml"]
