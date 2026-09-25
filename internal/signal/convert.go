@@ -135,12 +135,7 @@ func convertDataMessage(env Envelope, msg *signalpb.DataMessage) Event {
 	}
 
 	for _, att := range msg.GetAttachments() {
-		out.Attachments = append(out.Attachments, Attachment{
-			ContentType: att.GetContentType(),
-			Filename:    att.GetFileName(),
-			Size:        att.GetSize(),
-			Caption:     att.GetCaption(),
-		})
+		out.Attachments = append(out.Attachments, convertAttachment(att))
 	}
 
 	if sticker := msg.GetSticker(); sticker != nil {

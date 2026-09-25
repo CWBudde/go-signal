@@ -49,6 +49,11 @@ type Fake struct {
 	SendFailures map[string]error
 	// InUse simulates another process holding the account lock: Connect and Unlink fail.
 	InUse bool
+	// Attachments is the CDN for Download: content by RemoteAttachment.CDNKey. Other
+	// attachments fail with signal.ErrAttachmentNotFound.
+	Attachments map[string][]byte
+	// DownloadErrs makes downloading the attachments with these CDN keys fail.
+	DownloadErrs map[string]error
 
 	// OpenErr, LinkErr, ConnectErr, UploadErr, SendErr and DevicesErr make the respective call
 	// fail.
@@ -285,6 +290,25 @@ func (c *client) Connect(_ context.Context, opts ...signal.ConnectOption) error 
 
 func (c *client) Events() <-chan signal.Event {
 	return c.events
+}
+
+func (c *client) Download(_ context.Context, att signal.Attachment) ([]byte, error) {
+	c.fake.mu.Lock()
+	defer c.fake.mu.Unlock()
+
+	key := att.Remote.CDNKey
+
+	err := c.fake.DownloadErrs[key]
+	if err != nil {
+		return nil, err
+	}
+
+	data, ok := c.fake.Attachments[key]
+	if !ok || key == "" {
+		return nil, fmt.Errorf("%w (fake)", signal.ErrAttachmentNotFound)
+	}
+
+	return slices.Clone(data), nil
 }
 
 func (c *client) Resolve(_ context.Context, recipients []signal.Recipient) ([]signal.Recipient, error) {

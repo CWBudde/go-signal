@@ -10,7 +10,7 @@ import (
 //
 // A Client is used by a single command: Open it, then either Link a new account or Connect an
 // existing one, read Events, and Close it.
-type Client interface {
+type Client interface { //nolint:interfacebloat // the whole facade over signalmeow
 	// Link provisions a new secondary device. It calls onURI with the sgnl://linkdevice URI to
 	// show to the user, then blocks until the phone has scanned it and the account is stored.
 	Link(ctx context.Context, deviceName string, onURI func(uri string)) (Account, error)
@@ -37,6 +37,13 @@ type Client interface {
 	// event counts as handled (and is acked to the server) once it has been read from the
 	// channel; events not read before Close are delivered again next time.
 	Events() <-chan Event
+
+	// Download fetches an attachment of a received message from Signal's CDN, verifies its
+	// digest and MAC, and returns the decrypted content. The CDN needs no authentication, so
+	// Download needs neither Connect nor the account lock. It fails with ErrAttachmentNotFound
+	// when the CDN doesn't have the attachment (any more) and with ErrAttachmentInvalid when it
+	// fails verification; nothing unverified is returned. The whole content is held in memory.
+	Download(ctx context.Context, att Attachment) ([]byte, error)
 
 	// Resolve returns recipients with their ACI filled in, in the same order. Recipients that
 	// already have one are returned as they are. A number is looked up in the store first and

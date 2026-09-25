@@ -41,12 +41,15 @@ func (c Chat) IsGroup() bool {
 	return c.GroupID != ""
 }
 
-// Attachment describes an attachment of an incoming message. Downloading comes in Phase 3.7.
+// Attachment describes an attachment of an incoming message. Client.Download fetches its
+// content using Remote.
 type Attachment struct {
 	ContentType string
 	Filename    string
 	Size        uint32
 	Caption     string
+	// Remote locates the encrypted content on Signal's CDN.
+	Remote RemoteAttachment
 }
 
 // Quote references the message a reply quotes.

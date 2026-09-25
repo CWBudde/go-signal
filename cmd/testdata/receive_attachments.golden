@@ -1,0 +1,4 @@
+[2026-09-20 12:30:01 UTC] aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa → me: two photos [attachment image/jpeg 3 B ../../photo.jpg → $DIR/1789907401000-1-photo.jpg] [attachment audio/aac 3 B → $DIR/1789907401000-2-attachment.aac]
+[2026-09-20 12:30:02 UTC] aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa → me: [attachment application/pdf 3 B doc.pdf (download failed: attachment not found on the CDN (fake))] [attachment image/png 3 B (download failed: CDN unreachable)]
+[2026-09-20 12:30:03 UTC] aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa → me: [view-once attachment image/jpeg 3 B → $DIR/1789907403000-1-attachment.jpg]
+[2026-09-20 12:30:04 UTC] aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa → me: no attachments

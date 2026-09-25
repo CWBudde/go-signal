@@ -199,9 +199,13 @@ func TestConvertEvent(t *testing.T) { //nolint:funlen // table-driven
 				Timestamp: new(uint64(42)),
 				Body:      new("hi"),
 				Attachments: []*signalpb.AttachmentPointer{{
-					ContentType: new("image/png"),
-					FileName:    new("a.png"),
-					Size:        new(uint32(7)),
+					AttachmentIdentifier: &signalpb.AttachmentPointer_CdnKey{CdnKey: "cdn-key"},
+					CdnNumber:            new(uint32(3)),
+					Key:                  []byte("key"),
+					Digest:               []byte("digest"),
+					ContentType:          new("image/png"),
+					FileName:             new("a.png"),
+					Size:                 new(uint32(7)),
 				}},
 				Quote: &signalpb.DataMessage_Quote{
 					Id:        new(uint64(41)),
@@ -213,9 +217,14 @@ func TestConvertEvent(t *testing.T) { //nolint:funlen // table-driven
 				Envelope: signal.Envelope{
 					Sender: aliceR, Chat: signal.Chat{Recipient: aliceR}, Timestamp: 42, ServerTimestamp: 99,
 				},
-				Body:        "hi",
-				Attachments: []signal.Attachment{{ContentType: "image/png", Filename: "a.png", Size: 7}},
-				Quote:       &signal.Quote{Author: bobR, Timestamp: 41, Text: "earlier"},
+				Body: "hi",
+				Attachments: []signal.Attachment{{
+					ContentType: "image/png", Filename: "a.png", Size: 7,
+					Remote: signal.RemoteAttachment{
+						CDNNumber: 3, CDNKey: "cdn-key", Key: []byte("key"), Digest: []byte("digest"),
+					},
+				}},
+				Quote: &signal.Quote{Author: bobR, Timestamp: 41, Text: "earlier"},
 			},
 		},
 		{

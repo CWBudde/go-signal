@@ -39,13 +39,19 @@ was unlinked from the account.
 Plain output prints one line per event: "[time] <sender> → <dest>: <text>", with placeholders
 such as [attachment image/jpeg 12.3 KB photo.jpg] or [unsupported call] for content that can't
 be shown as text. "me" is this account. With -o json, every event (including connection
-changes) is one JSON document per line (NDJSON, see docs/json.md).`
+changes) is one JSON document per line (NDJSON, see docs/json.md).
+
+--download-attachments <dir> saves the attachments of received messages (view-once ones too)
+to dir, which is created if missing, as "<timestamp>-<n>-<name>", where name is the sender's file
+name reduced to safe characters. Existing files are kept; a taken name gets a number. The output
+shows each file's path; a failed download is reported there and does not stop receive.`
 
 func newReceiveCmd(clients *clientOpener, printers *printerFactory) *cobra.Command {
 	var (
 		timeout time.Duration
 		follow  bool
 		maxEvts int
+		dlDir   string
 	)
 
 	cmd := &cobra.Command{
@@ -63,7 +69,12 @@ func newReceiveCmd(clients *clientOpener, printers *printerFactory) *cobra.Comma
 				return err
 			}
 
-			opts := receiveOptions{max: maxEvts}
+			err = prepareDownloadDir(dlDir)
+			if err != nil {
+				return err
+			}
+
+			opts := receiveOptions{max: maxEvts, downloadDir: dlDir}
 			if !follow {
 				opts.idle = timeout
 			}
@@ -91,6 +102,7 @@ func newReceiveCmd(clients *clientOpener, printers *printerFactory) *cobra.Comma
 		"exit after this long without events (one-shot mode)")
 	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "stream events until interrupted")
 	cmd.Flags().IntVar(&maxEvts, "max", 0, "exit after this many events with content (0: no limit)")
+	cmd.Flags().StringVar(&dlDir, "download-attachments", "", "save attachments to this directory")
 	cmd.MarkFlagsMutuallyExclusive("timeout", "follow")
 
 	return cmd
@@ -102,6 +114,8 @@ type receiveOptions struct {
 	idle time.Duration
 	// max is the number of content events after which receive ends; zero means no limit.
 	max int
+	// downloadDir is where attachments are saved; empty means not at all.
+	downloadDir string
 }
 
 // receive prints events until opts says to stop (errIdle, or nil after opts.max events), the
@@ -118,13 +132,13 @@ func receive(ctx context.Context, clients *clientOpener, printer *output.Printer
 		return fmt.Errorf("connect: %w", err)
 	}
 
-	return receiveEvents(ctx, client.Events(), printer, opts)
+	return receiveEvents(ctx, client.Events(), newEventPrinter(printer, client, opts.downloadDir), opts)
 }
 
 // receiveEvents prints events until opts says to stop, the connection is lost for good, or ctx
 // is done.
 func receiveEvents(
-	ctx context.Context, events <-chan signal.Event, printer *output.Printer, opts receiveOptions,
+	ctx context.Context, events <-chan signal.Event, printer eventPrinter, opts receiveOptions,
 ) error {
 	// Without an idle timeout, idle stays nil and never fires.
 	var (
@@ -152,13 +166,14 @@ func receiveEvents(
 				return nil
 			}
 
-			if timer != nil {
-				timer.Reset(opts.idle)
-			}
-
-			done, err := handleEvent(printer, evt, &remaining)
+			done, err := handleEvent(ctx, printer, evt, &remaining)
 			if done {
 				return err
+			}
+
+			// Reset after handling, so that a slow attachment download doesn't count as idle.
+			if timer != nil {
+				timer.Reset(opts.idle)
 			}
 		}
 	}
@@ -167,8 +182,8 @@ func receiveEvents(
 // handleEvent prints evt and reports whether receive ends with it: after the last of --max
 // events (remaining counts down to zero; it starts at zero without a limit), or at a connection
 // that is lost for good, whose error it returns.
-func handleEvent(printer *output.Printer, evt signal.Event, remaining *int) (bool, error) {
-	err := printer.Event(evt)
+func handleEvent(ctx context.Context, printer eventPrinter, evt signal.Event, remaining *int) (bool, error) {
+	err := printer.print(ctx, evt)
 	if err != nil {
 		return true, fmt.Errorf("print event: %w", err)
 	}

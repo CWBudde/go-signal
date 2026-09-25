@@ -8,6 +8,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/cwbudde/go-signal/internal/app"
 	"github.com/cwbudde/go-signal/internal/signal"
 )
 
@@ -24,6 +25,21 @@ func (p *Printer) Event(evt signal.Event) error {
 		return nil
 	}
 
+	return p.writeLine(line)
+}
+
+// SavedMessage prints a message like Event, together with the outcome of saving its
+// attachments (app.SaveAttachments, one entry per attachment): the local path, or why the
+// download failed.
+func (p *Printer) SavedMessage(msg *signal.Message, saved []app.SavedAttachment) error {
+	if p.format == JSON {
+		return p.writeJSON(messageDocOf(msg, saved))
+	}
+
+	return p.writeLine(p.envelopeLine(msg.Envelope, p.messageText(msg, saved)))
+}
+
+func (p *Printer) writeLine(line string) error {
 	_, err := fmt.Fprintln(p.w, line)
 	if err != nil {
 		return fmt.Errorf("write output: %w", err)
@@ -108,6 +124,9 @@ type attachmentJSON struct {
 	Filename    string `json:"filename,omitempty"`
 	Size        uint32 `json:"size,omitempty"`
 	Caption     string `json:"caption,omitempty"`
+	// Path and DownloadError are only set by receive --download-attachments.
+	Path          string `json:"path,omitempty"`
+	DownloadError string `json:"downloadError,omitempty"`
 }
 
 type stickerJSON struct {
@@ -214,7 +233,7 @@ type connectionDoc struct {
 func eventDoc(evt signal.Event) any {
 	switch evt := evt.(type) {
 	case *signal.Message:
-		return messageDocOf(evt)
+		return messageDocOf(evt, nil)
 	case *signal.Edit:
 		return editDoc{
 			eventHead: head(typeEdit), envelopeJSON: envelope(evt.Envelope),
@@ -267,7 +286,8 @@ func eventDoc(evt signal.Event) any {
 	}
 }
 
-func messageDocOf(msg *signal.Message) messageDoc {
+// messageDocOf renders msg; saved is nil or has one entry per attachment.
+func messageDocOf(msg *signal.Message, saved []app.SavedAttachment) messageDoc {
 	doc := messageDoc{
 		eventHead:    head(typeMessage),
 		envelopeJSON: envelope(msg.Envelope),
@@ -276,10 +296,15 @@ func messageDocOf(msg *signal.Message) messageDoc {
 		Unsupported:  msg.Unsupported,
 	}
 
-	for _, att := range msg.Attachments {
+	for i, att := range msg.Attachments {
 		doc.Attachments = append(doc.Attachments, attachmentJSON{
 			ContentType: att.ContentType, Filename: att.Filename, Size: att.Size, Caption: att.Caption,
 		})
+
+		if i < len(saved) {
+			doc.Attachments[i].Path = saved[i].Path
+			doc.Attachments[i].DownloadError = errorText(saved[i].Err)
+		}
 	}
 
 	if msg.Sticker != nil {
@@ -329,7 +354,7 @@ const self = "me"
 func (p *Printer) eventLine(evt signal.Event) string {
 	switch evt := evt.(type) {
 	case *signal.Message:
-		return p.envelopeLine(evt.Envelope, p.messageText(evt))
+		return p.envelopeLine(evt.Envelope, p.messageText(evt, nil))
 	case *signal.Edit:
 		return p.envelopeLine(evt.Envelope,
 			"[edit of message sent "+p.msDateTime(evt.TargetTimestamp)+"] "+oneLine(evt.Body))
@@ -380,7 +405,8 @@ func (p *Printer) envelopeLine(env signal.Envelope, text string) string {
 	return p.timePrefix(env.Timestamp) + route + ": " + text
 }
 
-func (p *Printer) messageText(msg *signal.Message) string {
+// messageText renders msg; saved is nil or has one entry per attachment.
+func (p *Printer) messageText(msg *signal.Message, saved []app.SavedAttachment) string {
 	var parts []string
 
 	if msg.Quote != nil {
@@ -396,8 +422,13 @@ func (p *Printer) messageText(msg *signal.Message) string {
 		parts = append(parts, oneLine(msg.Body))
 	}
 
-	for _, att := range msg.Attachments {
-		parts = append(parts, attachmentText(att, msg.ViewOnce))
+	for i, att := range msg.Attachments {
+		var outcome *app.SavedAttachment
+		if i < len(saved) {
+			outcome = &saved[i]
+		}
+
+		parts = append(parts, attachmentText(att, msg.ViewOnce, outcome))
 	}
 
 	if msg.Sticker != nil {
@@ -419,7 +450,9 @@ func (p *Printer) messageText(msg *signal.Message) string {
 // quoteLength is how many characters of a quoted message plain output shows.
 const quoteLength = 40
 
-func attachmentText(att signal.Attachment, viewOnce bool) string {
+// attachmentText is "[attachment <type> <size> <name>]", plus "→ <path>" or the download error
+// when the attachment was saved (saved is not nil).
+func attachmentText(att signal.Attachment, viewOnce bool, saved *app.SavedAttachment) string {
 	words := []string{"attachment"}
 	if viewOnce {
 		words = []string{"view-once", "attachment"}
@@ -435,6 +468,14 @@ func attachmentText(att signal.Attachment, viewOnce bool) string {
 
 	if att.Filename != "" {
 		words = append(words, oneLine(att.Filename))
+	}
+
+	switch {
+	case saved == nil:
+	case saved.Err != nil:
+		words = append(words, "(download failed: "+oneLine(saved.Err.Error())+")")
+	default:
+		words = append(words, "→", oneLine(saved.Path))
 	}
 
 	return "[" + strings.Join(words, " ") + "]"

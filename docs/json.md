@@ -237,7 +237,7 @@ The envelope fields, plus:
 | Field         | Type     | Description                                                                                          |
 | ------------- | -------- | ---------------------------------------------------------------------------------------------------- |
 | `body`        | string   | Message text; _optional_. Mentions are U+FFFC placeholders for now                                   |
-| `attachments` | array    | _optional_. Each has `contentType`, and _optional_ `filename`, `size` (bytes) and `caption`          |
+| `attachments` | array    | _optional_. See below                                                                                |
 | `sticker`     | object   | _optional_. `packId` (hex), `stickerId` (number) and _optional_ `emoji`                              |
 | `quote`       | object   | The message this one replies to; _optional_. `author` (recipient), `timestamp` and _optional_ `text` |
 | `viewOnce`    | boolean  | `true` for a view-once message; _optional_ (left out when `false`)                                   |
@@ -245,6 +245,19 @@ The envelope fields, plus:
 
 A message has a `body`, an attachment or a sticker; data messages with none of these are reported
 as `unsupported`.
+
+Each entry of `attachments` has:
+
+| Field           | Type   | Description                                                                                                         |
+| --------------- | ------ | ------------------------------------------------------------------------------------------------------------------- |
+| `contentType`   | string | MIME type as the sender gave it                                                                                     |
+| `filename`      | string | The sender's file name, unsanitized; _optional_                                                                     |
+| `size`          | number | Size in bytes; _optional_                                                                                           |
+| `caption`       | string | _optional_                                                                                                          |
+| `path`          | string | Where `receive --download-attachments <dir>` saved it: `<dir>/<timestamp>-<n>-<name>`; _optional_                   |
+| `downloadError` | string | Why `--download-attachments` couldn't save it (e.g. `attachment not found on the CDN`); _optional_, excludes `path` |
+
+Without `--download-attachments`, neither `path` nor `downloadError` is set.
 
 ### `edit`
 

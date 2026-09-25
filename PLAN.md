@@ -472,12 +472,33 @@ up, so the timeout stays the only end condition.
 
 #### 3.7 Attachments on receive
 
-- [ ] `--download-attachments <dir>`: download, decrypt, verify digest, write with a safe
-      filename (`<ts>-<n>-<sanitized-name>`), no path traversal
-- [ ] Emit the local path in plain and JSON output
-- [ ] Without the flag, only print metadata (type, size, filename)
+- [x] `--download-attachments <dir>`: download, decrypt, verify digest, write with a safe
+      filename (`<ts>-<n>-<sanitized-name>`), no path traversal (`signal.Attachment.Remote`
+      carries CDN number/key/ID, key and digest; `Client.Download` calls signalmeow's
+      `DownloadAttachment`, which checks digest and MAC, and maps failures to
+      `ErrAttachmentNotFound`/`ErrAttachmentInvalid`. `app.SaveAttachments` keeps only letters,
+      digits, `.`, `-`, `_` of the sender's name (last path component, no leading dots, max 120
+      bytes), falls back to `attachment.<ext>` by content type, and creates files with `O_EXCL`
+      (0600) through an `os.Root` on the dir (0700, created up front, so a bad dir fails before
+      connecting); a taken name gets `-2`, `-3`, … instead of being overwritten)
+- [x] Emit the local path in plain and JSON output (plain appends `→ <path>` or
+      `(download failed: …)` to the `[attachment …]` placeholder; JSON has `path` or
+      `downloadError`. A failed download is logged as a warning and doesn't stop `receive`)
+- [x] Without the flag, only print metadata (type, size, filename) (as since 3.5)
 
-**Done when:** an image from the phone lands in the target dir byte-identical.
+**Done when:** an image from the phone lands in the target dir byte-identical. (Done with the fake
+and unit tests; not yet verified against the live server.)
+
+Notes: view-once attachments are downloaded too, as signal-cli does; the output marks them. The
+event is acked when it is read, before the download, and pointers aren't stored, so a failed
+download can't be retried later. signalmeow's CDN request ignores the context and has no timeout:
+`Download` stops waiting on cancel, but the transfer runs on in the background until the process
+exits. It also panics on a CDN number past its host list, so such pointers are rejected first, as
+are pointers without size (signalmeow would cut the content to zero bytes). The whole attachment
+is held in memory (up to 100 MiB). The idle timeout of a one-shot `receive` now restarts after an
+event is handled, so a slow download doesn't end it. A message delivered twice saves its
+attachments again under numbered names. Thumbnails, blurhash, voice-note/borderless flags,
+width/height and received stickers' images aren't handled.
 
 #### 3.8 Receipts, reactions, remote delete
 
