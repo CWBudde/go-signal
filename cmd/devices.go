@@ -1,8 +1,7 @@
 package cmd
 
 import (
-	"fmt"
-
+	"github.com/cwbudde/go-signal/internal/app"
 	"github.com/spf13/cobra"
 )
 
@@ -35,9 +34,9 @@ func newDevicesListCmd(clients *clientOpener, printers *printerFactory) *cobra.C
 			}
 			defer closeClient(client)
 
-			devices, err := client.Devices(cmd.Context())
+			devices, err := app.New(client).DevicesList(cmd.Context())
 			if err != nil {
-				return fmt.Errorf("devices list: %w", err)
+				return err //nolint:wrapcheck // app wraps it
 			}
 
 			return printer.Devices(devices)

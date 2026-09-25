@@ -3,6 +3,7 @@
 package signal
 
 import (
+	"github.com/google/uuid"
 	"go.mau.fi/mautrix-signal/pkg/libsignalgo"
 	"go.mau.fi/mautrix-signal/pkg/signalmeow"
 	"go.mau.fi/mautrix-signal/pkg/signalmeow/events"
@@ -36,4 +37,14 @@ func HPKEOpen(privateKey, ciphertext, info, associatedData []byte) ([]byte, erro
 // ConvertLoopStatus exposes convertLoopStatus to the signal_test package.
 func ConvertLoopStatus(status signalmeow.SignalConnectionStatus) LoopStatus {
 	return convertLoopStatus(status)
+}
+
+// UsernameHash exposes usernameHash to the signal_test package.
+func UsernameHash(username string) ([]byte, error) {
+	return usernameHash(username)
+}
+
+// ACIFromUsernameResponse exposes aciFromUsernameResponse to the signal_test package.
+func ACIFromUsernameResponse(status int, body []byte) (uuid.UUID, error) {
+	return aciFromUsernameResponse(status, body)
 }

@@ -31,6 +31,13 @@ var ErrNotConnected = errors.New("client is not connected")
 // ErrClosed is returned by operations started after Close.
 var ErrClosed = errors.New("client is closed")
 
+// ErrNotOnSignal means that a phone number or username belongs to no (discoverable) Signal
+// account.
+var ErrNotOnSignal = errors.New("not on Signal")
+
+// ErrUnresolvable means that a Recipient has no identifier that can be resolved to an ACI.
+var ErrUnresolvable = errors.New("recipient has no number, username or ACI")
+
 // ErrNotImplemented marks facade operations that a later phase fills in.
 var ErrNotImplemented = errors.New("not implemented yet")
 

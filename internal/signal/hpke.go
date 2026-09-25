@@ -40,7 +40,8 @@ import (
 	"unsafe"
 )
 
-var errHPKE = errors.New("libsignal hpke")
+// errLibsignal wraps the errors libsignal returns through ffiError.
+var errLibsignal = errors.New("libsignal")
 
 // hpkeOpen decrypts ciphertext sealed to the serialized private key (libsignal's
 // PrivateKey.open).
@@ -117,10 +118,10 @@ func ffiError(ffiErr *C.SignalFfiError) error {
 
 	var msg C.SignalCStringPtr
 	if C.signal_error_get_message(&msg, ffiErr) != nil || msg == nil {
-		return errHPKE
+		return errLibsignal
 	}
 
 	defer C.signal_free_string(msg)
 
-	return fmt.Errorf("%w: %s", errHPKE, C.GoString((*C.char)(unsafe.Pointer(msg))))
+	return fmt.Errorf("%w: %s", errLibsignal, C.GoString((*C.char)(unsafe.Pointer(msg))))
 }

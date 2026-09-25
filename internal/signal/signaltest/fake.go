@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -35,6 +36,9 @@ type Fake struct {
 	Incoming []signal.Event
 	// Devices is what Devices returns for any account.
 	Devices []signal.Device
+	// Directory are the users on Signal: Resolve finds them by Number or Username (with ACI set).
+	// Like the real client, looking up a number needs Connect.
+	Directory []signal.Recipient
 	// InUse simulates another process holding the account lock: Connect and Unlink fail.
 	InUse bool
 
@@ -256,6 +260,41 @@ func (c *client) Events() <-chan signal.Event {
 	return c.events
 }
 
+func (c *client) Resolve(_ context.Context, recipients []signal.Recipient) ([]signal.Recipient, error) {
+	c.fake.mu.Lock()
+	defer c.fake.mu.Unlock()
+
+	if c.closed {
+		return nil, signal.ErrClosed
+	}
+
+	out := slices.Clone(recipients)
+
+	var errs []error
+
+	for i, rcpt := range out {
+		if rcpt.ACI != "" {
+			continue
+		}
+
+		known, err := c.lookup(rcpt)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w (fake)", rcpt, err))
+
+			continue
+		}
+
+		out[i] = known
+	}
+
+	err := errors.Join(errs...)
+	if err != nil {
+		return nil, err
+	}
+
+	return out, nil
+}
+
 func (c *client) Send(_ context.Context, req signal.SendRequest) (signal.SendResult, error) {
 	c.fake.mu.Lock()
 	defer c.fake.mu.Unlock()
@@ -367,4 +406,33 @@ func (c *client) feed(incoming []signal.Event) {
 			return
 		}
 	}
+}
+
+// lookup finds rcpt in the Directory; the caller holds c.fake.mu.
+func (c *client) lookup(rcpt signal.Recipient) (signal.Recipient, error) {
+	var match func(signal.Recipient) bool
+
+	switch {
+	case rcpt.Number != "":
+		if c.connected == "" {
+			return signal.Recipient{}, signal.ErrNotConnected
+		}
+
+		match = func(known signal.Recipient) bool { return known.Number == rcpt.Number }
+	case rcpt.Username != "":
+		match = func(known signal.Recipient) bool { return strings.EqualFold(known.Username, rcpt.Username) }
+	default:
+		return signal.Recipient{}, signal.ErrUnresolvable
+	}
+
+	i := slices.IndexFunc(c.fake.Directory, match)
+	if i < 0 {
+		return signal.Recipient{}, signal.ErrNotOnSignal
+	}
+
+	known := c.fake.Directory[i]
+	// Keep what the caller asked for, like the real client does.
+	known.Number, known.Username = rcpt.Number, rcpt.Username
+
+	return known, nil
 }

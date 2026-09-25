@@ -306,6 +306,9 @@ When signalmeow clears the credentials of a logged-out device, `account show` fa
 
 ### Phase 3 — Send and receive (the core)
 
+Since 5.1, the command logic goes into `internal/app` (typed request → typed result, tested
+against the fake); `cmd/` only parses flags, calls `app` and renders via `internal/output`.
+
 #### 3.1 Connection lifecycle
 
 - [x] Root context cancelled on SIGINT/SIGTERM; second signal forces exit (`cmd.SignalContext`;
@@ -340,13 +343,32 @@ than the round trip could still miss it. signalmeow notices a silently dead conn
 
 #### 3.2 Recipient resolution
 
-- [ ] Parse E.164, ACI UUID, `@username`, and `group:<id>` into a `Recipient`
-- [ ] E.164 → ACI via CDSI (signalmeow contact discovery), cached in the store
-- [ ] Username → ACI lookup
-- [ ] Note-to-self as a recipient (`self` / own number)
+- [x] Parse E.164, ACI UUID, `@username`, and `group:<id>` into a `Recipient`
+      (`app.ParseRecipient` → `app.Target`: a `signal.Recipient`, a group ID or self; strict
+      `+<digits>` E.164, lower-cased ACI, group IDs of 32 bytes in standard or URL-safe base64,
+      normalized to standard. Invalid arguments fail with `app.ErrInvalidRecipient`)
+- [x] E.164 → ACI via CDSI (signalmeow contact discovery), cached in the store
+      (`Client.Resolve`: cache hits come from signalmeow's recipient table, misses go through
+      `signalmeow.Client.LookupPhone` and are written back with `UpdateRecipientE164`. CDSI needs
+      the authed websocket, so uncached numbers need `Connect` first (`ErrNotConnected`))
+- [x] Username → ACI lookup (libsignal's `signal_username_hash` via cgo, since libsignalgo doesn't
+      wrap it, then the unauthenticated `GET /v1/accounts/username_hash/<base64url>`; no
+      connection needed; invalid usernames fail with `signal.ErrInvalidUsername` before any request)
+- [x] Note-to-self as a recipient (`self` / own number) (also the own ACI; `app.ResolveRecipients`
+      turns them into a `Self` target carrying the own ACI and number)
 
 **Done when:** every recipient form resolves to an ACI (or group) in unit tests, and unknown
-numbers give a clear "not on Signal" error.
+numbers give a clear "not on Signal" error. (Done: `internal/app` tests against the fake's
+`Directory`, plus cgo tests for the username hash, the lookup response and store-cached numbers.
+Errors name the recipient, e.g. `+4915100000000: not on Signal`, and all failing recipients are
+reported together. Not yet verified against the live server.)
+
+Notes: `app.ResolveRecipients` drops duplicates (same ACI or group), keeping the order. Usernames
+aren't cached (signalmeow's recipient table has no column for them). CDSI returns no ACI for
+users who hid their number from discovery; that is reported as "not on Signal" too. For 3.3:
+while a command doesn't read `Events`, signalmeow's websocket read loop stalls once 256 incoming
+requests are queued, which also blocks responses to our requests (like CDSI credentials), so
+`send` must keep reading events (or Connect in a mode that doesn't hand them out).
 
 #### 3.3 Send: text
 
@@ -414,6 +436,9 @@ numbers give a clear "not on Signal" error.
 
 ### Phase 4 — Contacts, groups, identities
 
+Since 5.1, the command logic goes into `internal/app` (typed request → typed result, tested
+against the fake); `cmd/` only parses flags, calls `app` and renders via `internal/output`.
+
 #### 4.1 Contacts
 
 - [ ] `contacts list` (name, number, ACI, username, blocked), filters `--blocked`, `--query`
@@ -453,11 +478,15 @@ lacks something we need).
 
 #### 5.1 Shared use-case layer (`internal/app`)
 
-- [ ] Move the logic behind `send`, `react`, `delete`, `contacts`, `groups`, `identities` and
+- [x] Move the logic behind `send`, `react`, `delete`, `contacts`, `groups`, `identities` and
       `account show` out of `cmd/` into `internal/app` functions that take typed requests and
-      return typed results (no printing, no Cobra)
-- [ ] `cmd/` becomes flag parsing + `internal/app` call + `internal/output` rendering
-- [ ] Recipient resolution, name resolution and trust checks live only in `internal/app`
+      return typed results (no printing, no Cobra) (done for the commands that exist so far:
+      `app.App` wraps an open `signal.Client` with `AccountShow`, `AccountUnlink` and
+      `DevicesList`; the Phase 3/4 commands land there directly)
+- [x] `cmd/` becomes flag parsing + `internal/app` call + `internal/output` rendering (`account`
+      and `devices`; `link` and `receive` stay in `cmd/` since MCP doesn't expose them as tools)
+- [ ] Recipient resolution, name resolution and trust checks live only in `internal/app` (lands
+      with 3.2, 4.1 and 4.3; recipient resolution is in since 3.2: `app.ResolveRecipients`)
 
 **Done when:** the CLI behaves as before (golden files unchanged), and `internal/app` has unit
 tests against the fake facade.

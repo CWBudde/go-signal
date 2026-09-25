@@ -2,9 +2,8 @@ package cmd
 
 import (
 	"errors"
-	"fmt"
 
-	"github.com/cwbudde/go-signal/internal/signal"
+	"github.com/cwbudde/go-signal/internal/app"
 	"github.com/spf13/cobra"
 )
 
@@ -44,9 +43,9 @@ func newAccountShowCmd(clients *clientOpener, printers *printerFactory) *cobra.C
 			}
 			defer closeClient(client)
 
-			acc, err := client.Account(cmd.Context())
+			acc, err := app.New(client).AccountShow(cmd.Context())
 			if err != nil {
-				return fmt.Errorf("account show: %w", err)
+				return err //nolint:wrapcheck // app wraps it
 			}
 
 			return printer.Account(acc)
@@ -56,8 +55,8 @@ func newAccountShowCmd(clients *clientOpener, printers *printerFactory) *cobra.C
 
 func newAccountUnlinkCmd(clients *clientOpener, printers *printerFactory) *cobra.Command {
 	var (
-		yes  bool
-		opts signal.UnlinkOptions
+		yes bool
+		req app.UnlinkRequest
 	)
 
 	cmd := &cobra.Command{
@@ -84,17 +83,17 @@ go-signal has seen being unlinked (see "account show") skips the server automati
 			}
 			defer closeClient(client)
 
-			acc, err := client.Unlink(cmd.Context(), opts)
+			res, err := app.New(client).AccountUnlink(cmd.Context(), req)
 			if err != nil {
-				return fmt.Errorf("account unlink: %w", err)
+				return err //nolint:wrapcheck // app wraps it
 			}
 
-			return printer.Unlinked(acc, opts.LocalOnly || acc.Unlinked())
+			return printer.Unlinked(res.Account, res.LocalOnly)
 		},
 	}
 
 	cmd.Flags().BoolVar(&yes, "yes", false, "confirm deleting the account's local data")
-	cmd.Flags().BoolVar(&opts.LocalOnly, "local-only", false, "only delete the local data; don't contact the server")
+	cmd.Flags().BoolVar(&req.LocalOnly, "local-only", false, "only delete the local data; don't contact the server")
 
 	return cmd
 }

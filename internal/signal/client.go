@@ -34,6 +34,14 @@ type Client interface {
 	// channel; events not read before Close are delivered again next time.
 	Events() <-chan Event
 
+	// Resolve returns recipients with their ACI filled in, in the same order. Recipients that
+	// already have one are returned as they are. A number is looked up in the store first and
+	// otherwise through contact discovery, which needs Connect (ErrNotConnected); the result is
+	// cached in the store. A username (nickname.discriminator) is looked up by its hash and needs
+	// no connection. Each recipient that has no Signal account fails with ErrNotOnSignal; the
+	// errors of all recipients are joined.
+	Resolve(ctx context.Context, recipients []Recipient) ([]Recipient, error)
+
 	// Send sends a message. Only valid after Connect.
 	Send(ctx context.Context, req SendRequest) (SendResult, error)
 
