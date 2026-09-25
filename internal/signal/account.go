@@ -45,6 +45,13 @@ var ErrUnknownGroup = errors.New("unknown group")
 // ErrInvalidSendRequest means that a SendRequest has neither or both of recipients and a group.
 var ErrInvalidSendRequest = errors.New("send request needs either recipients or a group")
 
+// ErrInvalidContent means that a SendRequest mixes a reaction or remote delete with other
+// content, or lacks a field one of them needs (an emoji, a target timestamp).
+var ErrInvalidContent = errors.New("invalid message content")
+
+// ErrInvalidReceipt means that a receipt has an unknown type or no timestamps.
+var ErrInvalidReceipt = errors.New("invalid receipt")
+
 // ErrUnknownAttachment means that a SendRequest names an attachment this client hasn't uploaded.
 var ErrUnknownAttachment = errors.New("attachment was not uploaded by this client")
 

@@ -137,26 +137,44 @@ func baseType(contentType string) string {
 // a user recipient argument (see ParseRecipient; self for our own messages) and its sent
 // timestamp in milliseconds.
 func ParseQuote(arg string) (Target, uint64, error) {
+	return parseMessageRef(arg, ErrInvalidQuote)
+}
+
+// parseMessageRef parses <author>:<timestamp> (see ParseQuote); errors wrap kind.
+func parseMessageRef(arg string, kind error) (Target, uint64, error) {
 	i := strings.LastIndex(arg, ":")
 	if i < 0 {
-		return Target{}, 0, fmt.Errorf("%w %q: want <author>:<timestamp>", ErrInvalidQuote, arg)
+		return Target{}, 0, fmt.Errorf("%w %q: want <author>:<timestamp>", kind, arg)
 	}
 
-	timestamp, err := strconv.ParseUint(arg[i+1:], 10, 64)
-	if err != nil || timestamp == 0 {
-		return Target{}, 0, fmt.Errorf("%w %q: the timestamp must be the message's time in ms", ErrInvalidQuote, arg)
+	timestamp, err := parseTimestamp(arg[i+1:])
+	if err != nil {
+		return Target{}, 0, fmt.Errorf("%w %q: %w", kind, arg, err)
 	}
 
 	author, err := ParseRecipient(arg[:i])
 	if err != nil {
-		return Target{}, 0, fmt.Errorf("%w %q: %w", ErrInvalidQuote, arg, err)
+		return Target{}, 0, fmt.Errorf("%w %q: %w", kind, arg, err)
 	}
 
 	if author.IsGroup() {
-		return Target{}, 0, fmt.Errorf("%w %q: the author must be a user", ErrInvalidQuote, arg)
+		return Target{}, 0, fmt.Errorf("%w %q: the author must be a user", kind, arg)
 	}
 
 	return author, timestamp, nil
+}
+
+// errBadTimestamp explains an invalid message timestamp.
+var errBadTimestamp = errors.New("the timestamp must be the message's time in ms")
+
+// parseTimestamp parses a message's sent timestamp in ms, which is never zero.
+func parseTimestamp(arg string) (uint64, error) {
+	timestamp, err := strconv.ParseUint(strings.TrimSpace(arg), 10, 64)
+	if err != nil || timestamp == 0 {
+		return 0, errBadTimestamp
+	}
+
+	return timestamp, nil
 }
 
 // mention is a @{<recipient>} placeholder found in a message body.
@@ -219,6 +237,9 @@ type content struct {
 	quote       *signal.Quote
 	mentions    []signal.Mention
 	attachments []signal.UploadedAttachment
+	// reaction or deleteTarget replace the content above for React and Delete.
+	reaction     *signal.OutgoingReaction
+	deleteTarget uint64
 }
 
 // buildContent resolves the quote author and the mentioned users of req to ACIs and uploads files.

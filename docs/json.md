@@ -171,6 +171,74 @@ Each entry of `members`:
 | `unidentified` | boolean | `true` if sent with sealed sender                             |
 | `error`        | string  | Why sending to the member failed; _optional_                  |
 
+## `react`
+
+```json
+{
+  "version": 1,
+  "react": {
+    "emoji": "👍",
+    "remove": false,
+    "targetAuthor": {
+      "aci": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "number": "+15550101"
+    },
+    "targetTimestamp": 1789999999000,
+    "timestamp": 1790000000000,
+    "results": [
+      {
+        "type": "user",
+        "number": "+15550101",
+        "aci": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "timestamp": 1790000000000,
+        "success": true,
+        "unidentified": true
+      }
+    ]
+  }
+}
+```
+
+A reaction is a message of its own: `timestamp` and `results` are as in [`send`](#send), with one
+entry per chat given on the command line. The other fields describe the reaction:
+
+| Field             | Type      | Description                                                            |
+| ----------------- | --------- | ---------------------------------------------------------------------- |
+| `emoji`           | string    | The emoji                                                              |
+| `remove`          | boolean   | `true` if the reaction was taken back (`--remove`)                     |
+| `targetAuthor`    | recipient | Author of the message reacted to (as in `receive`); our own for `self` |
+| `targetTimestamp` | number    | Sent timestamp of the message reacted to                               |
+
+## `delete`
+
+```json
+{
+  "version": 1,
+  "delete": {
+    "targetTimestamp": 1789999999000,
+    "timestamp": 1790000000000,
+    "results": [
+      {
+        "type": "group",
+        "groupId": "Z3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXA=",
+        "timestamp": 1790000000000,
+        "success": true,
+        "members": [
+          {
+            "aci": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "success": true,
+            "unidentified": true
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+A remote delete is a message of its own, too: `timestamp` and `results` are as in
+[`send`](#send). `targetTimestamp` (number) is the sent timestamp of our message that was deleted.
+
 ## `receive`
 
 `receive` writes one document per event and line ([NDJSON](https://github.com/ndjson/ndjson-spec))

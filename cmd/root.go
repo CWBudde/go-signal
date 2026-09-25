@@ -188,8 +188,27 @@ messages, and run it as a JSON-RPC daemon for scripts and bots.`,
 		},
 	}
 
+	addGlobalFlags(root, cfg, &cfgFile)
+
+	root.AddCommand(
+		newAccountCmd(clients, printers),
+		newDeleteCmd(clients, printers, rootOpts.appOpts),
+		newDevicesCmd(clients, printers),
+		newLinkCmd(clients),
+		newMCPCmd(clients, rootOpts.appOpts),
+		newReactCmd(clients, printers, rootOpts.appOpts),
+		newReceiveCmd(clients, printers),
+		newSendCmd(clients, printers, rootOpts.appOpts),
+		newVersionCmd(),
+	)
+
+	return root
+}
+
+// addGlobalFlags adds the persistent flags to root and binds all but --config to cfg.
+func addGlobalFlags(root *cobra.Command, cfg *viper.Viper, cfgFile *string) {
 	flags := root.PersistentFlags()
-	flags.StringVar(&cfgFile, "config", "", "config file (default is $XDG_CONFIG_HOME/go-signal/config.yaml)")
+	flags.StringVar(cfgFile, "config", "", "config file (default is $XDG_CONFIG_HOME/go-signal/config.yaml)")
 	flags.String("data-dir", store.DefaultDir(), "directory holding account data and keys")
 	flags.StringP("account", "a", "", "account to use: E.164 number or ACI (required when several are linked)")
 	flags.StringP("output", "o", "plain", "output format: plain or json")
@@ -199,18 +218,6 @@ messages, and run it as a JSON-RPC daemon for scripts and bots.`,
 	for _, name := range []string{"data-dir", "account", "output", "verbose", "log-format"} {
 		cobra.CheckErr(cfg.BindPFlag(name, flags.Lookup(name)))
 	}
-
-	root.AddCommand(
-		newAccountCmd(clients, printers),
-		newDevicesCmd(clients, printers),
-		newLinkCmd(clients),
-		newMCPCmd(clients, rootOpts.appOpts),
-		newReceiveCmd(clients, printers),
-		newSendCmd(clients, printers, rootOpts.appOpts),
-		newVersionCmd(),
-	)
-
-	return root
 }
 
 // clientOpener opens a signal.Client configured from the global flags.

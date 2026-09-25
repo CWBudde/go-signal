@@ -74,12 +74,12 @@ func GroupResults(sent *signalmeow.GroupMessageSendResult) []RecipientResult {
 	return groupResults(sent)
 }
 
-// CheckSendRequest exposes checkSendRequest to the signal_test package.
-func CheckSendRequest(req SendRequest) error {
-	return checkSendRequest(req)
-}
-
 // ACIServiceID exposes aciServiceID to the signal_test package.
 func ACIServiceID(rcpt Recipient) (libsignalgo.ServiceID, error) {
 	return aciServiceID(rcpt)
+}
+
+// ReceiptContent exposes receiptContent to the signal_test package.
+func ReceiptContent(typ ReceiptType, timestamps []uint64) (*signalpb.Content, error) {
+	return receiptContent(typ, timestamps)
 }

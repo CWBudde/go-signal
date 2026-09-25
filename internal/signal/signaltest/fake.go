@@ -60,6 +60,8 @@ type Fake struct {
 	DevicesErr error
 	// UnlinkErr makes removing the device on the server fail; Unlink with LocalOnly ignores it.
 	UnlinkErr error
+	// ReceiptErr makes SendReceipt fail.
+	ReceiptErr error
 
 	mu        sync.Mutex
 	opened    []signal.Options
@@ -67,6 +69,7 @@ type Fake struct {
 	uploaded  []signal.OutgoingAttachment
 	connects  []string
 	unlinks   []UnlinkCall
+	receipts  []ReceiptCall
 	delivered int
 	nextTS    uint64
 	clients   []*client
@@ -127,6 +130,21 @@ func (f *Fake) Delivered() int {
 	defer f.mu.Unlock()
 
 	return f.delivered
+}
+
+// ReceiptCall records a successful SendReceipt.
+type ReceiptCall struct {
+	Sender     signal.Recipient
+	Type       signal.ReceiptType
+	Timestamps []uint64
+}
+
+// Receipts returns every successful SendReceipt, in order.
+func (f *Fake) Receipts() []ReceiptCall {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	return append([]ReceiptCall(nil), f.receipts...)
 }
 
 // UnlinkCall records a successful Unlink.
@@ -388,6 +406,34 @@ func (c *client) Send(_ context.Context, req signal.SendRequest) (signal.SendRes
 	return res, nil
 }
 
+func (c *client) SendReceipt(
+	_ context.Context, sender signal.Recipient, typ signal.ReceiptType, timestamps []uint64,
+) error {
+	c.fake.mu.Lock()
+	defer c.fake.mu.Unlock()
+
+	switch {
+	case c.closed:
+		return signal.ErrClosed
+	case c.connected == "":
+		return signal.ErrNotConnected
+	case typ < signal.ReceiptDelivery || typ > signal.ReceiptViewed || len(timestamps) == 0:
+		return fmt.Errorf("%w (fake)", signal.ErrInvalidReceipt)
+	case sender.ACI == "":
+		return fmt.Errorf("%s: %w (fake)", sender, signal.ErrUnresolvable)
+	case c.lost != nil:
+		return fmt.Errorf("receipt: %w", c.lost)
+	case c.fake.ReceiptErr != nil:
+		return c.fake.ReceiptErr
+	}
+
+	c.fake.receipts = append(c.fake.receipts, ReceiptCall{
+		Sender: sender, Type: typ, Timestamps: slices.Clone(timestamps),
+	})
+
+	return nil
+}
+
 // lostError returns the error of the first event in incoming that ends the connection for good.
 func lostError(incoming []signal.Event) error {
 	for _, evt := range incoming {
@@ -502,9 +548,14 @@ func (c *client) checkSend(req signal.SendRequest) error {
 	return c.checkContent(req)
 }
 
-// checkContent fails for attachments this client didn't upload and for a quote author or
-// mentioned user without ACI.
+// checkContent fails like signal.SendRequest.Check, for attachments this client didn't upload
+// and for a quote author or mentioned user without ACI.
 func (c *client) checkContent(req signal.SendRequest) error {
+	err := req.Check()
+	if err != nil {
+		return fmt.Errorf("%w (fake)", err)
+	}
+
 	for _, att := range req.Attachments {
 		if !slices.Contains(c.uploads, att.ID) {
 			return fmt.Errorf("%w: %s", signal.ErrUnknownAttachment, att.Filename)

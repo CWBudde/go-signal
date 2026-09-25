@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/cwbudde/go-signal/internal/app"
 	"github.com/cwbudde/go-signal/internal/output"
 	"github.com/cwbudde/go-signal/internal/signal"
 	"github.com/spf13/cobra"
@@ -39,13 +40,18 @@ was unlinked from the account.
 Plain output prints one line per event: "[time] <sender> → <dest>: <text>", with placeholders
 such as [attachment image/jpeg 12.3 KB photo.jpg] or [unsupported call] for content that can't
 be shown as text. "me" is this account. With -o json, every event (including connection
-changes) is one JSON document per line (NDJSON, see docs/json.md).`
+changes) is one JSON document per line (NDJSON, see docs/json.md).
+
+With --send-read-receipts, the sender of each incoming message (not your own messages from other
+devices) gets a read receipt once the message was printed, collected for about a second into one
+receipt per sender. Your other devices then mark the messages as read, too.`
 
 func newReceiveCmd(clients *clientOpener, printers *printerFactory) *cobra.Command {
 	var (
 		timeout time.Duration
 		follow  bool
 		maxEvts int
+		rcpts   bool
 	)
 
 	cmd := &cobra.Command{
@@ -63,7 +69,7 @@ func newReceiveCmd(clients *clientOpener, printers *printerFactory) *cobra.Comma
 				return err
 			}
 
-			opts := receiveOptions{max: maxEvts}
+			opts := receiveOptions{max: maxEvts, readReceipts: rcpts}
 			if !follow {
 				opts.idle = timeout
 			}
@@ -91,6 +97,7 @@ func newReceiveCmd(clients *clientOpener, printers *printerFactory) *cobra.Comma
 		"exit after this long without events (one-shot mode)")
 	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "stream events until interrupted")
 	cmd.Flags().IntVar(&maxEvts, "max", 0, "exit after this many events with content (0: no limit)")
+	cmd.Flags().BoolVar(&rcpts, "send-read-receipts", false, "send read receipts for received messages")
 	cmd.MarkFlagsMutuallyExclusive("timeout", "follow")
 
 	return cmd
@@ -102,6 +109,10 @@ type receiveOptions struct {
 	idle time.Duration
 	// max is the number of content events after which receive ends; zero means no limit.
 	max int
+	// readReceipts sends read receipts for received messages (--send-read-receipts).
+	readReceipts bool
+	// receipts collects them; receive sets it on the connected client.
+	receipts *app.ReadReceipts
 }
 
 // receive prints events until opts says to stop (errIdle, or nil after opts.max events), the
@@ -116,6 +127,10 @@ func receive(ctx context.Context, clients *clientOpener, printer *output.Printer
 	err = client.Connect(ctx)
 	if err != nil {
 		return fmt.Errorf("connect: %w", err)
+	}
+
+	if opts.readReceipts {
+		opts.receipts = app.New(client).ReadReceipts()
 	}
 
 	return receiveEvents(ctx, client.Events(), printer, opts)
@@ -141,12 +156,17 @@ func receiveEvents(
 
 	remaining := opts.max
 
+	receipts := newReceiptSender(opts.receipts)
+	defer receipts.close(ctx)
+
 	for {
 		select {
 		case <-ctx.Done():
 			return fmt.Errorf("wait for events: %w", ctx.Err())
 		case <-idle:
 			return errIdle
+		case <-receipts.due():
+			receipts.flush(ctx)
 		case evt, ok := <-events:
 			if !ok {
 				return nil
@@ -157,6 +177,8 @@ func receiveEvents(
 			}
 
 			done, err := handleEvent(printer, evt, &remaining)
+			receipts.handled(evt, err)
+
 			if done {
 				return err
 			}

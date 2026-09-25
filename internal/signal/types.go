@@ -72,6 +72,21 @@ type SendRequest struct {
 	Quote *Quote
 	// Mentions mark users mentioned in Body; they need their ACI.
 	Mentions []Mention
+	// Reaction makes the message an emoji reaction (or its removal) instead of content; Body,
+	// Attachments, Quote, Mentions and DeleteTarget must be empty then.
+	Reaction *OutgoingReaction
+	// DeleteTarget, if not zero, makes the message a remote delete ("delete for everyone") of
+	// our own message with this sent timestamp; all other content must be empty then.
+	DeleteTarget uint64
+}
+
+// OutgoingReaction is an emoji reaction on the message TargetAuthor sent at TargetTimestamp.
+// Remove takes back an earlier reaction with the same Emoji.
+type OutgoingReaction struct {
+	Emoji           string
+	Remove          bool
+	TargetAuthor    Recipient // needs its ACI
+	TargetTimestamp uint64
 }
 
 // Mention marks a user mentioned in a message body. Start and Length count UTF-16 code units, as
