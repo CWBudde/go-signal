@@ -11,8 +11,9 @@ import (
 // columnGap separates the columns of plain tables.
 const columnGap = 2
 
-// accountJSON is the "account" object of docs/json.md.
-type accountJSON struct {
+// AccountJSON is the "account" object of docs/json.md. The MCP server returns it as structured
+// content.
+type AccountJSON struct {
 	Number     string    `json:"number"`
 	ACI        string    `json:"aci"`
 	PNI        string    `json:"pni,omitempty"`
@@ -24,7 +25,7 @@ type accountJSON struct {
 
 type accountDoc struct {
 	Version int         `json:"version"`
-	Account accountJSON `json:"account"`
+	Account AccountJSON `json:"account"`
 }
 
 // deviceJSON is the "device" object of docs/json.md.
@@ -53,18 +54,23 @@ type unlinkedDoc struct {
 	Unlinked unlinkedJSON `json:"unlinked"`
 }
 
+// NewAccountJSON converts acc to its JSON form.
+func NewAccountJSON(acc signal.Account) AccountJSON {
+	return AccountJSON{
+		Number:     acc.Number,
+		ACI:        acc.ACI,
+		PNI:        acc.PNI,
+		DeviceID:   acc.DeviceID,
+		DeviceName: acc.DeviceName,
+		LinkedAt:   utc(acc.LinkedAt),
+		UnlinkedAt: utc(acc.UnlinkedAt),
+	}
+}
+
 // Account prints a linked account (`account show`).
 func (p *Printer) Account(acc signal.Account) error {
 	if p.format == JSON {
-		return p.writeJSON(accountDoc{Version: SchemaVersion, Account: accountJSON{
-			Number:     acc.Number,
-			ACI:        acc.ACI,
-			PNI:        acc.PNI,
-			DeviceID:   acc.DeviceID,
-			DeviceName: acc.DeviceName,
-			LinkedAt:   utc(acc.LinkedAt),
-			UnlinkedAt: utc(acc.UnlinkedAt),
-		}})
+		return p.writeJSON(accountDoc{Version: SchemaVersion, Account: NewAccountJSON(acc)})
 	}
 
 	table := tabwriter.NewWriter(p.w, 0, 0, 1, ' ', 0)

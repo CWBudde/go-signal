@@ -528,21 +528,37 @@ tests against the fake facade.
 
 #### 5.2 Server skeleton and transport
 
-- [ ] `cmd/mcp.go`: `mcp serve` command; stdio transport; server name/version from `version`
-- [ ] stdout carries only the MCP protocol; all logging goes through slog to stderr (enforce with
+- [x] `cmd/mcp.go`: `mcp serve` command; stdio transport; server name/version from `version`
+      (official `github.com/modelcontextprotocol/go-sdk` v1.8.0; `internal/mcp.Serve` runs the
+      SDK's newline-delimited JSON-RPC over the command's stdin/stdout, server `go-signal` with
+      `cmd.Version`, plus short instructions)
+- [x] stdout carries only the MCP protocol; all logging goes through slog to stderr (enforce with
       a test that runs the server and checks stdout contains only JSON-RPC frames)
-- [ ] Account selection (`-a`), lock acquisition and connect happen before the server
+      (`TestMCPServeStdout` re-runs the test binary as a child with `-v` and checks every line of
+      its real stdout; the SDK's own logs are demoted to debug, and the `logging` capability is
+      not advertised)
+- [x] Account selection (`-a`), lock acquisition and connect happen before the server
       advertises tools; a locked or unlinked account fails at startup with a clear error
-- [ ] Graceful shutdown on stdin EOF and SIGINT/SIGTERM (reuses 3.1)
-- [ ] Tests via the SDK's in-memory transport against the fake facade (`CGO_ENABLED=0`)
+      (`ErrAccountInUse`, `ErrNotLinked`, and `ErrDeviceUnlinked` with exit code 3, before
+      anything is read from stdin or written to stdout)
+- [x] Graceful shutdown on stdin EOF and SIGINT/SIGTERM (reuses 3.1) (both end with exit 0;
+      the client is closed through `Client.Close`)
+- [x] Tests via the SDK's in-memory transport against the fake facade (`CGO_ENABLED=0`)
+      (`internal/mcp`; `cmd` tests drive `mcp serve` over pipes)
 
 **Done when:** `claude mcp add signal -- go-signal mcp serve` connects and lists the server's
-tools.
+tools. (Done with the fake: initialize and `tools/list` over stdio; not yet verified with Claude
+Code against a linked account.)
+
+Notes: until the inbox (5.4) consumes events, the server connects with `signal.SendOnly()`, so
+incoming messages stay on the server for the next `receive`, and a remote unlink while it runs
+only surfaces on the next send. `account_show` (from 5.3) landed here so that there is a tool to
+list; its structured output is the `docs/json.md` account object (`output.AccountJSON`).
 
 #### 5.3 Read-only tools
 
 - [ ] `account_show`, `contacts_list` (with `query`), `contacts_show`, `groups_list`,
-      `groups_show`, `identities_list`
+      `groups_show`, `identities_list` (`account_show` landed with 5.2)
 - [ ] Input/output JSON schemas derived from Go structs; outputs reuse the `docs/json.md` types
       as structured content, with a short text summary for clients that ignore structured output
 - [ ] Tool annotations: `readOnlyHint: true`
