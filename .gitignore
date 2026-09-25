@@ -28,3 +28,6 @@ go.work.sum
 
 # OS
 .DS_Store
+
+# libsignal_ffi.a built by `just libsignal`
+/third_party/lib/

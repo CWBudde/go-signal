@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"runtime"
 
+	"github.com/cwbudde/go-signal/internal/signal"
 	"github.com/spf13/cobra"
 )
 
@@ -26,6 +27,7 @@ func newVersionCmd() *cobra.Command {
 			fmt.Fprintf(out, "go-signal %s\n", Version)
 			fmt.Fprintf(out, "Git commit: %s\n", GitCommit)
 			fmt.Fprintf(out, "Build date: %s\n", BuildDate)
+			fmt.Fprintf(out, "libsignal: %s\n", signal.LibsignalVersion)
 			fmt.Fprintf(out, "Go version: %s\n", runtime.Version())
 			fmt.Fprintf(out, "OS/Arch: %s/%s\n", runtime.GOOS, runtime.GOARCH)
 		},

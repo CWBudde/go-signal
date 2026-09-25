@@ -8,8 +8,11 @@ permissions:
 
 jobs:
   test:
-    # Linux only for now: libsignal-ffi (CGO) is not wired into CI yet.
+    # Pure-Go build and tests: CGO_ENABLED=0 drops the libsignal link, so this job needs no Rust.
+    # The race detector requires cgo; the test-cgo job runs the tests with -race.
     runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: "0"
 
     steps:
       - uses: actions/checkout@v4
@@ -24,5 +27,4 @@ jobs:
         run: go build -v ./...
 
       - name: Run tests
-        shell: bash
-        run: go test -v -race -count=1 -coverprofile=coverage.txt -covermode=atomic ./...
+        run: go test -v -count=1 -coverprofile=coverage.txt -covermode=atomic ./...

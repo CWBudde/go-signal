@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/cwbudde/go-signal/cmd"
+	"github.com/cwbudde/go-signal/internal/signal"
 )
 
 func TestVersionCommand(t *testing.T) {
@@ -24,6 +25,10 @@ func TestVersionCommand(t *testing.T) {
 
 	if !strings.HasPrefix(out.String(), "go-signal ") {
 		t.Errorf("unexpected output: %q", out.String())
+	}
+
+	if !strings.Contains(out.String(), "libsignal: "+signal.LibsignalVersion+"\n") {
+		t.Errorf("missing libsignal version: %q", out.String())
 	}
 }
 

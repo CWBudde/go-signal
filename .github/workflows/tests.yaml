@@ -14,8 +14,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test-can-build:
-    uses: ./.github/workflows/test-can-build.yaml
+  test-cgo:
+    uses: ./.github/workflows/test-cgo.yaml
 
   test-unit:
     uses: ./.github/workflows/test-unit.yaml

@@ -8,7 +8,11 @@ runs as a linked device next to your phone.
 
 ## Development
 
+Building needs Go, Rust and a C toolchain. See [docs/dev.md](docs/dev.md) for details.
+
 ```sh
+git submodule update --init --depth 1 third_party/libsignal
+just libsignal    # build libsignal_ffi.a (once, and after submodule bumps)
 just build        # bin/go-signal with version info
 just test         # go test -race
 just lint         # golangci-lint
