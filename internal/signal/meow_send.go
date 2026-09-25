@@ -13,7 +13,96 @@ import (
 	"go.mau.fi/mautrix-signal/pkg/signalmeow"
 	"go.mau.fi/mautrix-signal/pkg/signalmeow/protobuf/signalpb"
 	"go.mau.fi/mautrix-signal/pkg/signalmeow/types"
+	"google.golang.org/protobuf/proto"
 )
+
+func (c *meowClient) Upload(ctx context.Context, attachments []OutgoingAttachment) ([]UploadedAttachment, error) {
+	if c.cancelLoops == nil {
+		return nil, ErrNotConnected
+	}
+
+	if !c.begin(&c.sending) {
+		return nil, ErrClosed
+	}
+	defer c.sending.Done()
+
+	err := c.connectionLost()
+	if err != nil {
+		return nil, fmt.Errorf("upload: %w", err)
+	}
+
+	c.cliMu.Lock()
+	cli := c.cli
+	c.cliMu.Unlock()
+
+	ctx = c.zlog.WithContext(ctx)
+	out := make([]UploadedAttachment, 0, len(attachments))
+
+	for _, att := range attachments {
+		pointer, err := cli.UploadAttachment(ctx, att.Data)
+		if err != nil {
+			return nil, fmt.Errorf("upload %s: %w", att.Filename, err)
+		}
+
+		out = append(out, c.addUpload(pointerMetadata(pointer, att, time.Now())))
+	}
+
+	return out, nil
+}
+
+// pointerMetadata fills in what signalmeow's UploadAttachment leaves out of pointer.
+func pointerMetadata(pointer *signalpb.AttachmentPointer, att OutgoingAttachment, now time.Time,
+) *signalpb.AttachmentPointer {
+	pointer.ContentType = new(att.ContentType)
+	pointer.UploadTimestamp = new(uint64(now.UnixMilli())) //nolint:gosec // the clock is after 1970
+
+	if att.Filename != "" {
+		pointer.FileName = new(att.Filename)
+	}
+
+	if att.Width > 0 && att.Height > 0 {
+		pointer.Width = new(att.Width)
+		pointer.Height = new(att.Height)
+	}
+
+	return pointer
+}
+
+// addUpload keeps pointer for Send and returns its handle.
+func (c *meowClient) addUpload(pointer *signalpb.AttachmentPointer) UploadedAttachment {
+	c.uploadsMu.Lock()
+	defer c.uploadsMu.Unlock()
+
+	if c.uploads == nil {
+		c.uploads = make(map[string]*signalpb.AttachmentPointer)
+	}
+
+	id := uuid.NewString()
+	c.uploads[id] = pointer
+
+	return UploadedAttachment{
+		ID: id, ContentType: pointer.GetContentType(), Filename: pointer.GetFileName(), Size: pointer.GetSize(),
+	}
+}
+
+// uploadedPointers returns the pointers of the attachments of a SendRequest.
+func (c *meowClient) uploadedPointers(attachments []UploadedAttachment) ([]*signalpb.AttachmentPointer, error) {
+	c.uploadsMu.Lock()
+	defer c.uploadsMu.Unlock()
+
+	out := make([]*signalpb.AttachmentPointer, 0, len(attachments))
+
+	for _, att := range attachments {
+		pointer, ok := c.uploads[att.ID]
+		if !ok {
+			return nil, fmt.Errorf("%w: %s", ErrUnknownAttachment, att.Filename)
+		}
+
+		out = append(out, pointer)
+	}
+
+	return out, nil
+}
 
 func (c *meowClient) Send(ctx context.Context, req SendRequest) (SendResult, error) {
 	if c.cancelLoops == nil {
@@ -25,7 +114,11 @@ func (c *meowClient) Send(ctx context.Context, req SendRequest) (SendResult, err
 	}
 	defer c.sending.Done()
 
-	err := checkSendRequest(req)
+	if req.Timestamp == 0 {
+		req.Timestamp = uint64(time.Now().UnixMilli()) //nolint:gosec // the clock is after 1970
+	}
+
+	msg, err := c.message(ctx, req)
 	if err != nil {
 		return SendResult{}, err
 	}
@@ -41,23 +134,16 @@ func (c *meowClient) Send(ctx context.Context, req SendRequest) (SendResult, err
 
 	ctx = c.zlog.WithContext(ctx)
 
-	timestamp := req.Timestamp
-	if timestamp == 0 {
-		timestamp = uint64(time.Now().UnixMilli()) //nolint:gosec // the clock is after 1970
-	}
-
-	profileKey := c.ownProfileKey(ctx)
-
 	if req.GroupID != "" {
-		results, err := sendGroup(ctx, cli, req.GroupID, dataMessage(req.Body, timestamp, profileKey))
+		results, err := sendGroup(ctx, cli, req.GroupID, msg())
 		if err != nil {
 			return SendResult{}, err
 		}
 
-		return SendResult{Timestamp: timestamp, Results: results}, nil
+		return SendResult{Timestamp: req.Timestamp, Results: results}, nil
 	}
 
-	res := SendResult{Timestamp: timestamp, Results: make([]RecipientResult, 0, len(req.Recipients))}
+	res := SendResult{Timestamp: req.Timestamp, Results: make([]RecipientResult, 0, len(req.Recipients))}
 
 	for _, rcpt := range req.Recipients {
 		serviceID, err := aciServiceID(rcpt)
@@ -70,21 +156,40 @@ func (c *meowClient) Send(ctx context.Context, req SendRequest) (SendResult, err
 		// SendMessage adds to the content (PNI signature), so every recipient gets its own. For
 		// our own ACI it only sends the sync transcript (note-to-self); otherwise it sends the
 		// sync transcript after the message.
-		sent := cli.SendMessage(ctx, serviceID, signalmeow.WrapDataMessage(dataMessage(req.Body, timestamp, profileKey)))
+		sent := cli.SendMessage(ctx, serviceID, signalmeow.WrapDataMessage(msg()))
 		res.Results = append(res.Results, recipientResult(rcpt, rcpt.ACI == c.ownACI, sent))
 	}
 
 	return res, nil
 }
 
-// checkSendRequest rejects requests that 3.3 can't send yet or that have no single target.
+// message checks req and returns a function that builds a fresh DataMessage for it, since
+// signalmeow adds to the message of every send.
+func (c *meowClient) message(ctx context.Context, req SendRequest) (func() *signalpb.DataMessage, error) {
+	err := checkSendRequest(req)
+	if err != nil {
+		return nil, err
+	}
+
+	pointers, err := c.uploadedPointers(req.Attachments)
+	if err != nil {
+		return nil, err
+	}
+
+	msg, err := dataMessage(req, pointers, c.ownProfileKey(ctx))
+	if err != nil {
+		return nil, err
+	}
+
+	return func() *signalpb.DataMessage {
+		return proto.CloneOf(msg)
+	}, nil
+}
+
+// checkSendRequest rejects requests that have no single target.
 func checkSendRequest(req SendRequest) error {
 	if (req.GroupID == "") == (len(req.Recipients) == 0) {
 		return ErrInvalidSendRequest
-	}
-
-	if len(req.Attachments) > 0 || req.Quote != nil {
-		return fmt.Errorf("send attachments or quotes: %w (Phase 3.4)", ErrNotImplemented)
 	}
 
 	return nil
@@ -104,18 +209,63 @@ func (c *meowClient) ownProfileKey(ctx context.Context) []byte {
 	return key.Slice()
 }
 
-// dataMessage builds the DataMessage of a text message.
-func dataMessage(body string, timestamp uint64, profileKey []byte) *signalpb.DataMessage {
+// dataMessage builds the DataMessage of req with the uploaded attachments.
+func dataMessage(req SendRequest, attachments []*signalpb.AttachmentPointer, profileKey []byte,
+) (*signalpb.DataMessage, error) {
 	msg := &signalpb.DataMessage{
-		Body:      new(body),
-		Timestamp: new(timestamp),
+		Timestamp:   new(req.Timestamp),
+		Attachments: attachments,
+	}
+
+	if req.Body != "" {
+		msg.Body = new(req.Body)
 	}
 
 	if len(profileKey) > 0 {
 		msg.ProfileKey = profileKey
 	}
 
-	return msg
+	for _, mention := range req.Mentions {
+		aci, err := aciBytes(mention.Recipient)
+		if err != nil {
+			return nil, fmt.Errorf("mention: %w", err)
+		}
+
+		msg.BodyRanges = append(msg.BodyRanges, &signalpb.BodyRange{
+			Start:           new(mention.Start),
+			Length:          new(mention.Length),
+			AssociatedValue: &signalpb.BodyRange_MentionAciBinary{MentionAciBinary: aci},
+		})
+	}
+
+	if req.Quote != nil {
+		aci, err := aciBytes(req.Quote.Author)
+		if err != nil {
+			return nil, fmt.Errorf("quote: %w", err)
+		}
+
+		msg.Quote = &signalpb.DataMessage_Quote{
+			Id:              new(req.Quote.Timestamp),
+			AuthorAciBinary: aci,
+			Type:            signalpb.DataMessage_Quote_NORMAL.Enum(),
+		}
+
+		if req.Quote.Text != "" {
+			msg.Quote.Text = new(req.Quote.Text)
+		}
+	}
+
+	return msg, nil
+}
+
+// aciBytes returns the 16-byte ACI of rcpt.
+func aciBytes(rcpt Recipient) ([]byte, error) {
+	id, err := aciServiceID(rcpt)
+	if err != nil {
+		return nil, err
+	}
+
+	return id.UUID[:], nil
 }
 
 // sendGroup sends msg to the members of the group groupID (with sender keys where possible);

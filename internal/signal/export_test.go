@@ -3,6 +3,8 @@
 package signal
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 	"go.mau.fi/mautrix-signal/pkg/libsignalgo"
 	"go.mau.fi/mautrix-signal/pkg/signalmeow"
@@ -51,8 +53,15 @@ func ACIFromUsernameResponse(status int, body []byte) (uuid.UUID, error) {
 }
 
 // DataMessage exposes dataMessage to the signal_test package.
-func DataMessage(body string, timestamp uint64, profileKey []byte) *signalpb.DataMessage {
-	return dataMessage(body, timestamp, profileKey)
+func DataMessage(req SendRequest, attachments []*signalpb.AttachmentPointer, profileKey []byte,
+) (*signalpb.DataMessage, error) {
+	return dataMessage(req, attachments, profileKey)
+}
+
+// PointerMetadata exposes pointerMetadata to the signal_test package.
+func PointerMetadata(pointer *signalpb.AttachmentPointer, att OutgoingAttachment, now time.Time,
+) *signalpb.AttachmentPointer {
+	return pointerMetadata(pointer, att, now)
 }
 
 // ConvertRecipientResult exposes recipientResult to the signal_test package.

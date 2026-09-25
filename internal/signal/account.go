@@ -45,6 +45,9 @@ var ErrUnknownGroup = errors.New("unknown group")
 // ErrInvalidSendRequest means that a SendRequest has neither or both of recipients and a group.
 var ErrInvalidSendRequest = errors.New("send request needs either recipients or a group")
 
+// ErrUnknownAttachment means that a SendRequest names an attachment this client hasn't uploaded.
+var ErrUnknownAttachment = errors.New("attachment was not uploaded by this client")
+
 // ErrSyncFailed means that the sync transcript of a note-to-self didn't reach our other devices.
 var ErrSyncFailed = errors.New("sending the note to self to our other devices failed")
 

@@ -17,6 +17,7 @@ import (
 	"github.com/rs/zerolog"
 	"go.mau.fi/mautrix-signal/pkg/signalmeow"
 	"go.mau.fi/mautrix-signal/pkg/signalmeow/events"
+	"go.mau.fi/mautrix-signal/pkg/signalmeow/protobuf/signalpb"
 	mstore "go.mau.fi/mautrix-signal/pkg/signalmeow/store"
 )
 
@@ -91,6 +92,10 @@ type meowClient struct {
 	sendOnly bool
 	lostMu   sync.Mutex
 	lost     error
+
+	// uploads are the attachments Upload put on the CDN, by UploadedAttachment.ID.
+	uploadsMu sync.Mutex
+	uploads   map[string]*signalpb.AttachmentPointer
 
 	// mu guards closing, so that no handler or send starts once Close waits for them.
 	mu        sync.Mutex

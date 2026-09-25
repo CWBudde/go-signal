@@ -6,11 +6,13 @@ import (
 	"bytes"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/cwbudde/go-signal/internal/signal"
 	"github.com/google/uuid"
 	"go.mau.fi/mautrix-signal/pkg/libsignalgo"
 	"go.mau.fi/mautrix-signal/pkg/signalmeow"
+	"go.mau.fi/mautrix-signal/pkg/signalmeow/protobuf/signalpb"
 )
 
 const (
@@ -24,17 +26,90 @@ func TestDataMessage(t *testing.T) {
 
 	key := bytes.Repeat([]byte{7}, 32)
 
-	msg := signal.DataMessage("hello", 1790000000000, key)
+	msg, err := signal.DataMessage(signal.SendRequest{Body: "hello", Timestamp: 1790000000000}, nil, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	if msg.GetBody() != "hello" || msg.GetTimestamp() != 1790000000000 || !bytes.Equal(msg.GetProfileKey(), key) {
 		t.Errorf("got %v", msg)
 	}
 
-	if msg.GetGroupV2() != nil || msg.GetExpireTimer() != 0 || msg.GetFlags() != 0 {
+	if msg.GetGroupV2() != nil || msg.GetExpireTimer() != 0 || msg.GetFlags() != 0 || msg.GetQuote() != nil ||
+		msg.Attachments != nil || msg.BodyRanges != nil {
 		t.Errorf("got extra fields: %v", msg)
 	}
 
-	if msg := signal.DataMessage("hi", 1, nil); msg.GetProfileKey() != nil {
-		t.Errorf("got profile key %x without one", msg.GetProfileKey())
+	msg, err = signal.DataMessage(signal.SendRequest{Body: "hi", Timestamp: 1}, nil, nil)
+	if err != nil || msg.GetProfileKey() != nil {
+		t.Errorf("got profile key %x without one (%v)", msg.GetProfileKey(), err)
+	}
+}
+
+func TestDataMessageRich(t *testing.T) {
+	t.Parallel()
+
+	pointer := &signalpb.AttachmentPointer{ContentType: new("image/png")}
+	req := signal.SendRequest{
+		Body:      "hi \uFFFC",
+		Timestamp: 2,
+		Quote:     &signal.Quote{Author: signal.Recipient{ACI: otherACI}, Timestamp: 1, Text: "earlier"},
+		Mentions:  []signal.Mention{{Start: 3, Length: 1, Recipient: signal.Recipient{ACI: sendACI}}},
+	}
+
+	msg, err := signal.DataMessage(req, []*signalpb.AttachmentPointer{pointer}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(msg.GetAttachments()) != 1 || msg.GetAttachments()[0] != pointer {
+		t.Errorf("attachments %v", msg.GetAttachments())
+	}
+
+	quote := msg.GetQuote()
+	if quote.GetId() != 1 || quote.GetText() != "earlier" || quote.GetType() != signalpb.DataMessage_Quote_NORMAL ||
+		uuid.UUID(quote.GetAuthorAciBinary()).String() != otherACI {
+		t.Errorf("quote %v", quote)
+	}
+
+	ranges := msg.GetBodyRanges()
+	if len(ranges) != 1 || ranges[0].GetStart() != 3 || ranges[0].GetLength() != 1 ||
+		uuid.UUID(ranges[0].GetMentionAciBinary()).String() != sendACI {
+		t.Errorf("body ranges %v", ranges)
+	}
+
+	// An attachment without text has no body.
+	msg, err = signal.DataMessage(signal.SendRequest{Timestamp: 2}, []*signalpb.AttachmentPointer{pointer}, nil)
+	if err != nil || msg.Body != nil {
+		t.Errorf("got body %q (%v)", msg.GetBody(), err)
+	}
+
+	for _, req := range []signal.SendRequest{
+		{Body: "x", Quote: &signal.Quote{Author: signal.Recipient{Number: "+15550101"}, Timestamp: 1}},
+		{Body: "\uFFFC", Mentions: []signal.Mention{{Length: 1, Recipient: signal.Recipient{Username: "bob.42"}}}},
+	} {
+		_, err := signal.DataMessage(req, nil, nil)
+		if !errors.Is(err, signal.ErrUnresolvable) {
+			t.Errorf("%+v: got %v, want ErrUnresolvable", req, err)
+		}
+	}
+}
+
+func TestPointerMetadata(t *testing.T) {
+	t.Parallel()
+
+	now := time.UnixMilli(1790000000000)
+	att := signal.OutgoingAttachment{ContentType: "image/png", Filename: "a.png", Width: 640, Height: 480}
+
+	got := signal.PointerMetadata(&signalpb.AttachmentPointer{Size: new(uint32(9))}, att, now)
+	if got.GetContentType() != "image/png" || got.GetFileName() != "a.png" || got.GetWidth() != 640 ||
+		got.GetHeight() != 480 || got.GetUploadTimestamp() != 1790000000000 || got.GetSize() != 9 {
+		t.Errorf("got %v", got)
+	}
+
+	got = signal.PointerMetadata(&signalpb.AttachmentPointer{}, signal.OutgoingAttachment{ContentType: "text/plain"}, now)
+	if got.FileName != nil || got.Width != nil || got.Height != nil {
+		t.Errorf("got unknown fields: %v", got)
 	}
 }
 
@@ -135,7 +210,6 @@ func TestCheckSendRequest(t *testing.T) {
 		{"group", signal.SendRequest{GroupID: group, Body: "hi"}, nil},
 		{"neither", signal.SendRequest{Body: "hi"}, signal.ErrInvalidSendRequest},
 		{"both", signal.SendRequest{Recipients: users, GroupID: group}, signal.ErrInvalidSendRequest},
-		{"attachment", signal.SendRequest{Recipients: users, Attachments: []string{"a.png"}}, signal.ErrNotImplemented},
 	}
 
 	for _, test := range tests {

@@ -15,16 +15,23 @@ func newSendCmd(clients *clientOpener, printers *printerFactory, appOpts []app.O
 		message string
 		stdin   bool
 		groups  []string
+		req     app.SendRequest
 	)
 
 	cmd := &cobra.Command{
-		Use:   "send <recipient>... (-m <text> | --stdin)",
-		Short: "Send a text message to users, groups or yourself",
-		Long: `Send a text message to one or more recipients.
+		Use:   "send <recipient>... (-m <text> | --stdin | --attach <file>)",
+		Short: "Send a message to users, groups or yourself",
+		Long: `Send a message to one or more recipients.
 
 A recipient is an E.164 number (+4915112345678), an ACI (UUID), @username
 (nickname.discriminator), group:<id> (base64 group ID; or use --group <id>), or self
 for a note to yourself. All recipients get the same message timestamp.
+
+In the text, @{<recipient>} mentions a user (a number, ACI, @username or self). Files
+attached with --attach (up to 100 MiB each) are uploaded once for all recipients.
+--quote <author>:<timestamp> replies to a message: the author is a user recipient (self
+for your own messages) and the timestamp is the message's time in ms, as receive -o json
+shows it. --quote-text is the quoted text shown when the recipient no longer has the message.
 
 The message also shows up on your other devices (a sync transcript); a note to self only goes
 there. Incoming messages are left on the server for the next receive.
@@ -34,9 +41,12 @@ exit code is non-zero.`,
 		Example: `  go-signal send +4915112345678 -m "Hello"
   go-signal send @alice.42 self -m "Meeting at 10"
   go-signal send --group 'Z3JvdXAt...=' -m "Hi all"
-  echo "Build done" | go-signal send self --stdin`,
+  echo "Build done" | go-signal send self --stdin
+  go-signal send +4915112345678 --attach photo.jpg -m "Look, @{@alice.42}"
+  go-signal send +4915112345678 --quote +4915112345678:1790000000000 -m "Yes"`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			req := app.SendRequest{Recipients: recipientArgs(args, groups), Body: message}
+			req.Recipients = recipientArgs(args, groups)
+			req.Body = message
 
 			if stdin {
 				var err error
@@ -55,8 +65,11 @@ exit code is non-zero.`,
 	flags.StringVarP(&message, "message", "m", "", "message text")
 	flags.BoolVar(&stdin, "stdin", false, "read the message text from stdin")
 	flags.StringArrayVarP(&groups, "group", "g", nil, "send to the group with this base64 ID (repeatable)")
+	flags.StringArrayVar(&req.Attachments, "attach", nil, "attach this file (repeatable)")
+	flags.StringVar(&req.Quote, "quote", "", "reply to the message `<author>:<timestamp>`")
+	flags.StringVar(&req.QuoteText, "quote-text", "", "the quoted text, shown if the recipient lacks the message")
 	cmd.MarkFlagsMutuallyExclusive("message", "stdin")
-	cmd.MarkFlagsOneRequired("message", "stdin")
+	cmd.MarkFlagsOneRequired("message", "stdin", "attach")
 
 	return cmd
 }

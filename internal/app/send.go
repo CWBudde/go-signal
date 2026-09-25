@@ -25,7 +25,15 @@ var (
 type SendRequest struct {
 	// Recipients are recipient arguments (see ParseRecipient): users, group:<id> and self.
 	Recipients []string
-	Body       string
+	// Body is the message text. @{<recipient>} placeholders for users (see ParseRecipient)
+	// become mentions. It may be empty when there are attachments.
+	Body string
+	// Attachments are paths of files to attach, each at most MaxAttachmentSize.
+	Attachments []string
+	// Quote makes the message a reply to the message <author>:<timestamp> (see ParseQuote).
+	Quote string
+	// QuoteText is the quoted text that clients show when they don't have the quoted message.
+	QuoteText string
 }
 
 // SendResult is the output of Send.
@@ -79,21 +87,18 @@ func (r TargetResult) FailedMembers() int {
 	return failed
 }
 
-// Send sends a text message to every recipient in req with the same timestamp. It connects the
+// Send sends a message to every recipient in req with the same timestamp. It connects the
 // client in send-only mode (signal.SendOnly), so the client must not be connected yet: incoming
-// messages stay on the server for the next receive. Invalid arguments fail before connecting,
-// and recipients that can't be resolved (e.g. signal.ErrNotOnSignal) fail before anything is
-// sent. A note-to-self (self, or our own number or ACI) only goes to our other devices; every
-// other message is also synced to them.
+// messages stay on the server for the next receive. Invalid arguments and unreadable or too
+// large attachments fail before connecting; recipients, mentioned users or a quote author that
+// can't be resolved (e.g. signal.ErrNotOnSignal) fail before anything is uploaded or sent. The
+// attachments are uploaded once for all recipients. A note-to-self (self, or our own number or
+// ACI) only goes to our other devices; every other message is also synced to them.
 //
 // If sending fails for some targets, Send returns the complete result together with an error
 // wrapping ErrSendFailed (and signal.ErrDeviceUnlinked, if that was the cause).
 func (a *App) Send(ctx context.Context, req SendRequest) (SendResult, error) {
-	if strings.TrimSpace(req.Body) == "" {
-		return SendResult{}, fmt.Errorf("send: %w", ErrEmptyMessage)
-	}
-
-	err := checkRecipients(req.Recipients)
+	req, files, err := prepare(req)
 	if err != nil {
 		return SendResult{}, fmt.Errorf("send: %w", err)
 	}
@@ -108,6 +113,11 @@ func (a *App) Send(ctx context.Context, req SendRequest) (SendResult, error) {
 		return SendResult{}, fmt.Errorf("send: %w", err)
 	}
 
+	msg, err := a.content(ctx, req, files)
+	if err != nil {
+		return SendResult{}, fmt.Errorf("send: %w", err)
+	}
+
 	res := SendResult{
 		Timestamp: uint64(a.now().UnixMilli()), //nolint:gosec // the clock is after 1970
 		Results:   make([]TargetResult, len(targets)),
@@ -117,32 +127,76 @@ func (a *App) Send(ctx context.Context, req SendRequest) (SendResult, error) {
 		res.Results[i].Target = target
 	}
 
-	a.sendToUsers(ctx, req.Body, &res)
-	a.sendToGroups(ctx, req.Body, &res)
+	a.sendToUsers(ctx, msg, &res)
+	a.sendToGroups(ctx, msg, &res)
 
 	return res, res.err()
 }
 
-// checkRecipients parses args (see ParseRecipient) without resolving them.
-func checkRecipients(args []string) error {
-	if len(args) == 0 {
+// prepare checks req without connecting and reads its attachments. An empty body is fine with
+// attachments; one of only white space is dropped then.
+func prepare(req SendRequest) (SendRequest, []signal.OutgoingAttachment, error) {
+	if strings.TrimSpace(req.Body) == "" {
+		if len(req.Attachments) == 0 {
+			return req, nil, ErrEmptyMessage
+		}
+
+		req.Body = ""
+	}
+
+	err := checkRequest(req)
+	if err != nil {
+		return req, nil, err
+	}
+
+	files, err := loadAttachments(req.Attachments)
+	if err != nil {
+		return req, nil, err
+	}
+
+	return req, files, nil
+}
+
+// checkRequest checks the recipient and quote arguments of req without resolving them.
+func checkRequest(req SendRequest) error {
+	if len(req.Recipients) == 0 {
 		return ErrNoRecipients
 	}
 
 	var errs []error
 
-	for _, arg := range args {
+	for _, arg := range req.Recipients {
 		_, err := ParseRecipient(arg)
 		if err != nil {
 			errs = append(errs, err)
 		}
 	}
 
+	if req.Quote != "" {
+		_, _, err := ParseQuote(req.Quote)
+		if err != nil {
+			errs = append(errs, err)
+		}
+	} else if req.QuoteText != "" {
+		errs = append(errs, fmt.Errorf("%w: quote text without a quote", ErrInvalidQuote))
+	}
+
 	return errors.Join(errs...)
 }
 
-// sendToUsers sends body to all users (and self) among res.Results in one request.
-func (a *App) sendToUsers(ctx context.Context, body string, res *SendResult) {
+// request returns the signal.SendRequest of msg with timestamp.
+func (msg content) request(timestamp uint64) signal.SendRequest {
+	return signal.SendRequest{
+		Body:        msg.body,
+		Timestamp:   timestamp,
+		Attachments: msg.attachments,
+		Quote:       msg.quote,
+		Mentions:    msg.mentions,
+	}
+}
+
+// sendToUsers sends msg to all users (and self) among res.Results in one request.
+func (a *App) sendToUsers(ctx context.Context, msg content, res *SendResult) {
 	var (
 		users   []signal.Recipient
 		indices []int
@@ -159,7 +213,10 @@ func (a *App) sendToUsers(ctx context.Context, body string, res *SendResult) {
 		return
 	}
 
-	sent, err := a.client.Send(ctx, signal.SendRequest{Recipients: users, Body: body, Timestamp: res.Timestamp})
+	req := msg.request(res.Timestamp)
+	req.Recipients = users
+
+	sent, err := a.client.Send(ctx, req)
 
 	for n, i := range indices {
 		result := &res.Results[i]
@@ -176,17 +233,18 @@ func (a *App) sendToUsers(ctx context.Context, body string, res *SendResult) {
 	}
 }
 
-// sendToGroups sends body to each group among res.Results.
-func (a *App) sendToGroups(ctx context.Context, body string, res *SendResult) {
+// sendToGroups sends msg to each group among res.Results.
+func (a *App) sendToGroups(ctx context.Context, msg content, res *SendResult) {
 	for i := range res.Results {
 		result := &res.Results[i]
 		if !result.Target.IsGroup() {
 			continue
 		}
 
-		sent, err := a.client.Send(ctx, signal.SendRequest{
-			GroupID: result.Target.GroupID, Body: body, Timestamp: res.Timestamp,
-		})
+		req := msg.request(res.Timestamp)
+		req.GroupID = result.Target.GroupID
+
+		sent, err := a.client.Send(ctx, req)
 		if err != nil {
 			result.Err = err
 

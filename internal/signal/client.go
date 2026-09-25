@@ -46,14 +46,20 @@ type Client interface {
 	// errors of all recipients are joined.
 	Resolve(ctx context.Context, recipients []Recipient) ([]Recipient, error)
 
-	// Send sends a text message to req.Recipients, which need their ACI (see Resolve), or to the
+	// Upload encrypts the attachments and uploads them to Signal's CDN, so that Send can refer to
+	// them; an attachment uploaded once can go to any number of recipients and groups. It needs
+	// Connect (ErrNotConnected) and fails with ErrClosed after Close.
+	Upload(ctx context.Context, attachments []OutgoingAttachment) ([]UploadedAttachment, error)
+
+	// Send sends a message to req.Recipients, which need their ACI (see Resolve), or to the
 	// group req.GroupID, with the sent timestamp req.Timestamp (zero means now). A recipient with
 	// our own ACI gets a note-to-self: only a sync transcript to our other devices. For every
 	// other recipient our other devices get a sync transcript too. It needs Connect
 	// (ErrNotConnected) and fails with ErrClosed after Close. Failures of single recipients (or
 	// group members) are reported in the result; an error means that nothing was sent, e.g.
-	// because the group is unknown (ErrUnknownGroup) or the connection is lost for good (such as
-	// ErrDeviceUnlinked).
+	// because the group is unknown (ErrUnknownGroup), an attachment wasn't uploaded by this client
+	// (ErrUnknownAttachment), the quote author or a mentioned user has no ACI (ErrUnresolvable),
+	// or the connection is lost for good (such as ErrDeviceUnlinked).
 	Send(ctx context.Context, req SendRequest) (SendResult, error)
 
 	// Devices lists all devices of the selected account as the server knows them. It needs

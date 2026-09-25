@@ -50,10 +50,12 @@ type Fake struct {
 	// InUse simulates another process holding the account lock: Connect and Unlink fail.
 	InUse bool
 
-	// OpenErr, LinkErr, ConnectErr, SendErr and DevicesErr make the respective call fail.
+	// OpenErr, LinkErr, ConnectErr, UploadErr, SendErr and DevicesErr make the respective call
+	// fail.
 	OpenErr    error
 	LinkErr    error
 	ConnectErr error
+	UploadErr  error
 	SendErr    error
 	DevicesErr error
 	// UnlinkErr makes removing the device on the server fail; Unlink with LocalOnly ignores it.
@@ -62,6 +64,7 @@ type Fake struct {
 	mu        sync.Mutex
 	opened    []signal.Options
 	sent      []signal.SendRequest
+	uploaded  []signal.OutgoingAttachment
 	connects  []string
 	unlinks   []UnlinkCall
 	delivered int
@@ -100,6 +103,14 @@ func (f *Fake) Sent() []signal.SendRequest {
 	defer f.mu.Unlock()
 
 	return append([]signal.SendRequest(nil), f.sent...)
+}
+
+// Uploaded returns the attachments of all successful Upload calls, in order.
+func (f *Fake) Uploaded() []signal.OutgoingAttachment {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	return append([]signal.OutgoingAttachment(nil), f.uploaded...)
 }
 
 // Connects returns the ACI of the account each successful Connect used.
@@ -196,6 +207,7 @@ type client struct {
 	fed       chan struct{} // closed when the feeder started by Connect exits
 	connected string        // ACI of the connected account
 	lost      error         // connection lost for good, in send-only mode
+	uploads   []string      // IDs of the attachments Upload returned
 	closed    bool
 }
 
@@ -310,6 +322,35 @@ func (c *client) Resolve(_ context.Context, recipients []signal.Recipient) ([]si
 	return out, nil
 }
 
+func (c *client) Upload(_ context.Context, attachments []signal.OutgoingAttachment) ([]signal.UploadedAttachment, error) {
+	c.fake.mu.Lock()
+	defer c.fake.mu.Unlock()
+
+	switch {
+	case c.closed:
+		return nil, signal.ErrClosed
+	case c.connected == "":
+		return nil, signal.ErrNotConnected
+	case c.lost != nil:
+		return nil, fmt.Errorf("upload: %w", c.lost)
+	case c.fake.UploadErr != nil:
+		return nil, c.fake.UploadErr
+	}
+
+	out := make([]signal.UploadedAttachment, 0, len(attachments))
+
+	for _, att := range attachments {
+		id := fmt.Sprintf("upload-%d", len(c.fake.uploaded)+1)
+		c.fake.uploaded = append(c.fake.uploaded, att)
+		c.uploads = append(c.uploads, id)
+		out = append(out, signal.UploadedAttachment{
+			ID: id, ContentType: att.ContentType, Filename: att.Filename, Size: uint32(len(att.Data)), //nolint:gosec // test data
+		})
+	}
+
+	return out, nil
+}
+
 func (c *client) Send(_ context.Context, req signal.SendRequest) (signal.SendResult, error) {
 	c.fake.mu.Lock()
 	defer c.fake.mu.Unlock()
@@ -325,6 +366,11 @@ func (c *client) Send(_ context.Context, req signal.SendRequest) (signal.SendRes
 		return signal.SendResult{}, fmt.Errorf("send: %w", c.lost)
 	case c.fake.SendErr != nil:
 		return signal.SendResult{}, c.fake.SendErr
+	}
+
+	err := c.checkContent(req)
+	if err != nil {
+		return signal.SendResult{}, err
 	}
 
 	recipients, err := c.sendTo(req)
@@ -348,6 +394,28 @@ func (c *client) Send(_ context.Context, req signal.SendRequest) (signal.SendRes
 	}
 
 	return res, nil
+}
+
+// checkContent fails like the real client for attachments this client didn't upload and for a
+// quote author or mentioned user without ACI.
+func (c *client) checkContent(req signal.SendRequest) error {
+	for _, att := range req.Attachments {
+		if !slices.Contains(c.uploads, att.ID) {
+			return fmt.Errorf("%w: %s", signal.ErrUnknownAttachment, att.Filename)
+		}
+	}
+
+	if req.Quote != nil && req.Quote.Author.ACI == "" {
+		return fmt.Errorf("quote: %w", signal.ErrUnresolvable)
+	}
+
+	for _, mention := range req.Mentions {
+		if mention.Recipient.ACI == "" {
+			return fmt.Errorf("mention: %w", signal.ErrUnresolvable)
+		}
+	}
+
+	return nil
 }
 
 // lostError returns the error of the first event in incoming that ends the connection for good.

@@ -65,9 +65,41 @@ type SendRequest struct {
 	Body    string
 	// Timestamp is the sent timestamp (ms since epoch) that identifies the message; zero means
 	// now. Several requests with the same timestamp send the same message to more recipients.
-	Timestamp   uint64
-	Attachments []string // file paths (Phase 3.4)
-	Quote       *Quote   // (Phase 3.4)
+	Timestamp uint64
+	// Attachments were uploaded with Upload on the same client.
+	Attachments []UploadedAttachment
+	// Quote makes the message a reply; the author needs their ACI.
+	Quote *Quote
+	// Mentions mark users mentioned in Body; they need their ACI.
+	Mentions []Mention
+}
+
+// Mention marks a user mentioned in a message body. Start and Length count UTF-16 code units, as
+// Signal's body ranges do; the mention usually covers a single U+FFFC placeholder, which clients
+// show as the user's name.
+type Mention struct {
+	Start     uint32
+	Length    uint32
+	Recipient Recipient
+}
+
+// OutgoingAttachment is a file to upload with Upload.
+type OutgoingAttachment struct {
+	Data        []byte
+	ContentType string
+	Filename    string
+	// Width and Height are the dimensions of an image in pixels; zero if unknown.
+	Width  uint32
+	Height uint32
+}
+
+// UploadedAttachment is an attachment on Signal's CDN, ready to be sent with SendRequest.
+type UploadedAttachment struct {
+	// ID identifies the upload within the client that made it.
+	ID          string
+	ContentType string
+	Filename    string
+	Size        uint32
 }
 
 // SendResult reports the outcome of a SendRequest per recipient.
