@@ -8,9 +8,12 @@ import (
 	"github.com/cwbudde/go-signal/internal/signal"
 )
 
+// secondACI is the ACI of the second test account.
+const secondACI = "33333333-3333-3333-3333-333333333333"
+
 func accounts() (signal.Account, signal.Account) {
 	return signal.Account{Number: "+15550100", ACI: "11111111-1111-1111-1111-111111111111", DeviceID: 2},
-		signal.Account{Number: "+15550101", ACI: "33333333-3333-3333-3333-333333333333", DeviceID: 3}
+		signal.Account{Number: "+15550101", ACI: secondACI, DeviceID: 3}
 }
 
 func TestSelectAccount(t *testing.T) {

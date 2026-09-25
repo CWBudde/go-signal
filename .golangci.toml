@@ -79,3 +79,9 @@ enable = ['gofumpt', 'goimports']
 [formatters.exclusions]
 generated = 'lax'
 paths = ['third_party$', 'builtin$', 'examples$', 'reference$']
+
+# cgo rewrites C calls into generated code that trips gocritic's duplicate-expression check.
+[[linters.exclusions.rules]]
+path = 'internal/signal/hpke\.go'
+linters = ['gocritic']
+text = 'dupSubExpr'

@@ -183,3 +183,46 @@ func TestLockIsExclusive(t *testing.T) {
 
 	_ = lock.Unlock()
 }
+
+func TestRemoveAccount(t *testing.T) {
+	t.Parallel()
+
+	dir := openDir(t, io.Discard)
+
+	first := store.AccountEntry{Number: "+15550100", ACI: testACI, DeviceID: 2, DeviceName: "laptop"}
+	second := store.AccountEntry{Number: "+15550101", ACI: "33333333-3333-3333-3333-333333333333", DeviceID: 3}
+
+	putAccount(t, dir, first)
+	putAccount(t, dir, second)
+
+	lock, err := dir.Lock(testACI)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = dir.RemoveAccount(testACI)
+	if err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+
+	err = lock.Unlock()
+	if err != nil {
+		t.Errorf("unlock after remove: %v", err)
+	}
+
+	accounts, err := dir.Accounts()
+	if err != nil || len(accounts) != 1 || accounts[0] != second {
+		t.Errorf("accounts after remove: %+v, %v", accounts, err)
+	}
+
+	_, err = os.Stat(dir.AccountDir(testACI))
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("account dir still exists: %v", err)
+	}
+
+	// Removing it again is a no-op.
+	err = dir.RemoveAccount(testACI)
+	if err != nil {
+		t.Errorf("second remove: %v", err)
+	}
+}

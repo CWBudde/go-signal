@@ -30,6 +30,17 @@ type Client interface {
 	// Send sends a message. Only valid after Connect.
 	Send(ctx context.Context, req SendRequest) (SendResult, error)
 
+	// Devices lists all devices of the selected account as the server knows them. It needs
+	// neither Connect nor the account lock.
+	Devices(ctx context.Context) ([]Device, error)
+
+	// Unlink removes this device from the selected account on the server (unless
+	// opts.LocalOnly) and then deletes the account's local data. It takes the account lock, so
+	// it fails with ErrAccountInUse while another process is connected. A device the server
+	// already logged out (ErrLoggedOut) counts as removed. It returns the removed account as
+	// recorded in accounts.json.
+	Unlink(ctx context.Context, opts UnlinkOptions) (Account, error)
+
 	// Close disconnects and releases the store.
 	Close() error
 }

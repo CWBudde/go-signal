@@ -24,19 +24,25 @@ type Fake struct {
 	LinkAs signal.Account
 	// Incoming is delivered on Events right after Connect, in order. Set it before Factory.
 	Incoming []signal.Event
-	// InUse simulates another process holding the account lock: Connect fails.
+	// Devices is what Devices returns for any account.
+	Devices []signal.Device
+	// InUse simulates another process holding the account lock: Connect and Unlink fail.
 	InUse bool
 
-	// OpenErr, LinkErr, ConnectErr and SendErr make the respective call fail.
+	// OpenErr, LinkErr, ConnectErr, SendErr and DevicesErr make the respective call fail.
 	OpenErr    error
 	LinkErr    error
 	ConnectErr error
 	SendErr    error
+	DevicesErr error
+	// UnlinkErr makes removing the device on the server fail; Unlink with LocalOnly ignores it.
+	UnlinkErr error
 
 	mu       sync.Mutex
 	opened   []signal.Options
 	sent     []signal.SendRequest
 	connects []string
+	unlinks  []UnlinkCall
 	nextTS   uint64
 	clients  []*client
 }
@@ -82,6 +88,20 @@ func (f *Fake) Connects() []string {
 	return append([]string(nil), f.connects...)
 }
 
+// UnlinkCall records a successful Unlink.
+type UnlinkCall struct {
+	ACI       string
+	LocalOnly bool
+}
+
+// Unlinks returns every successful Unlink.
+func (f *Fake) Unlinks() []UnlinkCall {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	return append([]UnlinkCall(nil), f.unlinks...)
+}
+
 // AllClosed reports whether every opened client has been closed.
 func (f *Fake) AllClosed() bool {
 	f.mu.Lock()
@@ -104,6 +124,21 @@ func (f *Fake) account(opts signal.Options) (signal.Account, error) {
 	}
 
 	return acc, nil
+}
+
+// checkInUse mirrors the account lock; the caller holds f.mu.
+func (f *Fake) checkInUse(aci string) error {
+	if f.InUse {
+		return fmt.Errorf("%w (fake)", signal.ErrAccountInUse)
+	}
+
+	for _, other := range f.clients {
+		if other.connected == aci && !other.closed {
+			return fmt.Errorf("%w (fake)", signal.ErrAccountInUse)
+		}
+	}
+
+	return nil
 }
 
 type client struct {
@@ -153,14 +188,9 @@ func (c *client) Connect(context.Context) error {
 		return c.fake.ConnectErr
 	}
 
-	if c.fake.InUse {
-		return fmt.Errorf("%w (fake)", signal.ErrAccountInUse)
-	}
-
-	for _, other := range c.fake.clients {
-		if other.connected == acc.ACI && !other.closed {
-			return fmt.Errorf("%w (fake)", signal.ErrAccountInUse)
-		}
+	err = c.fake.checkInUse(acc.ACI)
+	if err != nil {
+		return err
 	}
 
 	c.connected = acc.ACI
@@ -198,6 +228,46 @@ func (c *client) Send(_ context.Context, req signal.SendRequest) (signal.SendRes
 	}
 
 	return res, nil
+}
+
+func (c *client) Devices(context.Context) ([]signal.Device, error) {
+	c.fake.mu.Lock()
+	defer c.fake.mu.Unlock()
+
+	_, err := c.fake.account(c.opts)
+	if err != nil {
+		return nil, err
+	}
+
+	if c.fake.DevicesErr != nil {
+		return nil, c.fake.DevicesErr
+	}
+
+	return append([]signal.Device(nil), c.fake.Devices...), nil
+}
+
+func (c *client) Unlink(_ context.Context, opts signal.UnlinkOptions) (signal.Account, error) {
+	c.fake.mu.Lock()
+	defer c.fake.mu.Unlock()
+
+	acc, err := c.fake.account(c.opts)
+	if err != nil {
+		return signal.Account{}, err
+	}
+
+	err = c.fake.checkInUse(acc.ACI)
+	if err != nil {
+		return signal.Account{}, err
+	}
+
+	if !opts.LocalOnly && c.fake.UnlinkErr != nil {
+		return signal.Account{}, c.fake.UnlinkErr
+	}
+
+	c.fake.Linked = slices.DeleteFunc(c.fake.Linked, func(old signal.Account) bool { return old.ACI == acc.ACI })
+	c.fake.unlinks = append(c.fake.unlinks, UnlinkCall{ACI: acc.ACI, LocalOnly: opts.LocalOnly})
+
+	return acc, nil
 }
 
 func (c *client) Close() error {

@@ -5,13 +5,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	ossignal "os/signal"
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
+	"github.com/cwbudde/go-signal/internal/output"
 	"github.com/cwbudde/go-signal/internal/signal"
 	"github.com/cwbudde/go-signal/internal/store"
 	"github.com/spf13/cobra"
@@ -40,6 +43,7 @@ type Option func(*rootOptions)
 
 type rootOptions struct {
 	newClient signal.Factory
+	loc       *time.Location
 }
 
 // WithClientFactory replaces the signalmeow-backed client, e.g. with signaltest.Fake in tests.
@@ -49,17 +53,25 @@ func WithClientFactory(factory signal.Factory) Option {
 	}
 }
 
+// WithLocation sets the time zone of plain output (default: local time), e.g. UTC in tests.
+func WithLocation(loc *time.Location) Option {
+	return func(o *rootOptions) {
+		o.loc = loc
+	}
+}
+
 // NewRootCmd returns the root command with all subcommands attached.
 // Settings resolve with precedence flag > GOSIGNAL_* env > config file > default.
 func NewRootCmd(opts ...Option) *cobra.Command {
 	cfg := viper.New()
 
-	ro := rootOptions{newClient: signal.Open}
+	rootOpts := rootOptions{newClient: signal.Open}
 	for _, opt := range opts {
-		opt(&ro)
+		opt(&rootOpts)
 	}
 
-	clients := &clientOpener{cfg: cfg, factory: ro.newClient}
+	clients := &clientOpener{cfg: cfg, factory: rootOpts.newClient}
+	printers := &printerFactory{cfg: cfg, loc: rootOpts.loc}
 
 	var cfgFile string
 
@@ -79,6 +91,11 @@ messages, and run it as a JSON-RPC daemon for scripts and bots.`,
 				return err
 			}
 
+			_, err = output.ParseFormat(cfg.GetString("output"))
+			if err != nil {
+				return fmt.Errorf("output: %w", err)
+			}
+
 			return setupLogging(cfg)
 		},
 	}
@@ -96,6 +113,8 @@ messages, and run it as a JSON-RPC daemon for scripts and bots.`,
 	}
 
 	root.AddCommand(
+		newAccountCmd(clients, printers),
+		newDevicesCmd(clients, printers),
 		newLinkCmd(clients),
 		newReceiveCmd(clients),
 		newVersionCmd(),
@@ -121,6 +140,21 @@ func (o *clientOpener) open(ctx context.Context) (signal.Client, error) {
 	}
 
 	return client, nil
+}
+
+// printerFactory creates output printers for the -o/--output format.
+type printerFactory struct {
+	cfg *viper.Viper
+	loc *time.Location
+}
+
+func (f *printerFactory) printer(out io.Writer) (*output.Printer, error) {
+	format, err := output.ParseFormat(f.cfg.GetString("output"))
+	if err != nil {
+		return nil, fmt.Errorf("output: %w", err)
+	}
+
+	return output.New(out, format, f.loc), nil
 }
 
 // closeClient closes client and logs a failure; used in defers.

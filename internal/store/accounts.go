@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 )
 
@@ -18,11 +19,13 @@ var ErrAccountsVersion = errors.New("unsupported accounts.json version")
 
 // AccountEntry is one linked account in accounts.json.
 type AccountEntry struct {
-	Number   string    `json:"number"`
-	ACI      string    `json:"aci"`
-	PNI      string    `json:"pni,omitempty"`
-	DeviceID int       `json:"deviceId"`
-	LinkedAt time.Time `json:"linkedAt,omitzero"`
+	Number   string `json:"number"`
+	ACI      string `json:"aci"`
+	PNI      string `json:"pni,omitempty"`
+	DeviceID int    `json:"deviceId"`
+	// DeviceName is the name the device was linked with.
+	DeviceName string    `json:"deviceName,omitempty"`
+	LinkedAt   time.Time `json:"linkedAt,omitzero"`
 }
 
 type accountsDoc struct {
@@ -83,6 +86,30 @@ func (d *Dir) PutAccount(entry AccountEntry) error {
 	}
 
 	return d.writeAccounts(accounts)
+}
+
+// RemoveAccount deletes the account with the given ACI: its accounts.json entry, then its
+// directory including the database. The caller should hold the account's Lock, which stays
+// valid until Unlock although its file is gone. A missing entry or directory is not an error.
+func (d *Dir) RemoveAccount(aci string) error {
+	accounts, err := d.Accounts()
+	if err != nil {
+		return err
+	}
+
+	kept := slices.DeleteFunc(accounts, func(entry AccountEntry) bool { return entry.ACI == aci })
+
+	err = d.writeAccounts(kept)
+	if err != nil {
+		return err
+	}
+
+	err = os.RemoveAll(d.AccountDir(aci))
+	if err != nil {
+		return fmt.Errorf("remove account data: %w", err)
+	}
+
+	return nil
 }
 
 // writeAccounts replaces accounts.json atomically (temp file + rename).

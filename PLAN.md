@@ -254,14 +254,27 @@ is also tested against a seeded two-account data dir.)
 
 #### 2.4 Account commands
 
-- [ ] `internal/output`: plain and JSON renderers, `-o` flag, and `docs/json.md` with a schema
-      version field
-- [ ] `account show`: number, ACI, PNI, device ID, device name, registration/link date
-- [ ] `devices list`: all devices of the account (id, name, created, last seen), mark ours
-- [ ] `account unlink`: remove our device from the account if possible, then delete local data
-      (with `--yes` confirmation guard)
+- [x] `internal/output`: plain and JSON renderers, `-o` flag, and `docs/json.md` with a schema
+      version field (`output.Printer`; every JSON document has `"version": 1`; an unknown `-o`
+      fails before anything runs with `output.ErrInvalidFormat`; plain times in local time)
+- [x] `account show`: number, ACI, PNI, device ID, device name, registration/link date (offline;
+      name and link date come from `accounts.json`, which `link` now records)
+- [x] `devices list`: all devices of the account (id, name, created, last seen), mark ours
+      (`Client.Devices`, REST `GET /v1/devices/` with the device credentials, no receive loop)
+- [x] `account unlink`: remove our device from the account if possible, then delete local data
+      (with `--yes` confirmation guard) (`Client.Unlink`: `DELETE /v1/devices/<id>`, then
+      `store.RemoveAccount` under the account lock; `--local-only` skips the server, and a
+      server error keeps the local data and suggests `--local-only`)
 
-**Done when:** all three commands work in plain and JSON mode with golden-file tests.
+**Done when:** all three commands work in plain and JSON mode with golden-file tests. (Done;
+goldens in `cmd/testdata`, regenerate with `UPDATE_GOLDEN=1 just test`.)
+
+Notes: device names and creation times are encrypted to our ACI identity key. signalmeow's
+`DecryptDeviceName` never verifies (its synthetic-IV check is wrong), so `internal/signal` has its
+own; the creation time is HPKE-sealed, which libsignalgo doesn't wrap, so `hpke.go` calls
+`signal_privatekey_hpke_open` directly. Values that don't decrypt are shown as unknown. `link` and
+`receive` don't use the renderers yet (`receive` gets them in 3.5). `devices list` and a non-local
+`unlink` are not yet verified against the live server.
 
 #### 2.5 Remote unlink handling
 

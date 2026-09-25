@@ -2,6 +2,7 @@ package signal
 
 import (
 	"errors"
+	"time"
 
 	"github.com/cwbudde/go-signal/internal/store"
 )
@@ -33,4 +34,27 @@ type Account struct {
 	ACI      string
 	PNI      string
 	DeviceID int
+	// DeviceName is the name this device was linked with; empty if unknown.
+	DeviceName string
+	// LinkedAt is when this device was linked; zero if unknown.
+	LinkedAt time.Time
+}
+
+// Device is one device of an account, as the server lists it.
+type Device struct {
+	ID int
+	// Name is the decrypted device name; the primary device usually has none.
+	Name string
+	// Created is when the device was linked; zero if it couldn't be decrypted.
+	Created time.Time
+	// LastSeen is when the device last connected (the server only keeps the day).
+	LastSeen time.Time
+	// Current marks the device this client runs as.
+	Current bool
+}
+
+// UnlinkOptions configures Client.Unlink.
+type UnlinkOptions struct {
+	// LocalOnly skips removing the device on the server and only deletes the local data.
+	LocalOnly bool
 }

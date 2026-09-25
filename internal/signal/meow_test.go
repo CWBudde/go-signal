@@ -5,7 +5,10 @@ package signal_test
 import (
 	"errors"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/cwbudde/go-signal/internal/signal"
 	"github.com/cwbudde/go-signal/internal/store"
@@ -18,6 +21,7 @@ import (
 const (
 	seededACI    = "11111111-1111-1111-1111-111111111111"
 	seededNumber = "+15550100"
+	deviceName   = "laptop"
 )
 
 func TestOpenWithoutAccount(t *testing.T) {
@@ -133,7 +137,7 @@ func TestConnectAccountInUse(t *testing.T) {
 func TestAccountSelectionWithTwoAccounts(t *testing.T) {
 	t.Parallel()
 
-	second := signal.Account{Number: "+15550101", ACI: "33333333-3333-3333-3333-333333333333", DeviceID: 3}
+	second := signal.Account{Number: "+15550101", ACI: secondACI, DeviceID: 3}
 	dataDir := seedAccounts(t, signal.Account{Number: seededNumber, ACI: seededACI, DeviceID: 2}, second)
 
 	client, err := signal.Open(t.Context(), signal.Options{DataDir: dataDir})
@@ -163,6 +167,102 @@ func TestAccountSelectionWithTwoAccounts(t *testing.T) {
 	}
 }
 
+func TestAccountDetailsFromAccountsJSON(t *testing.T) {
+	t.Parallel()
+
+	linkedAt := time.Date(2026, 9, 20, 12, 30, 0, 0, time.UTC)
+	dataDir := seedAccounts(t, signal.Account{
+		Number: seededNumber, ACI: seededACI, DeviceID: 2, DeviceName: deviceName, LinkedAt: linkedAt,
+	})
+
+	client, err := signal.Open(t.Context(), signal.Options{DataDir: dataDir})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer client.Close()
+
+	acc, err := client.Account(t.Context())
+	if err != nil || acc.DeviceName != deviceName || !acc.LinkedAt.Equal(linkedAt) || acc.PNI == "" {
+		t.Errorf("got %+v, %v", acc, err)
+	}
+}
+
+func TestUnlinkLocalOnly(t *testing.T) {
+	t.Parallel()
+
+	second := signal.Account{Number: "+15550101", ACI: secondACI, DeviceID: 3}
+	dataDir := seedAccounts(t, signal.Account{Number: seededNumber, ACI: seededACI, DeviceID: 2}, second)
+
+	client, err := signal.Open(t.Context(), signal.Options{DataDir: dataDir, Account: seededNumber})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+
+	// Reading the account first opens its database, which Unlink must close before deleting it.
+	_, err = client.Account(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	acc, err := client.Unlink(t.Context(), signal.UnlinkOptions{LocalOnly: true})
+	if err != nil || acc.ACI != seededACI {
+		t.Fatalf("unlink: %+v, %v", acc, err)
+	}
+
+	_ = client.Close()
+
+	_, err = os.Stat(filepath.Join(dataDir, seededACI))
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("account dir still exists: %v", err)
+	}
+
+	// The other account is untouched and now the only one, so -a is no longer needed.
+	client, err = signal.Open(t.Context(), signal.Options{DataDir: dataDir})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer client.Close()
+
+	acc, err = client.Account(t.Context())
+	if err != nil || acc.ACI != second.ACI {
+		t.Errorf("remaining account: %+v, %v", acc, err)
+	}
+}
+
+func TestUnlinkAccountInUse(t *testing.T) {
+	t.Parallel()
+
+	dataDir := seedAccount(t)
+
+	dir, err := store.OpenDir(dataDir, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	lock, err := dir.Lock(seededACI)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer func() { _ = lock.Unlock() }()
+
+	client, err := signal.Open(t.Context(), signal.Options{DataDir: dataDir})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer client.Close()
+
+	_, err = client.Unlink(t.Context(), signal.UnlinkOptions{LocalOnly: true})
+	if !errors.Is(err, signal.ErrAccountInUse) {
+		t.Fatalf("got %v, want ErrAccountInUse", err)
+	}
+
+	accounts, err := dir.Accounts()
+	if err != nil || len(accounts) != 1 {
+		t.Errorf("account removed although it was in use: %+v, %v", accounts, err)
+	}
+}
+
 // seedAccount seeds a data dir with the single account seededNumber / seededACI.
 func seedAccount(t *testing.T) string {
 	t.Helper()
@@ -185,7 +285,10 @@ func seedAccounts(t *testing.T, accounts ...signal.Account) string {
 	for _, acc := range accounts {
 		putDevice(t, dir, acc)
 
-		err = dir.PutAccount(store.AccountEntry{Number: acc.Number, ACI: acc.ACI, DeviceID: acc.DeviceID})
+		err = dir.PutAccount(store.AccountEntry{
+			Number: acc.Number, ACI: acc.ACI, DeviceID: acc.DeviceID,
+			DeviceName: acc.DeviceName, LinkedAt: acc.LinkedAt,
+		})
 		if err != nil {
 			t.Fatal(err)
 		}

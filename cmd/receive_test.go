@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/cwbudde/go-signal/cmd"
 	"github.com/cwbudde/go-signal/internal/signal"
@@ -36,7 +37,7 @@ func run(t *testing.T, fake *signaltest.Fake, args ...string) (string, error) {
 
 	var out bytes.Buffer
 
-	root := cmd.NewRootCmd(cmd.WithClientFactory(fake.Factory))
+	root := cmd.NewRootCmd(cmd.WithClientFactory(fake.Factory), cmd.WithLocation(time.UTC))
 	root.SetOut(&out)
 	root.SetArgs(append([]string{"--config", cfgFile, "--data-dir", t.TempDir()}, args...))
 

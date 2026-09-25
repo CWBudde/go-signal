@@ -95,7 +95,7 @@ func (c *meowClient) Link(ctx context.Context, deviceName string, onURI func(str
 		case signalmeow.StateProvisioningURLReceived:
 			onURI(resp.ProvisioningURL)
 		case signalmeow.StateProvisioningDataReceived:
-			return c.finishLink(links, resp.ProvisioningData)
+			return c.finishLink(links, resp.ProvisioningData, deviceName)
 		case signalmeow.StateProvisioningError:
 			return Account{}, fmt.Errorf("%w: %v", errUnexpectedState, resp.State)
 		default:
@@ -112,7 +112,16 @@ func (c *meowClient) Account(ctx context.Context) (Account, error) {
 		return Account{}, err
 	}
 
-	return accountFromDevice(&device.DeviceData), nil
+	// The device name and link date are only recorded in accounts.json.
+	entry, err := c.selectAccount()
+	if err != nil {
+		return Account{}, err
+	}
+
+	acc := accountFromDevice(&device.DeviceData)
+	acc.DeviceName, acc.LinkedAt = entry.DeviceName, entry.LinkedAt
+
+	return acc, nil
 }
 
 func (c *meowClient) Connect(ctx context.Context) error {
@@ -210,15 +219,18 @@ func (c *meowClient) release() error {
 
 // finishLink records the new account in accounts.json (next to any others) and keeps its
 // database and lock.
-func (c *meowClient) finishLink(links *store.LinkStore, data *mstore.DeviceData) (Account, error) {
+func (c *meowClient) finishLink(links *store.LinkStore, data *mstore.DeviceData, deviceName string) (Account, error) {
 	acc := accountFromDevice(data)
+	acc.DeviceName = deviceName
+	acc.LinkedAt = time.Now().UTC().Truncate(time.Second)
 
 	err := c.dir.PutAccount(store.AccountEntry{
-		Number:   acc.Number,
-		ACI:      acc.ACI,
-		PNI:      acc.PNI,
-		DeviceID: acc.DeviceID,
-		LinkedAt: time.Now().UTC().Truncate(time.Second),
+		Number:     acc.Number,
+		ACI:        acc.ACI,
+		PNI:        acc.PNI,
+		DeviceID:   acc.DeviceID,
+		DeviceName: acc.DeviceName,
+		LinkedAt:   acc.LinkedAt,
 	})
 	if err != nil {
 		return Account{}, fmt.Errorf("record account: %w", err)
@@ -286,6 +298,7 @@ func (c *meowClient) selectAccount() (Account, error) {
 	for _, entry := range entries {
 		accounts = append(accounts, Account{
 			Number: entry.Number, ACI: entry.ACI, PNI: entry.PNI, DeviceID: entry.DeviceID,
+			DeviceName: entry.DeviceName, LinkedAt: entry.LinkedAt,
 		})
 	}
 
