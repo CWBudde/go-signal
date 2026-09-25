@@ -197,35 +197,6 @@ func TestGroupResults(t *testing.T) {
 	}
 }
 
-func TestCheckSendRequest(t *testing.T) {
-	t.Parallel()
-
-	users := []signal.Recipient{{ACI: sendACI}}
-	group := "Z3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXA="
-
-	tests := []struct {
-		name string
-		req  signal.SendRequest
-		want error
-	}{
-		{"users", signal.SendRequest{Recipients: users, Body: "hi"}, nil},
-		{"group", signal.SendRequest{GroupID: group, Body: "hi"}, nil},
-		{"neither", signal.SendRequest{Body: "hi"}, signal.ErrInvalidSendRequest},
-		{"both", signal.SendRequest{Recipients: users, GroupID: group}, signal.ErrInvalidSendRequest},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
-
-			err := signal.CheckSendRequest(test.req)
-			if !errors.Is(err, test.want) || (test.want == nil && err != nil) {
-				t.Errorf("got %v, want %v", err, test.want)
-			}
-		})
-	}
-}
-
 func TestACIServiceID(t *testing.T) {
 	t.Parallel()
 

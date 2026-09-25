@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/cwbudde/go-signal/internal/app"
+	"github.com/cwbudde/go-signal/internal/output"
 	"github.com/spf13/cobra"
 )
 
@@ -59,7 +60,9 @@ func newSendCmd(clients *clientOpener, printers *printerFactory, appOpts []app.O
 				}
 			}
 
-			return send(cmd, clients, printers, appOpts, req)
+			return runSend(cmd, clients, printers, appOpts,
+				func(a *app.App) (app.SendResult, error) { return a.Send(cmd.Context(), req) },
+				(*output.Printer).Send)
 		},
 	}
 
@@ -76,9 +79,10 @@ func newSendCmd(clients *clientOpener, printers *printerFactory, appOpts []app.O
 	return cmd
 }
 
-// send runs req and prints the result, also when some recipients failed (app.ErrSendFailed).
-func send(cmd *cobra.Command, clients *clientOpener, printers *printerFactory, appOpts []app.Option,
-	req app.SendRequest,
+// runSend runs a sending use case (send, react, delete) on a new client and prints its result
+// with show, also when some recipients failed (app.ErrSendFailed).
+func runSend[R any](cmd *cobra.Command, clients *clientOpener, printers *printerFactory, appOpts []app.Option,
+	run func(*app.App) (R, error), show func(*output.Printer, R) error,
 ) error {
 	printer, err := printers.printer(cmd.OutOrStdout())
 	if err != nil {
@@ -91,17 +95,17 @@ func send(cmd *cobra.Command, clients *clientOpener, printers *printerFactory, a
 	}
 	defer closeClient(client)
 
-	res, err := app.New(client, appOpts...).Send(cmd.Context(), req)
+	res, err := run(app.New(client, appOpts...))
 	if err != nil && !errors.Is(err, app.ErrSendFailed) {
-		return err //nolint:wrapcheck // app wraps it
+		return err
 	}
 
-	printErr := printer.Send(res)
+	printErr := show(printer, res)
 	if printErr != nil {
-		return printErr //nolint:wrapcheck // output wraps it
+		return printErr
 	}
 
-	return err //nolint:wrapcheck // app wraps it
+	return err
 }
 
 // readBody reads the message text from r, without the final line break(s).

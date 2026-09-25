@@ -99,9 +99,9 @@ Noun-verb subcommands with kebab-case names. Global flags: `-a/--account`, `-o/-
 go-signal link [--name <device-name>]          # print sgnl:// URI + terminal QR, wait for scan
 go-signal send <recipient>... -m <text> [--attach <file>]... [--group <id>] [--quote <ts>]
 go-signal send --stdin <recipient>             # message body from stdin
-go-signal receive [--timeout 5s] [--max N] [--follow] [--download-attachments <dir>]
-go-signal react <recipient> --target <author>:<ts> --emoji 👍 [--remove]
-go-signal delete <recipient> --target <ts>     # remote delete
+go-signal receive [--timeout 5s] [--max N] [--follow] [--download-attachments <dir>] [--send-read-receipts]
+go-signal react <recipient>... --target <author>:<ts> --emoji 👍 [--remove] [--group <id>]
+go-signal delete <recipient>... --target <ts> [--group <id>]   # remote delete of our own message
 go-signal contacts list | show <recipient> | block | unblock
 go-signal groups list | show <id> | leave <id>
 go-signal devices list
@@ -502,12 +502,41 @@ width/height and received stickers' images aren't handled.
 
 #### 3.8 Receipts, reactions, remote delete
 
-- [ ] `--send-read-receipts` (opt-in) on `receive`
-- [ ] `react <recipient> --target <author>:<ts> --emoji <e> [--remove]`
-- [ ] `delete <recipient> --target <ts>` (remote delete of our own message)
-- [ ] Group variants via `--group`
+- [x] `--send-read-receipts` (opt-in) on `receive` (new `Client.SendReceipt` taking the sender,
+      type and timestamps; signalmeow also sends the read sync to our other devices.
+      `app.ReadReceipts` queues one for every printed `Message` from another user (not sync
+      transcripts, edits, reactions or deletes) and sends one receipt per sender with all
+      timestamps, like
+      signal-cli's merged `SendReceiptAction`: `receive` flushes the queue 1 s after the first
+      queued message and when it ends, also after Ctrl-C (bounded by 10 s). A failed receipt is
+      logged as a warning and doesn't end receive)
+- [x] `react <recipient>... --target <author>:<ts> --emoji <e> [--remove]` (`app.React`; the
+      target is parsed like `--quote` (`app.ParseTarget`, `self` for our own messages) and its author
+      resolved to an ACI. `signal.SendRequest.Reaction` becomes `DataMessage.Reaction` with
+      `RequiredProtocolVersion` REACTIONS, as in the mautrix bridge. The emoji check is a
+      heuristic (no letters, white space or invisible characters except ZWJ/tags, not pure ASCII,
+      at most 16 code points; `app.ErrInvalidEmoji`). JSON `react` document in `docs/json.md`)
+- [x] `delete <recipient>... --target <ts>` (remote delete of our own message) (`app.Delete`;
+      `signal.SendRequest.DeleteTarget` becomes `DataMessage.Delete`. The timestamp is the one
+      `send` printed; we can't check that the message is ours or still recent, since we don't
+      store sent messages. JSON `delete` document)
+- [x] Group variants via `--group` (both commands reuse `send`'s path (`app.sendContent`):
+      repeatable `--group <id>` and `group:<id>` arguments, `self`, one timestamp for all targets, sync
+      transcripts to our other devices, per-recipient results with the `send` table and exit
+      codes. `SendRequest.Check` rejects a reaction or delete mixed with other content
+      (`signal.ErrInvalidContent`))
 
-**Done when:** reactions and deletes show up on the phone for 1:1 and group targets.
+**Done when:** reactions and deletes show up on the phone for 1:1 and group targets. (Done with the
+fake and unit tests; not yet verified against the live server.)
+
+Notes: receipts are sent from the receive loop, so no event is read while one is in flight; with
+the batching that is at most one request per sender and second, but a long burst still waits for
+it (signalmeow's 256-request stall from 3.2 would need a very slow send). signalmeow silently skips
+receipts (reporting success) to senders whose message request we haven't accepted, so those get
+none. Read receipts go out for every printed message, including view-once and group messages, and
+also when the user disabled read receipts on the phone (we don't sync that setting yet). Open:
+viewed receipts (`ReceiptViewed` exists in `SendReceipt` but nothing sends it), reactions on
+stories, admin deletes, and the MCP tools for react/delete (5.x).
 
 #### 3.9 Initial sync after linking
 

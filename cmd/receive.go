@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/cwbudde/go-signal/internal/app"
 	"github.com/cwbudde/go-signal/internal/output"
 	"github.com/cwbudde/go-signal/internal/signal"
 	"github.com/spf13/cobra"
@@ -44,7 +45,11 @@ changes) is one JSON document per line (NDJSON, see docs/json.md).
 --download-attachments <dir> saves the attachments of received messages (view-once ones too)
 to dir, which is created if missing, as "<timestamp>-<n>-<name>", where name is the sender's file
 name reduced to safe characters. Existing files are kept; a taken name gets a number. The output
-shows each file's path; a failed download is reported there and does not stop receive.`
+shows each file's path; a failed download is reported there and does not stop receive.
+
+With --send-read-receipts, the sender of each incoming message (not your own messages from other
+devices) gets a read receipt once the message was printed, collected for about a second into one
+receipt per sender. Your other devices then mark the messages as read, too.`
 
 func newReceiveCmd(clients *clientOpener, printers *printerFactory) *cobra.Command {
 	var (
@@ -52,6 +57,7 @@ func newReceiveCmd(clients *clientOpener, printers *printerFactory) *cobra.Comma
 		follow  bool
 		maxEvts int
 		dlDir   string
+		rcpts   bool
 	)
 
 	cmd := &cobra.Command{
@@ -69,12 +75,7 @@ func newReceiveCmd(clients *clientOpener, printers *printerFactory) *cobra.Comma
 				return err
 			}
 
-			err = prepareDownloadDir(dlDir)
-			if err != nil {
-				return err
-			}
-
-			opts := receiveOptions{max: maxEvts, downloadDir: dlDir}
+			opts := receiveOptions{max: maxEvts, downloadDir: dlDir, readReceipts: rcpts}
 			if !follow {
 				opts.idle = timeout
 			}
@@ -103,6 +104,7 @@ func newReceiveCmd(clients *clientOpener, printers *printerFactory) *cobra.Comma
 	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "stream events until interrupted")
 	cmd.Flags().IntVar(&maxEvts, "max", 0, "exit after this many events with content (0: no limit)")
 	cmd.Flags().StringVar(&dlDir, "download-attachments", "", "save attachments to this directory")
+	cmd.Flags().BoolVar(&rcpts, "send-read-receipts", false, "send read receipts for received messages")
 	cmd.MarkFlagsMutuallyExclusive("timeout", "follow")
 
 	return cmd
@@ -116,11 +118,20 @@ type receiveOptions struct {
 	max int
 	// downloadDir is where attachments are saved; empty means not at all.
 	downloadDir string
+	// readReceipts sends read receipts for received messages (--send-read-receipts).
+	readReceipts bool
+	// receipts collects them; receive sets it on the connected client.
+	receipts *app.ReadReceipts
 }
 
 // receive prints events until opts says to stop (errIdle, or nil after opts.max events), the
 // connection is lost for good, or ctx is done.
 func receive(ctx context.Context, clients *clientOpener, printer *output.Printer, opts receiveOptions) error {
+	err := prepareDownloadDir(opts.downloadDir)
+	if err != nil {
+		return err
+	}
+
 	client, err := clients.open(ctx)
 	if err != nil {
 		return err
@@ -130,6 +141,10 @@ func receive(ctx context.Context, clients *clientOpener, printer *output.Printer
 	err = client.Connect(ctx)
 	if err != nil {
 		return fmt.Errorf("connect: %w", err)
+	}
+
+	if opts.readReceipts {
+		opts.receipts = app.New(client).ReadReceipts()
 	}
 
 	return receiveEvents(ctx, client.Events(), newEventPrinter(printer, client, opts.downloadDir), opts)
@@ -155,18 +170,25 @@ func receiveEvents(
 
 	remaining := opts.max
 
+	receipts := newReceiptSender(opts.receipts)
+	defer receipts.close(ctx)
+
 	for {
 		select {
 		case <-ctx.Done():
 			return fmt.Errorf("wait for events: %w", ctx.Err())
 		case <-idle:
 			return errIdle
+		case <-receipts.due():
+			receipts.flush(ctx)
 		case evt, ok := <-events:
 			if !ok {
 				return nil
 			}
 
 			done, err := handleEvent(ctx, printer, evt, &remaining)
+			receipts.handled(evt, err)
+
 			if done {
 				return err
 			}

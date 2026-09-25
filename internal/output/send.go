@@ -59,17 +59,23 @@ type sendDoc struct {
 // Send prints the outcome of `send`, one line (or JSON entry) per recipient.
 func (p *Printer) Send(res app.SendResult) error {
 	if p.format == JSON {
-		doc := sendDoc{Version: SchemaVersion, Send: sendJSON{
-			Timestamp: res.Timestamp,
-			Results:   make([]sendResultJSON, 0, len(res.Results)),
-		}}
-		for _, result := range res.Results {
-			doc.Send.Results = append(doc.Send.Results, sendResultToJSON(res.Timestamp, result))
-		}
-
-		return p.writeJSON(doc)
+		return p.writeJSON(sendDoc{Version: SchemaVersion, Send: sendToJSON(res)})
 	}
 
+	return p.sendTable(res)
+}
+
+func sendToJSON(res app.SendResult) sendJSON {
+	out := sendJSON{Timestamp: res.Timestamp, Results: make([]sendResultJSON, 0, len(res.Results))}
+	for _, result := range res.Results {
+		out.Results = append(out.Results, sendResultToJSON(res.Timestamp, result))
+	}
+
+	return out
+}
+
+// sendTable prints the plain table of res, one line per recipient.
+func (p *Printer) sendTable(res app.SendResult) error {
 	table := tabwriter.NewWriter(p.w, 0, 0, columnGap, ' ', 0)
 	fmt.Fprintln(table, "RECIPIENT\tTIMESTAMP\tSTATUS\tDETAILS")
 

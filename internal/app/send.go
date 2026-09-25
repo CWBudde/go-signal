@@ -103,19 +103,30 @@ func (a *App) Send(ctx context.Context, req SendRequest) (SendResult, error) {
 		return SendResult{}, fmt.Errorf("send: %w", err)
 	}
 
-	err = a.client.Connect(ctx, signal.SendOnly())
+	return a.sendContent(ctx, "send", req.Recipients, func(ctx context.Context) (content, error) {
+		return a.buildContent(ctx, req, files)
+	})
+}
+
+// sendContent runs action (send, react, delete): it connects in send-only mode, resolves the
+// recipient arguments, builds the message with build (after resolving, so that it can resolve
+// users and upload) and sends it to every target with one timestamp.
+func (a *App) sendContent(
+	ctx context.Context, action string, recipients []string, build func(context.Context) (content, error),
+) (SendResult, error) {
+	err := a.client.Connect(ctx, signal.SendOnly())
 	if err != nil {
-		return SendResult{}, fmt.Errorf("send: connect: %w", err)
+		return SendResult{}, fmt.Errorf("%s: connect: %w", action, err)
 	}
 
-	targets, err := a.ResolveRecipients(ctx, req.Recipients)
+	targets, err := a.ResolveRecipients(ctx, recipients)
 	if err != nil {
-		return SendResult{}, fmt.Errorf("send: %w", err)
+		return SendResult{}, fmt.Errorf("%s: %w", action, err)
 	}
 
-	msg, err := a.buildContent(ctx, req, files)
+	msg, err := build(ctx)
 	if err != nil {
-		return SendResult{}, fmt.Errorf("send: %w", err)
+		return SendResult{}, fmt.Errorf("%s: %w", action, err)
 	}
 
 	res := SendResult{
@@ -130,7 +141,7 @@ func (a *App) Send(ctx context.Context, req SendRequest) (SendResult, error) {
 	a.sendToUsers(ctx, msg, &res)
 	a.sendToGroups(ctx, msg, &res)
 
-	return res, res.err()
+	return res, res.err(action)
 }
 
 // prepare checks req without connecting and reads its attachments. An empty body is fine with
@@ -157,20 +168,32 @@ func prepare(req SendRequest) (SendRequest, []signal.OutgoingAttachment, error) 
 	return req, files, nil
 }
 
+// checkRecipients checks recipient arguments without resolving them: there is at least one, and
+// each is valid.
+func checkRecipients(args []string) []error {
+	if len(args) == 0 {
+		return []error{ErrNoRecipients}
+	}
+
+	var errs []error
+
+	for _, arg := range args {
+		_, err := ParseRecipient(arg)
+		if err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	return errs
+}
+
 // checkRequest checks the recipient and quote arguments of req without resolving them.
 func checkRequest(req SendRequest) error {
 	if len(req.Recipients) == 0 {
 		return ErrNoRecipients
 	}
 
-	var errs []error
-
-	for _, arg := range req.Recipients {
-		_, err := ParseRecipient(arg)
-		if err != nil {
-			errs = append(errs, err)
-		}
-	}
+	errs := checkRecipients(req.Recipients)
 
 	if req.Quote != "" {
 		_, _, err := ParseQuote(req.Quote)
@@ -187,11 +210,13 @@ func checkRequest(req SendRequest) error {
 // request returns the signal.SendRequest of msg with timestamp.
 func (msg content) request(timestamp uint64) signal.SendRequest {
 	return signal.SendRequest{
-		Body:        msg.body,
-		Timestamp:   timestamp,
-		Attachments: msg.attachments,
-		Quote:       msg.quote,
-		Mentions:    msg.mentions,
+		Body:         msg.body,
+		Timestamp:    timestamp,
+		Attachments:  msg.attachments,
+		Quote:        msg.quote,
+		Mentions:     msg.mentions,
+		Reaction:     msg.reaction,
+		DeleteTarget: msg.deleteTarget,
 	}
 }
 
@@ -255,14 +280,15 @@ func (a *App) sendToGroups(ctx context.Context, msg content, res *SendResult) {
 	}
 }
 
-// err returns the error for a result with failed targets, or nil.
-func (r SendResult) err() error {
+// err returns the error of action (send, react, delete) for a result with failed targets, or
+// nil.
+func (r SendResult) err(action string) error {
 	failed := r.Failed()
 	if failed == 0 {
 		return nil
 	}
 
-	err := fmt.Errorf("send: %w for %d of %d recipients", ErrSendFailed, failed, len(r.Results))
+	err := fmt.Errorf("%s: %w for %d of %d recipients", action, ErrSendFailed, failed, len(r.Results))
 
 	for _, res := range r.Results {
 		// Keep the cause that decides the exit code.

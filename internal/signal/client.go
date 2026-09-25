@@ -10,7 +10,7 @@ import (
 //
 // A Client is used by a single command: Open it, then either Link a new account or Connect an
 // existing one, read Events, and Close it.
-type Client interface { //nolint:interfacebloat // the whole facade over signalmeow
+type Client interface { //nolint:interfacebloat // the one facade over signalmeow; tests fake it whole
 	// Link provisions a new secondary device. It calls onURI with the sgnl://linkdevice URI to
 	// show to the user, then blocks until the phone has scanned it and the account is stored.
 	Link(ctx context.Context, deviceName string, onURI func(uri string)) (Account, error)
@@ -68,6 +68,13 @@ type Client interface { //nolint:interfacebloat // the whole facade over signalm
 	// (ErrUnknownAttachment), the quote author or a mentioned user has no ACI (ErrUnresolvable),
 	// or the connection is lost for good (such as ErrDeviceUnlinked).
 	Send(ctx context.Context, req SendRequest) (SendResult, error)
+
+	// SendReceipt tells sender that we received (ReceiptDelivery), read (ReceiptRead) or viewed
+	// (ReceiptViewed) their messages with the given sent timestamps. sender needs their ACI. A
+	// read receipt also reaches our other devices (as a read sync). It needs Connect
+	// (ErrNotConnected) and fails with ErrClosed after Close, and with ErrInvalidReceipt for an
+	// unknown type or no timestamps.
+	SendReceipt(ctx context.Context, sender Recipient, typ ReceiptType, timestamps []uint64) error
 
 	// Devices lists all devices of the selected account as the server knows them. It needs
 	// neither Connect nor the account lock. Like Connect, it fails with ErrDeviceUnlinked on an

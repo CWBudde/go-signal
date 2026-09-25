@@ -166,7 +166,7 @@ func (c *meowClient) Send(ctx context.Context, req SendRequest) (SendResult, err
 // message checks req and returns a function that builds a fresh DataMessage for it, since
 // signalmeow adds to the message of every send.
 func (c *meowClient) message(ctx context.Context, req SendRequest) (func() *signalpb.DataMessage, error) {
-	err := checkSendRequest(req)
+	err := req.Check()
 	if err != nil {
 		return nil, err
 	}
@@ -184,15 +184,6 @@ func (c *meowClient) message(ctx context.Context, req SendRequest) (func() *sign
 	return func() *signalpb.DataMessage {
 		return proto.CloneOf(msg)
 	}, nil
-}
-
-// checkSendRequest rejects requests that have no single target.
-func checkSendRequest(req SendRequest) error {
-	if (req.GroupID == "") == (len(req.Recipients) == 0) {
-		return ErrInvalidSendRequest
-	}
-
-	return nil
 }
 
 // ownProfileKey returns our profile key to include in messages, so that recipients can decrypt
@@ -238,6 +229,11 @@ func dataMessage(req SendRequest, attachments []*signalpb.AttachmentPointer, pro
 		})
 	}
 
+	err := addReactionOrDelete(msg, req)
+	if err != nil {
+		return nil, err
+	}
+
 	if req.Quote != nil {
 		aci, err := aciBytes(req.Quote.Author)
 		if err != nil {
@@ -256,6 +252,34 @@ func dataMessage(req SendRequest, attachments []*signalpb.AttachmentPointer, pro
 	}
 
 	return msg, nil
+}
+
+// addReactionOrDelete adds the reaction or remote delete of req to msg, as the official clients
+// and signal-cli send them.
+func addReactionOrDelete(msg *signalpb.DataMessage, req SendRequest) error {
+	if req.DeleteTarget != 0 {
+		msg.Delete = &signalpb.DataMessage_Delete{TargetSentTimestamp: new(req.DeleteTarget)}
+	}
+
+	reaction := req.Reaction
+	if reaction == nil {
+		return nil
+	}
+
+	aci, err := aciBytes(reaction.TargetAuthor)
+	if err != nil {
+		return fmt.Errorf("reaction: %w", err)
+	}
+
+	msg.RequiredProtocolVersion = new(uint32(signalpb.DataMessage_REACTIONS))
+	msg.Reaction = &signalpb.DataMessage_Reaction{
+		Emoji:                 new(reaction.Emoji),
+		Remove:                new(reaction.Remove),
+		TargetAuthorAciBinary: aci,
+		TargetSentTimestamp:   new(reaction.TargetTimestamp),
+	}
+
+	return nil
 }
 
 // aciBytes returns the 16-byte ACI of rcpt.
