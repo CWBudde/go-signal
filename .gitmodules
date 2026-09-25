@@ -2,3 +2,7 @@
 	path = reference/signal-cli
 	url = https://github.com/AsamK/signal-cli.git
 	shallow = true
+[submodule "third_party/libsignal"]
+	path = third_party/libsignal
+	url = https://github.com/signalapp/libsignal.git
+	shallow = true
