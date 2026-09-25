@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/cwbudde/go-signal/internal/store"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"go.mau.fi/mautrix-signal/pkg/signalmeow"
 	"go.mau.fi/mautrix-signal/pkg/signalmeow/events"
@@ -31,22 +32,21 @@ var (
 	errAlreadyStarted  = errors.New("client is already connected")
 )
 
-// Open opens the store in opts.DataDir and returns a signalmeow-backed Client.
-// It is the default Factory.
-func Open(ctx context.Context, opts Options) (Client, error) {
+// Open opens the data dir opts.DataDir and returns a signalmeow-backed Client. The account
+// database is opened on first use. It is the default Factory.
+func Open(_ context.Context, opts Options) (Client, error) {
 	log := opts.logger()
-	zlog := NewZerologBridge(log)
 
-	data, err := store.Open(zlog.WithContext(ctx), opts.DataDir, zlog)
+	dir, err := store.OpenDir(opts.DataDir, log)
 	if err != nil {
-		return nil, fmt.Errorf("open store: %w", err)
+		return nil, fmt.Errorf("open data dir: %w", err)
 	}
 
 	return &meowClient{
 		opts:   opts,
 		log:    log,
-		zlog:   zlog,
-		data:   data,
+		zlog:   NewZerologBridge(log),
+		dir:    dir,
 		events: make(chan Event, eventBuffer),
 		done:   make(chan struct{}),
 	}, nil
@@ -56,7 +56,12 @@ type meowClient struct {
 	opts Options
 	log  *slog.Logger
 	zlog zerolog.Logger
-	data *store.Store
+	dir  *store.Dir
+
+	// data is the open database of the account dataACI; lock is held once connected or linked.
+	data    *store.Store
+	dataACI string
+	lock    *store.Lock
 
 	cli    *signalmeow.Client
 	ownACI string
@@ -73,7 +78,15 @@ type meowClient struct {
 func (c *meowClient) Link(ctx context.Context, deviceName string, onURI func(string)) (Account, error) {
 	ctx = c.zlog.WithContext(ctx)
 
-	for resp := range signalmeow.PerformProvisioning(ctx, c.data.Devices, deviceName, false) {
+	links := c.dir.NewLinkStore(c.zlog)
+	defer func() {
+		err := links.Close()
+		if err != nil {
+			c.log.Warn("close link store", "error", err)
+		}
+	}()
+
+	for resp := range signalmeow.PerformProvisioning(ctx, links, deviceName, false) {
 		if resp.Err != nil {
 			return Account{}, fmt.Errorf("provisioning: %w", resp.Err)
 		}
@@ -82,7 +95,7 @@ func (c *meowClient) Link(ctx context.Context, deviceName string, onURI func(str
 		case signalmeow.StateProvisioningURLReceived:
 			onURI(resp.ProvisioningURL)
 		case signalmeow.StateProvisioningDataReceived:
-			return accountFromDevice(resp.ProvisioningData), nil
+			return c.finishLink(links, resp.ProvisioningData)
 		case signalmeow.StateProvisioningError:
 			return Account{}, fmt.Errorf("%w: %v", errUnexpectedState, resp.State)
 		default:
@@ -112,6 +125,13 @@ func (c *meowClient) Connect(ctx context.Context) error {
 	device, err := c.device(ctx)
 	if err != nil {
 		return err
+	}
+
+	if c.lock == nil {
+		c.lock, err = c.dir.Lock(c.dataACI)
+		if err != nil {
+			return fmt.Errorf("%w: %s", err, device.Number)
+		}
 	}
 
 	c.ownACI = device.ACI.String()
@@ -165,39 +185,113 @@ func (c *meowClient) Close() error {
 		close(c.events)
 		c.mu.Unlock()
 
-		err = c.data.Close()
+		err = c.release()
 	})
 
-	if err != nil {
-		return fmt.Errorf("close store: %w", err)
-	}
-
-	return nil
+	return err
 }
 
-// device returns the device selected by opts.Account, or the first one.
-func (c *meowClient) device(ctx context.Context) (*mstore.Device, error) {
-	devices, err := c.data.Devices.GetAllDevices(ctx)
+// release closes the account database and releases the lock, if held.
+func (c *meowClient) release() error {
+	var errs []error
+
+	if c.data != nil {
+		errs = append(errs, c.data.Close())
+	}
+
+	if c.lock != nil {
+		errs = append(errs, c.lock.Unlock())
+	}
+
+	c.data, c.lock, c.dataACI = nil, nil, ""
+
+	return errors.Join(errs...)
+}
+
+// finishLink records the new account in accounts.json and keeps its database and lock.
+func (c *meowClient) finishLink(links *store.LinkStore, data *mstore.DeviceData) (Account, error) {
+	acc := accountFromDevice(data)
+
+	err := c.dir.PutAccount(store.AccountEntry{
+		Number:   acc.Number,
+		ACI:      acc.ACI,
+		PNI:      acc.PNI,
+		DeviceID: acc.DeviceID,
+		LinkedAt: time.Now().UTC().Truncate(time.Second),
+	})
 	if err != nil {
-		return nil, fmt.Errorf("load devices: %w", err)
+		return Account{}, fmt.Errorf("record account: %w", err)
 	}
 
-	for _, device := range devices {
-		if !device.IsDeviceLoggedIn() {
-			continue
+	err = c.release()
+	if err != nil {
+		return Account{}, err
+	}
+
+	c.data, c.lock = links.Take()
+	c.dataACI = acc.ACI
+
+	return acc, nil
+}
+
+// device returns the logged-in device of the selected account, opening its database if needed.
+func (c *meowClient) device(ctx context.Context) (*mstore.Device, error) {
+	entry, err := c.selectAccount()
+	if err != nil {
+		return nil, err
+	}
+
+	if c.dataACI != entry.ACI {
+		err = c.release()
+		if err != nil {
+			return nil, err
 		}
 
-		want := c.opts.Account
-		if want == "" || want == device.Number || want == device.ACI.String() {
-			return device, nil
+		c.data, err = c.dir.OpenAccount(ctx, entry.ACI, c.zlog)
+		if err != nil {
+			return nil, fmt.Errorf("open account: %w", err)
+		}
+
+		c.dataACI = entry.ACI
+	}
+
+	aci, err := uuid.Parse(entry.ACI)
+	if err != nil {
+		return nil, fmt.Errorf("accounts.json: invalid ACI %q: %w", entry.ACI, err)
+	}
+
+	device, err := c.data.Devices.DeviceByACI(ctx, aci)
+	if err != nil {
+		return nil, fmt.Errorf("load device: %w", err)
+	}
+
+	if device == nil || !device.IsDeviceLoggedIn() {
+		return nil, fmt.Errorf("%w: %s has no device data", ErrNotLinked, entry.Number)
+	}
+
+	return device, nil
+}
+
+// selectAccount picks the accounts.json entry matching opts.Account (number or ACI), or the
+// first one. Phase 2.3 requires -a when there are several.
+func (c *meowClient) selectAccount() (store.AccountEntry, error) {
+	accounts, err := c.dir.Accounts()
+	if err != nil {
+		return store.AccountEntry{}, fmt.Errorf("load accounts: %w", err)
+	}
+
+	want := c.opts.Account
+	for _, entry := range accounts {
+		if want == "" || want == entry.Number || want == entry.ACI {
+			return entry, nil
 		}
 	}
 
-	if c.opts.Account != "" {
-		return nil, fmt.Errorf("%w: %s", ErrAccountNotFound, c.opts.Account)
+	if want != "" {
+		return store.AccountEntry{}, fmt.Errorf("%w: %s", ErrAccountNotFound, want)
 	}
 
-	return nil, ErrNotLinked
+	return store.AccountEntry{}, ErrNotLinked
 }
 
 // handle is signalmeow's event handler. Its return value decides whether the envelope is acked,

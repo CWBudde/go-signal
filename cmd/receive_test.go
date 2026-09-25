@@ -135,6 +135,17 @@ func TestReceiveLoggedOut(t *testing.T) {
 	}
 }
 
+func TestReceiveAccountInUse(t *testing.T) {
+	t.Parallel()
+
+	fake := &signaltest.Fake{Linked: testAccount(), InUse: true}
+
+	_, err := run(t, fake, "receive", "--timeout", "5s")
+	if !errors.Is(err, signal.ErrAccountInUse) {
+		t.Fatalf("got %v, want ErrAccountInUse", err)
+	}
+}
+
 func TestReceiveNotLinked(t *testing.T) {
 	t.Parallel()
 

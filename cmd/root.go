@@ -13,6 +13,7 @@ import (
 	"syscall"
 
 	"github.com/cwbudde/go-signal/internal/signal"
+	"github.com/cwbudde/go-signal/internal/store"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -84,7 +85,7 @@ messages, and run it as a JSON-RPC daemon for scripts and bots.`,
 
 	flags := root.PersistentFlags()
 	flags.StringVar(&cfgFile, "config", "", "config file (default is $XDG_CONFIG_HOME/go-signal/config.yaml)")
-	flags.String("data-dir", defaultDataDir(), "directory holding account data and keys")
+	flags.String("data-dir", store.DefaultDir(), "directory holding account data and keys")
 	flags.StringP("account", "a", "", "account (phone number) to operate on")
 	flags.StringP("output", "o", "plain", "output format: plain or json")
 	flags.BoolP("verbose", "v", false, "enable debug logging")
@@ -188,17 +189,4 @@ func setupLogging(cfg *viper.Viper) error {
 	}
 
 	return nil
-}
-
-func defaultDataDir() string {
-	if dir := os.Getenv("XDG_DATA_HOME"); dir != "" {
-		return filepath.Join(dir, "go-signal")
-	}
-
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "go-signal-data"
-	}
-
-	return filepath.Join(home, ".local", "share", "go-signal")
 }

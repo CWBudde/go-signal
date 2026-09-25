@@ -4,9 +4,11 @@ package store
 
 import (
 	"context"
+	"database/sql"
+	"embed"
+	"errors"
 	"fmt"
 	"net/url"
-	"os"
 	"path/filepath"
 
 	// Registers the "sqlite3" database/sql driver.
@@ -16,30 +18,45 @@ import (
 	"go.mau.fi/util/dbutil"
 )
 
-// dbFile is the database name inside the data dir. Phase 2.2 moves it to <data-dir>/<aci>/.
-const dbFile = "signal.db"
+// ourVersionTable tracks our migrations separately from signalmeow's.
+const ourVersionTable = "gosignal_version"
 
-// dirPerm keeps keys and messages private to the user.
-const dirPerm = 0o700
+//go:embed upgrades/*.sql
+var upgradeFiles embed.FS
 
-// Store is an open data dir.
+// Store is an open account database.
 type Store struct {
-	db *dbutil.Database
+	db  *dbutil.Database
+	own *dbutil.Database
 
-	// Devices holds the signalmeow devices (accounts) and all their protocol state.
+	// Devices holds the signalmeow device (account) and all its protocol state.
 	Devices *store.Container
 }
 
-// Open creates dataDir if needed, opens the database in it and runs signalmeow's migrations.
-func Open(ctx context.Context, dataDir string, log zerolog.Logger) (*Store, error) {
-	err := os.MkdirAll(dataDir, dirPerm)
+// OpenAccount opens (creating if needed) <data-dir>/<aci>/account.db and runs signalmeow's and
+// our migrations. It doesn't take the account lock; see Lock.
+func (d *Dir) OpenAccount(ctx context.Context, aci string, log zerolog.Logger) (*Store, error) {
+	dir := d.AccountDir(aci)
+
+	err := d.mkdir(dir)
 	if err != nil {
-		return nil, fmt.Errorf("create data dir: %w", err)
+		return nil, fmt.Errorf("create account dir: %w", err)
 	}
 
+	path := filepath.Join(dir, dbFile)
+
+	err = d.touch(path)
+	if err != nil {
+		return nil, err
+	}
+
+	return openDB(ctx, path, log)
+}
+
+func openDB(ctx context.Context, path string, log zerolog.Logger) (*Store, error) {
 	dsn := (&url.URL{
 		Scheme:   "file",
-		Opaque:   filepath.Join(dataDir, dbFile),
+		Opaque:   path,
 		RawQuery: "_foreign_keys=on&_journal_mode=WAL&_busy_timeout=5000&_txlock=immediate",
 	}).String()
 
@@ -54,10 +71,52 @@ func Open(ctx context.Context, dataDir string, log zerolog.Logger) (*Store, erro
 	if err != nil {
 		_ = sqlDB.Close()
 
-		return nil, fmt.Errorf("migrate database: %w", err)
+		return nil, fmt.Errorf("migrate signalmeow tables: %w", err)
 	}
 
-	return &Store{db: sqlDB, Devices: devices}, nil
+	own := sqlDB.Child(ourVersionTable, upgradeTable(),
+		dbutil.ZeroLogger(log.With().Str("db_section", "go-signal").Logger()))
+
+	err = own.Upgrade(ctx)
+	if err != nil {
+		_ = sqlDB.Close()
+
+		return nil, fmt.Errorf("migrate go-signal tables: %w", err)
+	}
+
+	return &Store{db: sqlDB, own: own, Devices: devices}, nil
+}
+
+func upgradeTable() dbutil.UpgradeTable {
+	return dbutil.BuildUpgradeTable().WithFSPath(upgradeFiles, "upgrades").Finish()
+}
+
+// Meta returns the value stored under key, and whether there was one.
+func (s *Store) Meta(ctx context.Context, key string) (string, bool, error) {
+	var value string
+
+	err := s.own.QueryRow(ctx, "SELECT value FROM gosignal_meta WHERE key=$1", key).Scan(&value)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, nil
+	}
+
+	if err != nil {
+		return "", false, fmt.Errorf("read meta %s: %w", key, err)
+	}
+
+	return value, true, nil
+}
+
+// SetMeta stores value under key.
+func (s *Store) SetMeta(ctx context.Context, key, value string) error {
+	_, err := s.own.Exec(ctx,
+		"INSERT INTO gosignal_meta (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value=excluded.value",
+		key, value)
+	if err != nil {
+		return fmt.Errorf("write meta %s: %w", key, err)
+	}
+
+	return nil
 }
 
 // Close closes the database.

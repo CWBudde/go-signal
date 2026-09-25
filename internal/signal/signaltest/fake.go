@@ -13,7 +13,8 @@ import (
 const LinkURI = "sgnl://linkdevice?uuid=fake&pub_key=fake"
 
 // Fake is shared state behind the clients its Factory opens, so that e.g. a `link` followed by a
-// `receive` in the same test see the same account. Set the exported fields before use.
+// `receive` in the same test see the same account. Like the real account lock, only one open
+// client at a time can be connected (ErrAccountInUse). Set the exported fields before use.
 type Fake struct {
 	// Linked is the stored account; nil means not linked. Link sets it to LinkAs.
 	Linked *signal.Account
@@ -21,6 +22,8 @@ type Fake struct {
 	LinkAs signal.Account
 	// Incoming is delivered on Events right after Connect, in order. Set it before Factory.
 	Incoming []signal.Event
+	// InUse simulates another process holding the account lock: Connect fails.
+	InUse bool
 
 	// OpenErr, LinkErr, ConnectErr and SendErr make the respective call fail.
 	OpenErr    error
@@ -142,6 +145,16 @@ func (c *client) Connect(context.Context) error {
 
 	if c.fake.ConnectErr != nil {
 		return c.fake.ConnectErr
+	}
+
+	if c.fake.InUse {
+		return fmt.Errorf("%w (fake)", signal.ErrAccountInUse)
+	}
+
+	for _, other := range c.fake.clients {
+		if other.connected && !other.closed {
+			return fmt.Errorf("%w (fake)", signal.ErrAccountInUse)
+		}
 	}
 
 	c.connected = true

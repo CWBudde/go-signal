@@ -1,6 +1,10 @@
 package signal
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/cwbudde/go-signal/internal/store"
+)
 
 // ErrCGORequired is returned by operations that need libsignal when built with CGO_ENABLED=0.
 var ErrCGORequired = errors.New("this build has no libsignal support (built without cgo)")
@@ -13,6 +17,9 @@ var ErrAccountNotFound = errors.New("account not found")
 
 // ErrLoggedOut means the server no longer accepts this device (e.g. it was unlinked on the phone).
 var ErrLoggedOut = errors.New("device was logged out by the server")
+
+// ErrAccountInUse means another go-signal process is connected as the same account.
+var ErrAccountInUse = store.ErrAccountInUse
 
 // ErrNotConnected is returned by operations that need Connect first.
 var ErrNotConnected = errors.New("client is not connected")

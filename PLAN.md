@@ -66,7 +66,7 @@ Consequences:
   asynchronously, so closing right after the handler returns can lose the ack. The spike sleeps
   1 s; Phase 3.1 needs a proper drain.
 - **Gaps.** No QR refresh (the server drops the provisioning socket after ~60 s; the bridge
-  reprovisions every 45 s). The DB file is created 0644 (Phase 2.2). Linking with
+  reprovisions every 45 s). The DB file was created 0644 (fixed in Phase 2.2). Linking with
   `allowBackup=false` skips message history transfer.
 
 ## 2. Target layout
@@ -216,16 +216,28 @@ number or ACI (`ErrAccountNotFound`); the multi-account rules follow in 2.3.
 
 #### 2.2 Data-dir layout and permissions
 
-- [ ] Resolve `--data-dir` (default `$XDG_DATA_HOME/go-signal`)
-- [ ] Layout: `<data-dir>/<aci>/account.db` (SQLite, WAL, `busy_timeout`) and
-      `<data-dir>/accounts.json` mapping number ↔ ACI ↔ device ID
-- [ ] Create dirs 0700 and files 0600; warn (don't fail) when existing perms are looser
-- [ ] Lock file per account so two processes don't run receive loops on the same account
-- [ ] Our own tables (schema migrations via `dbutil`) next to signalmeow's, for later
-      metadata (e.g. last-seen timestamps, trust decisions)
+- [x] Resolve `--data-dir` (default `$XDG_DATA_HOME/go-signal`; `~/` expanded, made absolute;
+      `store.DefaultDir`, `store.OpenDir`)
+- [x] Layout: `<data-dir>/<aci>/account.db` (SQLite, WAL, `busy_timeout`) and
+      `<data-dir>/accounts.json` mapping number ↔ ACI ↔ device ID (versioned, written atomically)
+- [x] Create dirs 0700 and files 0600; warn (don't fail) when existing perms are looser
+      (`account.db` is pre-created 0600; SQLite gives `-wal`/`-shm` the same mode)
+- [x] Lock file per account so two processes don't run receive loops on the same account
+      (`<data-dir>/<aci>/lock`, non-blocking `flock`, holder PID in the error; best effort on
+      non-unix)
+- [x] Our own tables (schema migrations via `dbutil`) next to signalmeow's, for later
+      metadata (e.g. last-seen timestamps, trust decisions) (`gosignal_version`, v1 creates a
+      `gosignal_meta` key/value table)
 
 **Done when:** linking writes the layout above, and a second concurrent `receive` fails with a
-clear "account in use" error.
+clear "account in use" error. (Done; `signal.ErrAccountInUse`.)
+
+Notes: the ACI is only known once the phone confirms the link, so linking uses a
+`store.LinkStore` (a signalmeow `DeviceStore`) that takes the lock and opens
+`<aci>/account.db` inside `PutDevice`; relinking an account that is connected elsewhere
+therefore fails. The client opens the account database on first use and takes the lock in
+`Connect` (reading the account doesn't need it). The spike's `<data-dir>/signal.db` is not
+migrated; relink after upgrading.
 
 #### 2.3 Account selection
 

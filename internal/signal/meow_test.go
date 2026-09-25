@@ -4,9 +4,20 @@ package signal_test
 
 import (
 	"errors"
+	"log/slog"
 	"testing"
 
 	"github.com/cwbudde/go-signal/internal/signal"
+	"github.com/cwbudde/go-signal/internal/store"
+	"github.com/google/uuid"
+	"github.com/rs/zerolog"
+	"go.mau.fi/mautrix-signal/pkg/libsignalgo"
+	mstore "go.mau.fi/mautrix-signal/pkg/signalmeow/store"
+)
+
+const (
+	seededACI    = "11111111-1111-1111-1111-111111111111"
+	seededNumber = "+15550100"
 )
 
 func TestOpenWithoutAccount(t *testing.T) {
@@ -62,4 +73,109 @@ func TestOpenUnknownAccount(t *testing.T) {
 	if !errors.Is(err, signal.ErrAccountNotFound) {
 		t.Errorf("got %v, want ErrAccountNotFound", err)
 	}
+}
+
+func TestAccountFromDataDir(t *testing.T) {
+	t.Parallel()
+
+	dataDir := seedAccount(t)
+
+	for _, sel := range []string{"", seededNumber, seededACI} {
+		client, err := signal.Open(t.Context(), signal.Options{DataDir: dataDir, Account: sel})
+		if err != nil {
+			t.Fatalf("open: %v", err)
+		}
+
+		acc, err := client.Account(t.Context())
+		if err != nil || acc.ACI != seededACI || acc.Number != seededNumber || acc.DeviceID != 2 {
+			t.Errorf("-a %q: got %+v, %v", sel, acc, err)
+		}
+
+		_ = client.Close()
+	}
+}
+
+func TestConnectAccountInUse(t *testing.T) {
+	t.Parallel()
+
+	dataDir := seedAccount(t)
+
+	dir, err := store.OpenDir(dataDir, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	lock, err := dir.Lock(seededACI)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer func() { _ = lock.Unlock() }()
+
+	client, err := signal.Open(t.Context(), signal.Options{DataDir: dataDir})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer client.Close()
+
+	// Reading the account doesn't need the lock; connecting does.
+	_, err = client.Account(t.Context())
+	if err != nil {
+		t.Errorf("Account: %v", err)
+	}
+
+	err = client.Connect(t.Context())
+	if !errors.Is(err, signal.ErrAccountInUse) {
+		t.Errorf("Connect: got %v, want ErrAccountInUse", err)
+	}
+}
+
+// seedAccount writes the layout `link` would: accounts.json plus a logged-in device in the
+// account database. It returns the data dir.
+func seedAccount(t *testing.T) string {
+	t.Helper()
+
+	dataDir := t.TempDir()
+
+	dir, err := store.OpenDir(dataDir, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := dir.OpenAccount(t.Context(), seededACI, zerolog.Nop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer data.Close()
+
+	aciKeys, err := libsignalgo.GenerateIdentityKeyPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pniKeys, err := libsignalgo.GenerateIdentityKeyPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = data.Devices.PutDevice(t.Context(), &mstore.DeviceData{
+		ACIIdentityKeyPair: aciKeys,
+		PNIIdentityKeyPair: pniKeys,
+		ACI:                uuid.MustParse(seededACI),
+		PNI:                uuid.New(),
+		DeviceID:           2,
+		Number:             seededNumber,
+		Password:           "secret",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = dir.PutAccount(store.AccountEntry{Number: seededNumber, ACI: seededACI, DeviceID: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return dataDir
 }
