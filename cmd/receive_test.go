@@ -68,7 +68,7 @@ func TestLink(t *testing.T) {
 		t.Errorf("output does not end with %q: %q", want, out)
 	}
 
-	if fake.Linked == nil || *fake.Linked != *testAccount() {
+	if len(fake.Linked) != 1 || fake.Linked[0] != *testAccount() {
 		t.Errorf("account not stored: %+v", fake.Linked)
 	}
 }
@@ -88,7 +88,7 @@ func TestReceiveStopsAtFirstMessage(t *testing.T) {
 	t.Parallel()
 
 	fake := &signaltest.Fake{
-		Linked: testAccount(),
+		Linked: []signal.Account{*testAccount()},
 		Incoming: []signal.Event{
 			&signal.Connection{State: signal.StateConnected},
 			&signal.Message{Body: "first"},
@@ -113,7 +113,7 @@ func TestReceiveStopsAtFirstMessage(t *testing.T) {
 func TestReceiveTimeout(t *testing.T) {
 	t.Parallel()
 
-	fake := &signaltest.Fake{Linked: testAccount()}
+	fake := &signaltest.Fake{Linked: []signal.Account{*testAccount()}}
 
 	_, err := run(t, fake, "receive", "--timeout", "10ms")
 	if err != nil {
@@ -125,7 +125,7 @@ func TestReceiveLoggedOut(t *testing.T) {
 	t.Parallel()
 
 	fake := &signaltest.Fake{
-		Linked:   testAccount(),
+		Linked:   []signal.Account{*testAccount()},
 		Incoming: []signal.Event{&signal.Connection{State: signal.StateLoggedOut}},
 	}
 
@@ -138,7 +138,7 @@ func TestReceiveLoggedOut(t *testing.T) {
 func TestReceiveAccountInUse(t *testing.T) {
 	t.Parallel()
 
-	fake := &signaltest.Fake{Linked: testAccount(), InUse: true}
+	fake := &signaltest.Fake{Linked: []signal.Account{*testAccount()}, InUse: true}
 
 	_, err := run(t, fake, "receive", "--timeout", "5s")
 	if !errors.Is(err, signal.ErrAccountInUse) {
@@ -158,7 +158,7 @@ func TestReceiveNotLinked(t *testing.T) {
 func TestReceivePassesGlobalFlags(t *testing.T) {
 	t.Parallel()
 
-	fake := &signaltest.Fake{Linked: testAccount()}
+	fake := &signaltest.Fake{Linked: []signal.Account{*testAccount()}}
 
 	_, err := run(t, fake, "receive", "-a", "+15550199", "--timeout", "5s")
 	if !errors.Is(err, signal.ErrAccountNotFound) {

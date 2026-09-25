@@ -208,7 +208,8 @@ func (c *meowClient) release() error {
 	return errors.Join(errs...)
 }
 
-// finishLink records the new account in accounts.json and keeps its database and lock.
+// finishLink records the new account in accounts.json (next to any others) and keeps its
+// database and lock.
 func (c *meowClient) finishLink(links *store.LinkStore, data *mstore.DeviceData) (Account, error) {
 	acc := accountFromDevice(data)
 
@@ -230,34 +231,36 @@ func (c *meowClient) finishLink(links *store.LinkStore, data *mstore.DeviceData)
 
 	c.data, c.lock = links.Take()
 	c.dataACI = acc.ACI
+	// Stay on the new account even when others are linked too.
+	c.opts.Account = acc.ACI
 
 	return acc, nil
 }
 
 // device returns the logged-in device of the selected account, opening its database if needed.
 func (c *meowClient) device(ctx context.Context) (*mstore.Device, error) {
-	entry, err := c.selectAccount()
+	acc, err := c.selectAccount()
 	if err != nil {
 		return nil, err
 	}
 
-	if c.dataACI != entry.ACI {
+	if c.dataACI != acc.ACI {
 		err = c.release()
 		if err != nil {
 			return nil, err
 		}
 
-		c.data, err = c.dir.OpenAccount(ctx, entry.ACI, c.zlog)
+		c.data, err = c.dir.OpenAccount(ctx, acc.ACI, c.zlog)
 		if err != nil {
 			return nil, fmt.Errorf("open account: %w", err)
 		}
 
-		c.dataACI = entry.ACI
+		c.dataACI = acc.ACI
 	}
 
-	aci, err := uuid.Parse(entry.ACI)
+	aci, err := uuid.Parse(acc.ACI)
 	if err != nil {
-		return nil, fmt.Errorf("accounts.json: invalid ACI %q: %w", entry.ACI, err)
+		return nil, fmt.Errorf("accounts.json: invalid ACI %q: %w", acc.ACI, err)
 	}
 
 	device, err := c.data.Devices.DeviceByACI(ctx, aci)
@@ -266,32 +269,27 @@ func (c *meowClient) device(ctx context.Context) (*mstore.Device, error) {
 	}
 
 	if device == nil || !device.IsDeviceLoggedIn() {
-		return nil, fmt.Errorf("%w: %s has no device data", ErrNotLinked, entry.Number)
+		return nil, fmt.Errorf("%w: %s has no device data", ErrNotLinked, acc.Number)
 	}
 
 	return device, nil
 }
 
-// selectAccount picks the accounts.json entry matching opts.Account (number or ACI), or the
-// first one. Phase 2.3 requires -a when there are several.
-func (c *meowClient) selectAccount() (store.AccountEntry, error) {
-	accounts, err := c.dir.Accounts()
+// selectAccount resolves opts.Account against accounts.json (see SelectAccount).
+func (c *meowClient) selectAccount() (Account, error) {
+	entries, err := c.dir.Accounts()
 	if err != nil {
-		return store.AccountEntry{}, fmt.Errorf("load accounts: %w", err)
+		return Account{}, fmt.Errorf("load accounts: %w", err)
 	}
 
-	want := c.opts.Account
-	for _, entry := range accounts {
-		if want == "" || want == entry.Number || want == entry.ACI {
-			return entry, nil
-		}
+	accounts := make([]Account, 0, len(entries))
+	for _, entry := range entries {
+		accounts = append(accounts, Account{
+			Number: entry.Number, ACI: entry.ACI, PNI: entry.PNI, DeviceID: entry.DeviceID,
+		})
 	}
 
-	if want != "" {
-		return store.AccountEntry{}, fmt.Errorf("%w: %s", ErrAccountNotFound, want)
-	}
-
-	return store.AccountEntry{}, ErrNotLinked
+	return SelectAccount(accounts, c.opts.Account)
 }
 
 // handle is signalmeow's event handler. Its return value decides whether the envelope is acked,

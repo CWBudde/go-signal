@@ -86,7 +86,7 @@ messages, and run it as a JSON-RPC daemon for scripts and bots.`,
 	flags := root.PersistentFlags()
 	flags.StringVar(&cfgFile, "config", "", "config file (default is $XDG_CONFIG_HOME/go-signal/config.yaml)")
 	flags.String("data-dir", store.DefaultDir(), "directory holding account data and keys")
-	flags.StringP("account", "a", "", "account (phone number) to operate on")
+	flags.StringP("account", "a", "", "account to use: E.164 number or ACI (required when several are linked)")
 	flags.StringP("output", "o", "plain", "output format: plain or json")
 	flags.BoolP("verbose", "v", false, "enable debug logging")
 	flags.String("log-format", "text", "log format: text or json")

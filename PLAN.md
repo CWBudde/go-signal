@@ -212,7 +212,7 @@ with `CGO_ENABLED=0`. (Done; `link` verified up to the QR code against the live 
 Notes: the real client's handler blocks until the consumer reads the event from `Events()`, and
 only then acks the envelope, so unread events are redelivered next time. `Close` still waits 1 s
 for pending acks when anything was acked (Phase 3.1 replaces that). `-a` already selects by
-number or ACI (`ErrAccountNotFound`); the multi-account rules follow in 2.3.
+number or ACI (`ErrAccountNotFound`); the multi-account rules followed in 2.3.
 
 #### 2.2 Data-dir layout and permissions
 
@@ -241,13 +241,16 @@ migrated; relink after upgrading.
 
 #### 2.3 Account selection
 
-- [ ] `-a/--account` accepts E.164 or ACI; resolve it via `accounts.json`
-- [ ] With exactly one linked account, `-a` is optional; with several, it's required
-      (sentinel error listing the choices)
-- [ ] `link` into an existing data dir adds a second account instead of overwriting
+- [x] `-a/--account` accepts E.164 or ACI; resolve it via `accounts.json`
+      (`signal.SelectAccount`; anything else is `ErrInvalidAccount`, ACIs match case-insensitively)
+- [x] With exactly one linked account, `-a` is optional; with several, it's required
+      (`ErrAccountRequired`, listing number and ACI of each)
+- [x] `link` into an existing data dir adds a second account instead of overwriting (relinking
+      the same ACI replaces its entry)
 
 **Done when:** commands pick the right account with zero, one and two linked accounts (tests with
-the fake).
+the fake). (Done; the fake and the real client share `signal.SelectAccount`, and the real client
+is also tested against a seeded two-account data dir.)
 
 #### 2.4 Account commands
 

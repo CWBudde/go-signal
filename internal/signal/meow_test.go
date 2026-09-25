@@ -130,9 +130,49 @@ func TestConnectAccountInUse(t *testing.T) {
 	}
 }
 
-// seedAccount writes the layout `link` would: accounts.json plus a logged-in device in the
-// account database. It returns the data dir.
+func TestAccountSelectionWithTwoAccounts(t *testing.T) {
+	t.Parallel()
+
+	second := signal.Account{Number: "+15550101", ACI: "33333333-3333-3333-3333-333333333333", DeviceID: 3}
+	dataDir := seedAccounts(t, signal.Account{Number: seededNumber, ACI: seededACI, DeviceID: 2}, second)
+
+	client, err := signal.Open(t.Context(), signal.Options{DataDir: dataDir})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+
+	_, err = client.Account(t.Context())
+	if !errors.Is(err, signal.ErrAccountRequired) {
+		t.Errorf("without -a: got %v, want ErrAccountRequired", err)
+	}
+
+	_ = client.Close()
+
+	for _, sel := range []string{second.Number, second.ACI} {
+		client, err := signal.Open(t.Context(), signal.Options{DataDir: dataDir, Account: sel})
+		if err != nil {
+			t.Fatalf("open: %v", err)
+		}
+
+		acc, err := client.Account(t.Context())
+		if err != nil || acc.ACI != second.ACI || acc.DeviceID != second.DeviceID {
+			t.Errorf("-a %s: got %+v, %v", sel, acc, err)
+		}
+
+		_ = client.Close()
+	}
+}
+
+// seedAccount seeds a data dir with the single account seededNumber / seededACI.
 func seedAccount(t *testing.T) string {
+	t.Helper()
+
+	return seedAccounts(t, signal.Account{Number: seededNumber, ACI: seededACI, DeviceID: 2})
+}
+
+// seedAccounts writes the layout `link` would: accounts.json plus a logged-in device in each
+// account database. It returns the data dir.
+func seedAccounts(t *testing.T, accounts ...signal.Account) string {
 	t.Helper()
 
 	dataDir := t.TempDir()
@@ -142,7 +182,22 @@ func seedAccount(t *testing.T) string {
 		t.Fatal(err)
 	}
 
-	data, err := dir.OpenAccount(t.Context(), seededACI, zerolog.Nop())
+	for _, acc := range accounts {
+		putDevice(t, dir, acc)
+
+		err = dir.PutAccount(store.AccountEntry{Number: acc.Number, ACI: acc.ACI, DeviceID: acc.DeviceID})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	return dataDir
+}
+
+func putDevice(t *testing.T, dir *store.Dir, acc signal.Account) {
+	t.Helper()
+
+	data, err := dir.OpenAccount(t.Context(), acc.ACI, zerolog.Nop())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,20 +217,13 @@ func seedAccount(t *testing.T) string {
 	err = data.Devices.PutDevice(t.Context(), &mstore.DeviceData{
 		ACIIdentityKeyPair: aciKeys,
 		PNIIdentityKeyPair: pniKeys,
-		ACI:                uuid.MustParse(seededACI),
+		ACI:                uuid.MustParse(acc.ACI),
 		PNI:                uuid.New(),
-		DeviceID:           2,
-		Number:             seededNumber,
+		DeviceID:           acc.DeviceID,
+		Number:             acc.Number,
 		Password:           "secret",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	err = dir.PutAccount(store.AccountEntry{Number: seededNumber, ACI: seededACI, DeviceID: 2})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	return dataDir
 }
