@@ -27,7 +27,11 @@ type Client interface {
 	// device out (it was unlinked on the phone), the account is marked as unlinked and a
 	// StateLoggedOut event carries UnlinkedError. On an account already marked, Connect fails
 	// with it right away, without contacting the server.
-	Connect(ctx context.Context) error
+	//
+	// With the SendOnly option, Connect is for commands that only send: incoming messages are
+	// not handed out on Events but left on the server (not acked), so the next receive gets
+	// them. See SendOnly.
+	Connect(ctx context.Context, opts ...ConnectOption) error
 
 	// Events returns the channel of incoming events. It is unbuffered and closed by Close. An
 	// event counts as handled (and is acked to the server) once it has been read from the
@@ -42,7 +46,14 @@ type Client interface {
 	// errors of all recipients are joined.
 	Resolve(ctx context.Context, recipients []Recipient) ([]Recipient, error)
 
-	// Send sends a message. Only valid after Connect.
+	// Send sends a text message to req.Recipients, which need their ACI (see Resolve), or to the
+	// group req.GroupID, with the sent timestamp req.Timestamp (zero means now). A recipient with
+	// our own ACI gets a note-to-self: only a sync transcript to our other devices. For every
+	// other recipient our other devices get a sync transcript too. It needs Connect
+	// (ErrNotConnected) and fails with ErrClosed after Close. Failures of single recipients (or
+	// group members) are reported in the result; an error means that nothing was sent, e.g.
+	// because the group is unknown (ErrUnknownGroup) or the connection is lost for good (such as
+	// ErrDeviceUnlinked).
 	Send(ctx context.Context, req SendRequest) (SendResult, error)
 
 	// Devices lists all devices of the selected account as the server knows them. It needs
@@ -83,4 +94,39 @@ func (o Options) logger() *slog.Logger {
 	}
 
 	return slog.Default()
+}
+
+// ConnectOptions are the settings a ConnectOption changes.
+type ConnectOptions struct {
+	// SendOnly is set by the SendOnly option.
+	SendOnly bool
+}
+
+// ConnectOption configures Connect.
+type ConnectOption func(*ConnectOptions)
+
+// SendOnly connects without receiving, for commands that only send.
+//
+// signalmeow hands every incoming envelope to our handler on the websocket's request loop and
+// only acks it once the handler returns. A command that never reads Events would block that
+// loop; after 256 queued requests the websocket stalls, and with it the responses to our own
+// requests (sends, contact discovery). In send-only mode the handler returns right away without
+// acking, so the server keeps the envelope and delivers it again on the next connection (the
+// decrypted content stays in signalmeow's event buffer until then). Nothing is lost and Events
+// stays silent until Close closes it. A connection lost for good (logged out, or reconnecting
+// gave up) is not reported on Events either; the next Send fails with its error instead.
+func SendOnly() ConnectOption {
+	return func(o *ConnectOptions) {
+		o.SendOnly = true
+	}
+}
+
+// NewConnectOptions applies opts; Client implementations call it in Connect.
+func NewConnectOptions(opts ...ConnectOption) ConnectOptions {
+	var out ConnectOptions
+	for _, opt := range opts {
+		opt(&out)
+	}
+
+	return out
 }

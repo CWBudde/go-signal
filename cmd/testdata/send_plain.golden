@@ -1,0 +1,5 @@
+RECIPIENT                                           TIMESTAMP      STATUS  DETAILS
++15550101                                           1790000000000  sent    sealed sender
+@bob.42                                             1790000000000  sent    sealed sender
+self                                                1790000000000  sent    note to self
+group:Z3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXA=  1790000000000  sent    2 members

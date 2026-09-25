@@ -86,6 +86,12 @@ type meowClient struct {
 	events chan Event
 	done   chan struct{} // closed by Close; unblocks pending emits
 
+	// sendOnly is set by Connect before the loops start (see SendOnly). Then lost holds the
+	// error of a connection lost for good, which Send reports.
+	sendOnly bool
+	lostMu   sync.Mutex
+	lost     error
+
 	// mu guards closing, so that no handler or send starts once Close waits for them.
 	mu        sync.Mutex
 	closing   bool
@@ -149,7 +155,7 @@ func (c *meowClient) Account(ctx context.Context) (Account, error) {
 	return acc, nil
 }
 
-func (c *meowClient) Connect(ctx context.Context) error {
+func (c *meowClient) Connect(ctx context.Context, opts ...ConnectOption) error {
 	if c.cancelLoops != nil {
 		return errAlreadyStarted
 	}
@@ -181,6 +187,7 @@ func (c *meowClient) Connect(ctx context.Context) error {
 	c.connDevice = device
 	c.ownACI = device.ACI.String()
 	c.account = acc
+	c.sendOnly = NewConnectOptions(opts...).SendOnly
 
 	// The loops outlive ctx: cancelling the command must not cut the websockets before Close
 	// has drained them.
@@ -201,19 +208,6 @@ func (c *meowClient) Connect(ctx context.Context) error {
 
 func (c *meowClient) Events() <-chan Event {
 	return c.events
-}
-
-func (c *meowClient) Send(context.Context, SendRequest) (SendResult, error) {
-	if c.cancelLoops == nil {
-		return SendResult{}, ErrNotConnected
-	}
-
-	if !c.begin(&c.sending) {
-		return SendResult{}, ErrClosed
-	}
-	defer c.sending.Done()
-
-	return SendResult{}, fmt.Errorf("send: %w (Phase 3.3)", ErrNotImplemented)
 }
 
 // Close shuts down gracefully: it lets in-flight sends finish, stops handing out events (an
@@ -513,7 +507,7 @@ func (c *meowClient) selectAccount() (Account, error) {
 
 // handle is signalmeow's event handler. Its return value decides whether the envelope is acked,
 // so it only returns true once the event has been handed to the consumer. Once Close has
-// started, it leaves every envelope for the next run.
+// started, and always in send-only mode, it leaves every envelope for the next run.
 func (c *meowClient) handle(raw events.SignalEvent) bool {
 	if !c.begin(&c.handling) {
 		return false
@@ -525,6 +519,12 @@ func (c *meowClient) handle(raw events.SignalEvent) bool {
 		c.log.Debug("ignoring event", "type", fmt.Sprintf("%T", raw))
 
 		return true
+	}
+
+	if _, isConn := evt.(*Connection); c.sendOnly && !isConn {
+		c.log.Debug("send-only: leaving event on the server", "type", fmt.Sprintf("%T", evt))
+
+		return false
 	}
 
 	if !c.emit(evt) {
@@ -561,8 +561,16 @@ func (c *meowClient) markUnlinked(acc Account, cause error) error {
 	return UnlinkedError(acc)
 }
 
-// emit delivers evt to the consumer. It reports false if the client was closed first.
+// emit delivers evt to the consumer. It reports false if the client was closed first. In
+// send-only mode nobody reads Events, so it only records a connection lost for good (see
+// connectionLost) and never blocks.
 func (c *meowClient) emit(evt Event) bool {
+	if c.sendOnly {
+		c.noteConnection(evt)
+
+		return true
+	}
+
 	select {
 	case c.events <- evt:
 		return true

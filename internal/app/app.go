@@ -6,6 +6,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/cwbudde/go-signal/internal/signal"
 )
@@ -13,11 +14,27 @@ import (
 // App runs the use cases against one open signal.Client, which stays owned by the caller.
 type App struct {
 	client signal.Client
+	now    func() time.Time
+}
+
+// Option customises an App.
+type Option func(*App)
+
+// WithClock replaces time.Now, e.g. for fixed message timestamps in tests.
+func WithClock(now func() time.Time) Option {
+	return func(a *App) {
+		a.now = now
+	}
 }
 
 // New returns an App on client.
-func New(client signal.Client) *App {
-	return &App{client: client}
+func New(client signal.Client, opts ...Option) *App {
+	a := &App{client: client, now: time.Now}
+	for _, opt := range opts {
+		opt(a)
+	}
+
+	return a
 }
 
 // AccountShow returns the selected account from the data dir, without contacting the server.

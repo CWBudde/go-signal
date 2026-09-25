@@ -93,6 +93,84 @@ fields they don't know.
 | `localOnly`  | boolean | `true` if only local data was deleted (`--local-only`), without the server        |
 | `unlinkedAt` | string  | When go-signal found the device unlinked; _optional_ (then `localOnly` is `true`) |
 
+## `send`
+
+```json
+{
+  "version": 1,
+  "send": {
+    "timestamp": 1790000000000,
+    "results": [
+      {
+        "type": "user",
+        "number": "+15550101",
+        "aci": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "timestamp": 1790000000000,
+        "success": true,
+        "unidentified": true
+      },
+      {
+        "type": "self",
+        "number": "+15550100",
+        "aci": "11111111-1111-1111-1111-111111111111",
+        "timestamp": 1790000000000,
+        "success": true,
+        "unidentified": false
+      },
+      {
+        "type": "group",
+        "groupId": "Z3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXA=",
+        "timestamp": 1790000000000,
+        "success": false,
+        "members": [
+          {
+            "aci": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "success": true,
+            "unidentified": true
+          },
+          {
+            "aci": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+            "success": false,
+            "unidentified": false,
+            "error": "recipient unreachable"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+`timestamp` is the message's sent timestamp (milliseconds since the Unix epoch). All recipients
+get the same one; together with the account's ACI it identifies the message (e.g. for quotes,
+reactions and remote deletes). `results` has one entry per recipient, in the order given on the
+command line, without duplicates. The document is also printed when some recipients failed; the
+exit code is then non-zero. Errors that stop the command before anything is sent (invalid or
+unknown recipients) print no document.
+
+| Field          | Type    | Description                                                                        |
+| -------------- | ------- | ---------------------------------------------------------------------------------- |
+| `type`         | string  | `user`, `self` (note to self) or `group`                                           |
+| `number`       | string  | Phone number of a user; _optional_                                                 |
+| `username`     | string  | Username of a user, as given; _optional_                                           |
+| `aci`          | string  | ACI of a user; _optional_ (always set for `user` and `self`)                       |
+| `groupId`      | string  | Base64 group ID; _optional_ (only for `group`)                                     |
+| `timestamp`    | number  | Sent timestamp of the message                                                      |
+| `success`      | boolean | `true` if the recipient (for a group: every member) got the message                |
+| `unidentified` | boolean | `true` if sent with sealed sender; _optional_ (only for `user` and `self`)         |
+| `error`        | string  | Why sending to the recipient failed as a whole; _optional_                         |
+| `members`      | array   | Result per group member, without us; _optional_ (only for `group`, unless `error`) |
+
+Each entry of `members`:
+
+| Field          | Type    | Description                                                   |
+| -------------- | ------- | ------------------------------------------------------------- |
+| `aci`          | string  | ACI of the member; _optional_ (members can also have a `pni`) |
+| `pni`          | string  | PNI of a member known only by phone number; _optional_        |
+| `success`      | boolean | `true` if the member got the message                          |
+| `unidentified` | boolean | `true` if sent with sealed sender                             |
+| `error`        | string  | Why sending to the member failed; _optional_                  |
+
 ## `receive`
 
 `receive` writes one document per event and line ([NDJSON](https://github.com/ndjson/ndjson-spec))

@@ -1,0 +1,112 @@
+package cmd
+
+import (
+	"errors"
+	"fmt"
+	"io"
+	"strings"
+
+	"github.com/cwbudde/go-signal/internal/app"
+	"github.com/spf13/cobra"
+)
+
+func newSendCmd(clients *clientOpener, printers *printerFactory, appOpts []app.Option) *cobra.Command {
+	var (
+		message string
+		stdin   bool
+		groups  []string
+	)
+
+	cmd := &cobra.Command{
+		Use:   "send <recipient>... (-m <text> | --stdin)",
+		Short: "Send a text message to users, groups or yourself",
+		Long: `Send a text message to one or more recipients.
+
+A recipient is an E.164 number (+4915112345678), an ACI (UUID), @username
+(nickname.discriminator), group:<id> (base64 group ID; or use --group <id>), or self
+for a note to yourself. All recipients get the same message timestamp.
+
+The message also shows up on your other devices (a sync transcript); a note to self only goes
+there. Incoming messages are left on the server for the next receive.
+
+The result is printed per recipient. If sending to any recipient (or group member) fails, the
+exit code is non-zero.`,
+		Example: `  go-signal send +4915112345678 -m "Hello"
+  go-signal send @alice.42 self -m "Meeting at 10"
+  go-signal send --group 'Z3JvdXAt...=' -m "Hi all"
+  echo "Build done" | go-signal send self --stdin`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			req := app.SendRequest{Recipients: recipientArgs(args, groups), Body: message}
+
+			if stdin {
+				var err error
+
+				req.Body, err = readBody(cmd.InOrStdin())
+				if err != nil {
+					return err
+				}
+			}
+
+			return send(cmd, clients, printers, appOpts, req)
+		},
+	}
+
+	flags := cmd.Flags()
+	flags.StringVarP(&message, "message", "m", "", "message text")
+	flags.BoolVar(&stdin, "stdin", false, "read the message text from stdin")
+	flags.StringArrayVarP(&groups, "group", "g", nil, "send to the group with this base64 ID (repeatable)")
+	cmd.MarkFlagsMutuallyExclusive("message", "stdin")
+	cmd.MarkFlagsOneRequired("message", "stdin")
+
+	return cmd
+}
+
+// send runs req and prints the result, also when some recipients failed (app.ErrSendFailed).
+func send(cmd *cobra.Command, clients *clientOpener, printers *printerFactory, appOpts []app.Option,
+	req app.SendRequest,
+) error {
+	printer, err := printers.printer(cmd.OutOrStdout())
+	if err != nil {
+		return err
+	}
+
+	client, err := clients.open(cmd.Context())
+	if err != nil {
+		return err
+	}
+	defer closeClient(client)
+
+	res, err := app.New(client, appOpts...).Send(cmd.Context(), req)
+	if err != nil && !errors.Is(err, app.ErrSendFailed) {
+		return err //nolint:wrapcheck // app wraps it
+	}
+
+	printErr := printer.Send(res)
+	if printErr != nil {
+		return printErr //nolint:wrapcheck // output wraps it
+	}
+
+	return err //nolint:wrapcheck // app wraps it
+}
+
+// readBody reads the message text from r, without the final line break(s).
+func readBody(r io.Reader) (string, error) {
+	raw, err := io.ReadAll(r)
+	if err != nil {
+		return "", fmt.Errorf("read message from stdin: %w", err)
+	}
+
+	return strings.TrimRight(string(raw), "\r\n"), nil
+}
+
+// recipientArgs returns the recipient arguments followed by the --group IDs as group:<id>.
+func recipientArgs(args, groups []string) []string {
+	out := make([]string, 0, len(args)+len(groups))
+	out = append(out, args...)
+
+	for _, id := range groups {
+		out = append(out, app.GroupPrefix+id)
+	}
+
+	return out
+}

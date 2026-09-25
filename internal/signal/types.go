@@ -58,18 +58,25 @@ type Quote struct {
 
 // SendRequest is one outgoing message, either to Recipients or to a group.
 type SendRequest struct {
-	Recipients  []Recipient
-	GroupID     string
-	Body        string
-	Attachments []string // file paths
-	Quote       *Quote
+	// Recipients need their ACI; one with our own ACI is a note-to-self.
+	Recipients []Recipient
+	// GroupID is the base64 group identifier (standard encoding), instead of Recipients.
+	GroupID string
+	Body    string
+	// Timestamp is the sent timestamp (ms since epoch) that identifies the message; zero means
+	// now. Several requests with the same timestamp send the same message to more recipients.
+	Timestamp   uint64
+	Attachments []string // file paths (Phase 3.4)
+	Quote       *Quote   // (Phase 3.4)
 }
 
 // SendResult reports the outcome of a SendRequest per recipient.
 type SendResult struct {
 	// Timestamp is the message's sent timestamp (ms since epoch), which identifies it.
 	Timestamp uint64
-	Results   []RecipientResult
+	// Results has one entry per recipient in request order, or per group member (without us)
+	// for a group.
+	Results []RecipientResult
 }
 
 // RecipientResult is the outcome of sending to one recipient.

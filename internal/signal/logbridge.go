@@ -36,7 +36,7 @@ func (w slogWriter) Write(line []byte) (int, error) {
 	level := slogLevel(fields[zerolog.LevelFieldName])
 	msg, _ := fields[zerolog.MessageFieldName].(string)
 
-	if isWebsocketStatus(msg) {
+	if isWebsocketStatus(msg) || isDeferredEnvelope(msg, fields) {
 		level = slog.LevelDebug
 	}
 
@@ -69,6 +69,20 @@ func slogLevel(level any) slog.Level {
 	default:
 		return slog.LevelDebug
 	}
+}
+
+// handlerFailed is the text of signalmeow.ErrHandlerFailed (this file also builds without cgo,
+// so it can't import signalmeow).
+const handlerFailed = "event handler returned non-success status"
+
+// isDeferredEnvelope reports whether an entry is about an envelope that our handler left on the
+// server on purpose (send-only mode, or while closing): signalmeow logs that as an error ("Error
+// handling request") and a warning, but the envelope just comes again next time.
+func isDeferredEnvelope(msg string, fields map[string]any) bool {
+	errText, _ := fields[zerolog.ErrorFieldName].(string)
+
+	return errText == handlerFailed ||
+		msg == "Not clearing buffered event plaintext due to handler failure"
 }
 
 // isWebsocketStatus reports whether msg is one of signalmeow's websocket status logs, e.g.

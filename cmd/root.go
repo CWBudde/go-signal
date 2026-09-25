@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cwbudde/go-signal/internal/app"
 	"github.com/cwbudde/go-signal/internal/output"
 	"github.com/cwbudde/go-signal/internal/signal"
 	"github.com/cwbudde/go-signal/internal/store"
@@ -123,6 +124,7 @@ type Option func(*rootOptions)
 type rootOptions struct {
 	newClient signal.Factory
 	loc       *time.Location
+	appOpts   []app.Option
 }
 
 // WithClientFactory replaces the signalmeow-backed client, e.g. with signaltest.Fake in tests.
@@ -136,6 +138,13 @@ func WithClientFactory(factory signal.Factory) Option {
 func WithLocation(loc *time.Location) Option {
 	return func(o *rootOptions) {
 		o.loc = loc
+	}
+}
+
+// WithClock replaces time.Now for the use cases, e.g. for fixed message timestamps in tests.
+func WithClock(now func() time.Time) Option {
+	return func(o *rootOptions) {
+		o.appOpts = append(o.appOpts, app.WithClock(now))
 	}
 }
 
@@ -196,6 +205,7 @@ messages, and run it as a JSON-RPC daemon for scripts and bots.`,
 		newDevicesCmd(clients, printers),
 		newLinkCmd(clients),
 		newReceiveCmd(clients, printers),
+		newSendCmd(clients, printers, rootOpts.appOpts),
 		newVersionCmd(),
 	)
 

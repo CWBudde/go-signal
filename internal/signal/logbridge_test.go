@@ -10,7 +10,15 @@ import (
 	"github.com/cwbudde/go-signal/internal/signal"
 )
 
-var errBoom = errors.New("boom")
+const (
+	levelDebug = "DEBUG"
+	keyError   = "error"
+)
+
+var (
+	errBoom          = errors.New("boom")
+	errHandlerFailed = errors.New("event handler returned non-success status")
+)
 
 func TestZerologBridge(t *testing.T) {
 	t.Parallel()
@@ -23,13 +31,17 @@ func TestZerologBridge(t *testing.T) {
 	zlog.Info().Str("websocket_type", "authed").Msg("connecting")
 	zlog.Error().Err(errBoom).Msg("failed")
 	zlog.Error().Err(errBoom).Msg("Authed websocket logged out")
+	zlog.Error().Err(errHandlerFailed).Msg("Error handling request")
+	zlog.Warn().Msg("Not clearing buffered event plaintext due to handler failure")
 
 	dec := json.NewDecoder(&buf)
 
 	want := []struct{ level, msg, key, value string }{
-		{"DEBUG", "connecting", "websocket_type", "authed"},
-		{"ERROR", "failed", "error", "boom"},
-		{"DEBUG", "Authed websocket logged out", "error", "boom"},
+		{levelDebug, "connecting", "websocket_type", "authed"},
+		{"ERROR", "failed", keyError, "boom"},
+		{levelDebug, "Authed websocket logged out", keyError, "boom"},
+		{levelDebug, "Error handling request", keyError, "event handler returned non-success status"},
+		{levelDebug, "Not clearing buffered event plaintext due to handler failure", "", ""},
 	}
 	for _, line := range want {
 		var got map[string]any
@@ -39,7 +51,7 @@ func TestZerologBridge(t *testing.T) {
 			t.Fatalf("decode: %v", err)
 		}
 
-		if got["level"] != line.level || got["msg"] != line.msg || got[line.key] != line.value {
+		if got["level"] != line.level || got["msg"] != line.msg || (line.key != "" && got[line.key] != line.value) {
 			t.Errorf("got %v, want level=%s msg=%s %s=%s", got, line.level, line.msg, line.key, line.value)
 		}
 	}

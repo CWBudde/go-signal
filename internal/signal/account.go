@@ -38,6 +38,19 @@ var ErrNotOnSignal = errors.New("not on Signal")
 // ErrUnresolvable means that a Recipient has no identifier that can be resolved to an ACI.
 var ErrUnresolvable = errors.New("recipient has no number, username or ACI")
 
+// ErrUnknownGroup means that the group of a send is not in the store: go-signal only knows a
+// group once it has received a message from it (or, later, synced the groups).
+var ErrUnknownGroup = errors.New("unknown group")
+
+// ErrInvalidSendRequest means that a SendRequest has neither or both of recipients and a group.
+var ErrInvalidSendRequest = errors.New("send request needs either recipients or a group")
+
+// ErrSyncFailed means that the sync transcript of a note-to-self didn't reach our other devices.
+var ErrSyncFailed = errors.New("sending the note to self to our other devices failed")
+
+// ErrSendFailed stands in for the cause when sending to a recipient failed without an error.
+var ErrSendFailed = errors.New("sending failed")
+
 // ErrNotImplemented marks facade operations that a later phase fills in.
 var ErrNotImplemented = errors.New("not implemented yet")
 

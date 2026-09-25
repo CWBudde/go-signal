@@ -7,6 +7,7 @@ import (
 	"go.mau.fi/mautrix-signal/pkg/libsignalgo"
 	"go.mau.fi/mautrix-signal/pkg/signalmeow"
 	"go.mau.fi/mautrix-signal/pkg/signalmeow/events"
+	"go.mau.fi/mautrix-signal/pkg/signalmeow/protobuf/signalpb"
 )
 
 // ConvertEvent exposes convertEvent to the signal_test package.
@@ -47,4 +48,29 @@ func UsernameHash(username string) ([]byte, error) {
 // ACIFromUsernameResponse exposes aciFromUsernameResponse to the signal_test package.
 func ACIFromUsernameResponse(status int, body []byte) (uuid.UUID, error) {
 	return aciFromUsernameResponse(status, body)
+}
+
+// DataMessage exposes dataMessage to the signal_test package.
+func DataMessage(body string, timestamp uint64, profileKey []byte) *signalpb.DataMessage {
+	return dataMessage(body, timestamp, profileKey)
+}
+
+// ConvertRecipientResult exposes recipientResult to the signal_test package.
+func ConvertRecipientResult(rcpt Recipient, self bool, sent signalmeow.SendMessageResult) RecipientResult {
+	return recipientResult(rcpt, self, sent)
+}
+
+// GroupResults exposes groupResults to the signal_test package.
+func GroupResults(sent *signalmeow.GroupMessageSendResult) []RecipientResult {
+	return groupResults(sent)
+}
+
+// CheckSendRequest exposes checkSendRequest to the signal_test package.
+func CheckSendRequest(req SendRequest) error {
+	return checkSendRequest(req)
+}
+
+// ACIServiceID exposes aciServiceID to the signal_test package.
+func ACIServiceID(rcpt Recipient) (libsignalgo.ServiceID, error) {
+	return aciServiceID(rcpt)
 }

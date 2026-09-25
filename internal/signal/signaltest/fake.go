@@ -33,12 +33,20 @@ type Fake struct {
 	// Incoming is delivered on Events after Connect, in order. Like the real client, Events is
 	// unbuffered, so an event counts as delivered (Delivered) once the consumer has taken it.
 	// A StateLoggedOut Connection marks the account as unlinked; its Err becomes UnlinkedError.
+	// After Connect with signal.SendOnly nothing is delivered (the events stay "on the server"),
+	// but a StateLoggedOut or StateFailed Connection makes Send fail with its error.
 	Incoming []signal.Event
 	// Devices is what Devices returns for any account.
 	Devices []signal.Device
 	// Directory are the users on Signal: Resolve finds them by Number or Username (with ACI set).
 	// Like the real client, looking up a number needs Connect.
 	Directory []signal.Recipient
+	// Groups are the groups Send knows, by base64 group ID, with their members; our own ACI
+	// among them is skipped like the real client does. Other groups fail with
+	// signal.ErrUnknownGroup.
+	Groups map[string][]signal.Recipient
+	// SendFailures makes sending to the recipients (or group members) with these ACIs fail.
+	SendFailures map[string]error
 	// InUse simulates another process holding the account lock: Connect and Unlink fail.
 	InUse bool
 
@@ -187,6 +195,7 @@ type client struct {
 	done      chan struct{} // closed by Close; stops the feeder
 	fed       chan struct{} // closed when the feeder started by Connect exits
 	connected string        // ACI of the connected account
+	lost      error         // connection lost for good, in send-only mode
 	closed    bool
 }
 
@@ -216,7 +225,7 @@ func (c *client) Account(context.Context) (signal.Account, error) {
 	return c.fake.account(c.opts)
 }
 
-func (c *client) Connect(context.Context) error {
+func (c *client) Connect(_ context.Context, opts ...signal.ConnectOption) error {
 	c.fake.mu.Lock()
 	defer c.fake.mu.Unlock()
 
@@ -248,6 +257,12 @@ func (c *client) Connect(context.Context) error {
 		}
 
 		incoming = append(incoming, evt)
+	}
+
+	if signal.NewConnectOptions(opts...).SendOnly {
+		c.lost = lostError(incoming)
+
+		return nil
 	}
 
 	c.fed = make(chan struct{})
@@ -299,23 +314,62 @@ func (c *client) Send(_ context.Context, req signal.SendRequest) (signal.SendRes
 	c.fake.mu.Lock()
 	defer c.fake.mu.Unlock()
 
-	if c.connected == "" {
+	switch {
+	case c.closed:
+		return signal.SendResult{}, signal.ErrClosed
+	case c.connected == "":
 		return signal.SendResult{}, signal.ErrNotConnected
-	}
-
-	if c.fake.SendErr != nil {
+	case (req.GroupID == "") == (len(req.Recipients) == 0):
+		return signal.SendResult{}, signal.ErrInvalidSendRequest
+	case c.lost != nil:
+		return signal.SendResult{}, fmt.Errorf("send: %w", c.lost)
+	case c.fake.SendErr != nil:
 		return signal.SendResult{}, c.fake.SendErr
 	}
 
-	c.fake.sent = append(c.fake.sent, req)
-	c.fake.nextTS++
+	recipients, err := c.sendTo(req)
+	if err != nil {
+		return signal.SendResult{}, err
+	}
 
-	res := signal.SendResult{Timestamp: c.fake.nextTS}
-	for _, rcpt := range req.Recipients {
-		res.Results = append(res.Results, signal.RecipientResult{Recipient: rcpt, Unidentified: true})
+	c.fake.sent = append(c.fake.sent, req)
+
+	res := signal.SendResult{Timestamp: req.Timestamp}
+	if res.Timestamp == 0 {
+		c.fake.nextTS++
+		res.Timestamp = c.fake.nextTS
+	}
+
+	for _, rcpt := range recipients {
+		result := signal.RecipientResult{Recipient: rcpt, Err: c.fake.SendFailures[rcpt.ACI]}
+		// Sealed sender, except for the sync transcript of a note-to-self.
+		result.Unidentified = result.Err == nil && rcpt.ACI != c.connected
+		res.Results = append(res.Results, result)
 	}
 
 	return res, nil
+}
+
+// lostError returns the error of the first event in incoming that ends the connection for good.
+func lostError(incoming []signal.Event) error {
+	for _, evt := range incoming {
+		conn, ok := evt.(*signal.Connection)
+		if !ok {
+			continue
+		}
+
+		switch conn.State {
+		case signal.StateLoggedOut, signal.StateFailed:
+			if conn.Err != nil {
+				return conn.Err
+			}
+
+			return signal.ErrConnectionFailed
+		case signal.StateConnected, signal.StateDisconnected, signal.StateError:
+		}
+	}
+
+	return nil
 }
 
 func (c *client) Devices(context.Context) ([]signal.Device, error) {
@@ -406,6 +460,21 @@ func (c *client) feed(incoming []signal.Event) {
 			return
 		}
 	}
+}
+
+// sendTo returns the recipients of req: its Recipients, or the members of its group without us
+// (like signalmeow); the caller holds c.fake.mu.
+func (c *client) sendTo(req signal.SendRequest) ([]signal.Recipient, error) {
+	if req.GroupID == "" {
+		return req.Recipients, nil
+	}
+
+	members, ok := c.fake.Groups[req.GroupID]
+	if !ok {
+		return nil, fmt.Errorf("%w %s (fake)", signal.ErrUnknownGroup, req.GroupID)
+	}
+
+	return slices.DeleteFunc(slices.Clone(members), func(m signal.Recipient) bool { return m.ACI == c.connected }), nil
 }
 
 // lookup finds rcpt in the Directory; the caller holds c.fake.mu.
