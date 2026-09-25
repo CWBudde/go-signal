@@ -182,7 +182,7 @@ func TestSendMentions(t *testing.T) {
 
 	want := []signal.Mention{
 		{Start: 3, Length: 1, Recipient: signal.Recipient{ACI: aliceACI, PNI: carolACI, Number: aliceNumber}},
-		{Start: 9, Length: 1, Recipient: signal.Recipient{ACI: bobACI, Username: "bob.42"}},
+		{Start: 9, Length: 1, Recipient: signal.Recipient{ACI: bobACI, Username: bobUsername[1:]}},
 		{Start: 86, Length: 1, Recipient: signal.Recipient{ACI: own.ACI, Number: own.Number}},
 	}
 	if !reflect.DeepEqual(sent[0].Mentions, want) {
@@ -212,7 +212,7 @@ func TestSendQuote(t *testing.T) {
 		quote string
 		want  signal.Recipient
 	}{
-		{"@bob.42:1789999999000", signal.Recipient{ACI: bobACI, Username: "bob.42"}},
+		{"@bob.42:1789999999000", signal.Recipient{ACI: bobACI, Username: bobUsername[1:]}},
 		{"self:1789999999000", signal.Recipient{ACI: own.ACI, Number: own.Number}},
 	}
 

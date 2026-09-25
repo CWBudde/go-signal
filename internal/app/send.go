@@ -113,7 +113,7 @@ func (a *App) Send(ctx context.Context, req SendRequest) (SendResult, error) {
 		return SendResult{}, fmt.Errorf("send: %w", err)
 	}
 
-	msg, err := a.content(ctx, req, files)
+	msg, err := a.buildContent(ctx, req, files)
 	if err != nil {
 		return SendResult{}, fmt.Errorf("send: %w", err)
 	}

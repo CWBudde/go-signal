@@ -10,18 +10,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newSendCmd(clients *clientOpener, printers *printerFactory, appOpts []app.Option) *cobra.Command {
-	var (
-		message string
-		stdin   bool
-		groups  []string
-		req     app.SendRequest
-	)
-
-	cmd := &cobra.Command{
-		Use:   "send <recipient>... (-m <text> | --stdin | --attach <file>)",
-		Short: "Send a message to users, groups or yourself",
-		Long: `Send a message to one or more recipients.
+const sendLong = `Send a message to one or more recipients.
 
 A recipient is an E.164 number (+4915112345678), an ACI (UUID), @username
 (nickname.discriminator), group:<id> (base64 group ID; or use --group <id>), or self
@@ -37,7 +26,20 @@ The message also shows up on your other devices (a sync transcript); a note to s
 there. Incoming messages are left on the server for the next receive.
 
 The result is printed per recipient. If sending to any recipient (or group member) fails, the
-exit code is non-zero.`,
+exit code is non-zero.`
+
+func newSendCmd(clients *clientOpener, printers *printerFactory, appOpts []app.Option) *cobra.Command {
+	var (
+		message string
+		stdin   bool
+		groups  []string
+		req     app.SendRequest
+	)
+
+	cmd := &cobra.Command{
+		Use:   "send <recipient>... (-m <text> | --stdin | --attach <file>)",
+		Short: "Send a message to users, groups or yourself",
+		Long:  sendLong,
 		Example: `  go-signal send +4915112345678 -m "Hello"
   go-signal send @alice.42 self -m "Meeting at 10"
   go-signal send --group 'Z3JvdXAt...=' -m "Hi all"

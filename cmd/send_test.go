@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -144,14 +145,8 @@ func TestSendRichContent(t *testing.T) {
 	t.Parallel()
 
 	fake := sendFake()
-	file := filepath.Join(t.TempDir(), "report.pdf")
 
-	err := os.WriteFile(file, []byte("%PDF-1.7\n"), 0o600)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = runSend(t, fake, "", sendCmd, aliceNumber, "--attach", file,
+	_, err := runSend(t, fake, "", sendCmd, aliceNumber, "--attach", writeReport(t),
 		"--quote", aliceNumber+":1789999999000", "--quote-text", "the report?", "-m", "here, @{@bob.42}")
 	if err != nil {
 		t.Fatalf("send: %v", err)
@@ -162,28 +157,46 @@ func TestSendRichContent(t *testing.T) {
 		t.Fatalf("sent %+v", sent)
 	}
 
-	req := sent[0]
-	if req.Body != "here, \uFFFC" || len(req.Mentions) != 1 || req.Mentions[0].Recipient.ACI != bobACI {
-		t.Errorf("body %q, mentions %+v", req.Body, req.Mentions)
+	alice := signal.Recipient{ACI: aliceACI, Number: aliceNumber}
+
+	want := signal.SendRequest{
+		Recipients: []signal.Recipient{alice},
+		Body:       "here, \uFFFC",
+		Timestamp:  sentAt,
+		Attachments: []signal.UploadedAttachment{
+			{ID: "upload-1", ContentType: "application/pdf", Filename: "report.pdf", Size: 9},
+		},
+		Quote:    &signal.Quote{Author: alice, Timestamp: 1789999999000, Text: "the report?"},
+		Mentions: []signal.Mention{{Start: 6, Length: 1, Recipient: signal.Recipient{ACI: bobACI, Username: "bob.42"}}},
 	}
-
-	if req.Quote == nil || req.Quote.Author.ACI != aliceACI || req.Quote.Timestamp != 1789999999000 ||
-		req.Quote.Text != "the report?" {
-		t.Errorf("quote %+v", req.Quote)
+	if !reflect.DeepEqual(sent[0], want) {
+		t.Errorf("sent\n%+v\nwant\n%+v", sent[0], want)
 	}
+}
 
-	if len(req.Attachments) != 1 || req.Attachments[0].ContentType != "application/pdf" ||
-		req.Attachments[0].Filename != "report.pdf" {
-		t.Errorf("attachments %+v", req.Attachments)
-	}
+func TestSendAttachmentOnly(t *testing.T) {
+	t.Parallel()
 
-	// An attachment needs no text.
-	fake = sendFake()
+	fake := sendFake()
 
-	_, err = runSend(t, fake, "", sendCmd, app.SelfRecipient, "--attach", file)
+	_, err := runSend(t, fake, "", sendCmd, app.SelfRecipient, "--attach", writeReport(t))
 	if err != nil || len(fake.Sent()) != 1 || fake.Sent()[0].Body != "" {
-		t.Errorf("attachment only: sent %+v, %v", fake.Sent(), err)
+		t.Errorf("sent %+v, %v; want the attachment without text", fake.Sent(), err)
 	}
+}
+
+// writeReport writes a small PDF and returns its path.
+func writeReport(t *testing.T) string {
+	t.Helper()
+
+	file := filepath.Join(t.TempDir(), "report.pdf")
+
+	err := os.WriteFile(file, []byte("%PDF-1.7\n"), 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return file
 }
 
 func TestSendUnlinked(t *testing.T) {

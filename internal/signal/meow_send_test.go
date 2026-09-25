@@ -13,6 +13,7 @@ import (
 	"go.mau.fi/mautrix-signal/pkg/libsignalgo"
 	"go.mau.fi/mautrix-signal/pkg/signalmeow"
 	"go.mau.fi/mautrix-signal/pkg/signalmeow/protobuf/signalpb"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -26,48 +27,51 @@ func TestDataMessage(t *testing.T) {
 
 	key := bytes.Repeat([]byte{7}, 32)
 
-	msg, err := signal.DataMessage(signal.SendRequest{Body: "hello", Timestamp: 1790000000000}, nil, key)
+	msg, err := signal.DataMessage(signal.SendRequest{Body: "hi there", Timestamp: 1790000000000}, nil, key)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if msg.GetBody() != "hello" || msg.GetTimestamp() != 1790000000000 || !bytes.Equal(msg.GetProfileKey(), key) {
-		t.Errorf("got %v", msg)
-	}
-
-	if msg.GetGroupV2() != nil || msg.GetExpireTimer() != 0 || msg.GetFlags() != 0 || msg.GetQuote() != nil ||
-		msg.Attachments != nil || msg.BodyRanges != nil {
-		t.Errorf("got extra fields: %v", msg)
-	}
-
-	msg, err = signal.DataMessage(signal.SendRequest{Body: "hi", Timestamp: 1}, nil, nil)
-	if err != nil || msg.GetProfileKey() != nil {
-		t.Errorf("got profile key %x without one (%v)", msg.GetProfileKey(), err)
+	want := &signalpb.DataMessage{Body: new("hi there"), Timestamp: new(uint64(1790000000000)), ProfileKey: key}
+	if !proto.Equal(msg, want) {
+		t.Errorf("got %v, want %v", msg, want)
 	}
 }
 
-func TestDataMessageRich(t *testing.T) {
+func TestDataMessageWithout(t *testing.T) {
 	t.Parallel()
 
+	msg, err := signal.DataMessage(signal.SendRequest{Body: "hi", Timestamp: 1}, nil, nil)
+	if err != nil || msg.GetProfileKey() != nil {
+		t.Errorf("got profile key %x without one (%v)", msg.GetProfileKey(), err)
+	}
+
+	// An attachment without text has no body.
 	pointer := &signalpb.AttachmentPointer{ContentType: new("image/png")}
+
+	msg, err = signal.DataMessage(signal.SendRequest{Timestamp: 2}, []*signalpb.AttachmentPointer{pointer}, nil)
+	if err != nil || msg.Body != nil || len(msg.GetAttachments()) != 1 || msg.GetAttachments()[0] != pointer {
+		t.Errorf("got %v (%v)", msg, err)
+	}
+}
+
+func TestDataMessageQuoteAndMention(t *testing.T) {
+	t.Parallel()
+
 	req := signal.SendRequest{
 		Body:      "hi \uFFFC",
 		Timestamp: 2,
-		Quote:     &signal.Quote{Author: signal.Recipient{ACI: otherACI}, Timestamp: 1, Text: "earlier"},
+		Quote:     &signal.Quote{Author: signal.Recipient{ACI: otherACI}, Timestamp: 1, Text: "the question"},
 		Mentions:  []signal.Mention{{Start: 3, Length: 1, Recipient: signal.Recipient{ACI: sendACI}}},
 	}
 
-	msg, err := signal.DataMessage(req, []*signalpb.AttachmentPointer{pointer}, nil)
+	msg, err := signal.DataMessage(req, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if len(msg.GetAttachments()) != 1 || msg.GetAttachments()[0] != pointer {
-		t.Errorf("attachments %v", msg.GetAttachments())
-	}
-
 	quote := msg.GetQuote()
-	if quote.GetId() != 1 || quote.GetText() != "earlier" || quote.GetType() != signalpb.DataMessage_Quote_NORMAL ||
+	if quote.GetId() != 1 || quote.GetText() != "the question" || quote.GetType() != signalpb.DataMessage_Quote_NORMAL ||
 		uuid.UUID(quote.GetAuthorAciBinary()).String() != otherACI {
 		t.Errorf("quote %v", quote)
 	}
@@ -77,12 +81,10 @@ func TestDataMessageRich(t *testing.T) {
 		uuid.UUID(ranges[0].GetMentionAciBinary()).String() != sendACI {
 		t.Errorf("body ranges %v", ranges)
 	}
+}
 
-	// An attachment without text has no body.
-	msg, err = signal.DataMessage(signal.SendRequest{Timestamp: 2}, []*signalpb.AttachmentPointer{pointer}, nil)
-	if err != nil || msg.Body != nil {
-		t.Errorf("got body %q (%v)", msg.GetBody(), err)
-	}
+func TestDataMessageUnresolved(t *testing.T) {
+	t.Parallel()
 
 	for _, req := range []signal.SendRequest{
 		{Body: "x", Quote: &signal.Quote{Author: signal.Recipient{Number: "+15550101"}, Timestamp: 1}},
@@ -99,10 +101,10 @@ func TestPointerMetadata(t *testing.T) {
 	t.Parallel()
 
 	now := time.UnixMilli(1790000000000)
-	att := signal.OutgoingAttachment{ContentType: "image/png", Filename: "a.png", Width: 640, Height: 480}
+	att := signal.OutgoingAttachment{ContentType: "image/jpeg", Filename: "photo.jpg", Width: 640, Height: 480}
 
 	got := signal.PointerMetadata(&signalpb.AttachmentPointer{Size: new(uint32(9))}, att, now)
-	if got.GetContentType() != "image/png" || got.GetFileName() != "a.png" || got.GetWidth() != 640 ||
+	if got.GetContentType() != "image/jpeg" || got.GetFileName() != "photo.jpg" || got.GetWidth() != 640 ||
 		got.GetHeight() != 480 || got.GetUploadTimestamp() != 1790000000000 || got.GetSize() != 9 {
 		t.Errorf("got %v", got)
 	}

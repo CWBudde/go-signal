@@ -322,7 +322,9 @@ func (c *client) Resolve(_ context.Context, recipients []signal.Recipient) ([]si
 	return out, nil
 }
 
-func (c *client) Upload(_ context.Context, attachments []signal.OutgoingAttachment) ([]signal.UploadedAttachment, error) {
+func (c *client) Upload(
+	_ context.Context, attachments []signal.OutgoingAttachment,
+) ([]signal.UploadedAttachment, error) {
 	c.fake.mu.Lock()
 	defer c.fake.mu.Unlock()
 
@@ -344,7 +346,10 @@ func (c *client) Upload(_ context.Context, attachments []signal.OutgoingAttachme
 		c.fake.uploaded = append(c.fake.uploaded, att)
 		c.uploads = append(c.uploads, id)
 		out = append(out, signal.UploadedAttachment{
-			ID: id, ContentType: att.ContentType, Filename: att.Filename, Size: uint32(len(att.Data)), //nolint:gosec // test data
+			ID:          id,
+			ContentType: att.ContentType,
+			Filename:    att.Filename,
+			Size:        uint32(len(att.Data)), //nolint:gosec // test data
 		})
 	}
 
@@ -355,20 +360,7 @@ func (c *client) Send(_ context.Context, req signal.SendRequest) (signal.SendRes
 	c.fake.mu.Lock()
 	defer c.fake.mu.Unlock()
 
-	switch {
-	case c.closed:
-		return signal.SendResult{}, signal.ErrClosed
-	case c.connected == "":
-		return signal.SendResult{}, signal.ErrNotConnected
-	case (req.GroupID == "") == (len(req.Recipients) == 0):
-		return signal.SendResult{}, signal.ErrInvalidSendRequest
-	case c.lost != nil:
-		return signal.SendResult{}, fmt.Errorf("send: %w", c.lost)
-	case c.fake.SendErr != nil:
-		return signal.SendResult{}, c.fake.SendErr
-	}
-
-	err := c.checkContent(req)
+	err := c.checkSend(req)
 	if err != nil {
 		return signal.SendResult{}, err
 	}
@@ -394,28 +386,6 @@ func (c *client) Send(_ context.Context, req signal.SendRequest) (signal.SendRes
 	}
 
 	return res, nil
-}
-
-// checkContent fails like the real client for attachments this client didn't upload and for a
-// quote author or mentioned user without ACI.
-func (c *client) checkContent(req signal.SendRequest) error {
-	for _, att := range req.Attachments {
-		if !slices.Contains(c.uploads, att.ID) {
-			return fmt.Errorf("%w: %s", signal.ErrUnknownAttachment, att.Filename)
-		}
-	}
-
-	if req.Quote != nil && req.Quote.Author.ACI == "" {
-		return fmt.Errorf("quote: %w", signal.ErrUnresolvable)
-	}
-
-	for _, mention := range req.Mentions {
-		if mention.Recipient.ACI == "" {
-			return fmt.Errorf("mention: %w", signal.ErrUnresolvable)
-		}
-	}
-
-	return nil
 }
 
 // lostError returns the error of the first event in incoming that ends the connection for good.
@@ -510,6 +480,46 @@ func (c *client) Close() error {
 	}
 
 	close(c.events)
+
+	return nil
+}
+
+// checkSend fails like the real client for a send it can't make.
+func (c *client) checkSend(req signal.SendRequest) error {
+	switch {
+	case c.closed:
+		return signal.ErrClosed
+	case c.connected == "":
+		return signal.ErrNotConnected
+	case (req.GroupID == "") == (len(req.Recipients) == 0):
+		return signal.ErrInvalidSendRequest
+	case c.lost != nil:
+		return fmt.Errorf("send: %w", c.lost)
+	case c.fake.SendErr != nil:
+		return c.fake.SendErr
+	}
+
+	return c.checkContent(req)
+}
+
+// checkContent fails for attachments this client didn't upload and for a quote author or
+// mentioned user without ACI.
+func (c *client) checkContent(req signal.SendRequest) error {
+	for _, att := range req.Attachments {
+		if !slices.Contains(c.uploads, att.ID) {
+			return fmt.Errorf("%w: %s", signal.ErrUnknownAttachment, att.Filename)
+		}
+	}
+
+	if req.Quote != nil && req.Quote.Author.ACI == "" {
+		return fmt.Errorf("quote: %w", signal.ErrUnresolvable)
+	}
+
+	for _, mention := range req.Mentions {
+		if mention.Recipient.ACI == "" {
+			return fmt.Errorf("mention: %w", signal.ErrUnresolvable)
+		}
+	}
 
 	return nil
 }

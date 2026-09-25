@@ -221,8 +221,8 @@ type content struct {
 	attachments []signal.UploadedAttachment
 }
 
-// content resolves the quote author and the mentioned users of req to ACIs and uploads files.
-func (a *App) content(ctx context.Context, req SendRequest, files []signal.OutgoingAttachment) (content, error) {
+// buildContent resolves the quote author and the mentioned users of req to ACIs and uploads files.
+func (a *App) buildContent(ctx context.Context, req SendRequest, files []signal.OutgoingAttachment) (content, error) {
 	out, err := a.resolveContent(ctx, req)
 	if err != nil || len(files) == 0 {
 		return out, err

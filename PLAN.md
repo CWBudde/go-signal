@@ -402,12 +402,30 @@ same-timestamp sync transcripts across several chats well.
 
 #### 3.4 Send: rich content
 
-- [ ] `--attach <file>` (repeatable): MIME sniffing, upload, size limit check
-- [ ] `--quote <author>:<ts>` quoting a previous message
-- [ ] Mentions: `@{<recipient>}` placeholders in the text → body ranges
-- [ ] Text styles (bold/italic/…) — optional, only if cheap
+- [x] `--attach <file>` (repeatable): MIME sniffing, upload, size limit check (`app` reads the
+      files before connecting: regular files up to `app.MaxAttachmentSize` = 100 MiB, the official
+      clients' limit; the sniffed type wins unless it is generic (binary, plain text, ZIP), then
+      the extension decides; GIF/JPEG/PNG get width and height. `Client.Upload` uploads each file
+      once and returns handles that every recipient and group send reuses. `--attach` alone needs
+      no text; it has no shorthand because `-a` is `--account`)
+- [x] `--quote <author>:<ts>` quoting a previous message (`app.ParseQuote`; the author is a user
+      recipient argument, `self` for our own messages, resolved to an ACI like recipients;
+      optional `--quote-text` is what clients show when they no longer have the message)
+- [x] Mentions: `@{<recipient>}` placeholders in the text → body ranges (users only: number,
+      ACI, `@username` or `self`; each becomes U+FFFC with a mention range in UTF-16 units.
+      Anything else in `@{…}`, like git's `HEAD@{1}` or a group, stays text; a mentioned user who
+      isn't on Signal fails the send before anything is uploaded)
+- [ ] Text styles (bold/italic/…) — optional, only if cheap (deferred: a markup syntax or
+      signal-cli's `start:length:STYLE` offsets both need more design than they are worth now)
 
-**Done when:** attachments and quotes render correctly on the phone.
+**Done when:** attachments and quotes render correctly on the phone. (Done with the fake and unit
+tests; not yet verified against the live server.)
+
+Notes: the pointer gets content type, file name, dimensions and upload timestamp on top of what
+signalmeow's `UploadAttachment` fills in; no thumbnail, blurhash, voice-note/GIF flags or
+captions. The whole file is read into memory (signalmeow's upload takes a byte slice). Quotes
+carry no quoted attachments (we don't store sent or received messages), and mentions in quotes
+and received mentions (still U+FFFC in `receive`) are open.
 
 #### 3.5 Receive: event model and output
 
