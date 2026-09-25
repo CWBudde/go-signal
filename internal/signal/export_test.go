@@ -4,12 +4,18 @@ package signal
 
 import (
 	"go.mau.fi/mautrix-signal/pkg/libsignalgo"
+	"go.mau.fi/mautrix-signal/pkg/signalmeow"
 	"go.mau.fi/mautrix-signal/pkg/signalmeow/events"
 )
 
 // ConvertEvent exposes convertEvent to the signal_test package.
 func ConvertEvent(raw events.SignalEvent, ownACI string) Event {
 	return convertEvent(raw, ownACI)
+}
+
+// ConvertStatus exposes convertStatus to the signal_test package.
+func ConvertStatus(status signalmeow.SignalConnectionStatus) Event {
+	return convertStatus(status)
 }
 
 // DevicesFromResponse exposes devicesFromResponse to the signal_test package.

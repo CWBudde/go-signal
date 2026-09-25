@@ -25,7 +25,18 @@ const envPrefix = "GOSIGNAL"
 
 var errInvalidLogFormat = errors.New("invalid log format (want text or json)")
 
-// Execute builds the command tree and runs it.
+// Exit codes of the go-signal binary.
+const (
+	// ExitOK means the command succeeded.
+	ExitOK = 0
+	// ExitFailure is any error without a more specific code.
+	ExitFailure = 1
+	// ExitUnlinked means the device was unlinked from the account (signal.ErrDeviceUnlinked):
+	// retrying won't help; delete the local data and link again.
+	ExitUnlinked = 3
+)
+
+// Execute builds the command tree, runs it and exits with ExitCode of its error.
 func Execute() {
 	ctx, stop := ossignal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	err := NewRootCmd().ExecuteContext(ctx)
@@ -34,7 +45,19 @@ func Execute() {
 
 	if err != nil {
 		slog.Error("command failed", "error", err)
-		os.Exit(1)
+		os.Exit(ExitCode(err))
+	}
+}
+
+// ExitCode maps the error of a command to the process exit code.
+func ExitCode(err error) int {
+	switch {
+	case err == nil:
+		return ExitOK
+	case errors.Is(err, signal.ErrDeviceUnlinked):
+		return ExitUnlinked
+	default:
+		return ExitFailure
 	}
 }
 

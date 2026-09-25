@@ -65,8 +65,10 @@ type meowClient struct {
 
 	cli    *signalmeow.Client
 	ownACI string
-	events chan Event
-	done   chan struct{} // closed by Close; unblocks pending emits
+	// account is the connected account; it is set before the receive loops start.
+	account Account
+	events  chan Event
+	done    chan struct{} // closed by Close; unblocks pending emits
 
 	// mu guards events against being closed while an emit is in flight.
 	mu        sync.RWMutex
@@ -107,19 +109,24 @@ func (c *meowClient) Link(ctx context.Context, deviceName string, onURI func(str
 }
 
 func (c *meowClient) Account(ctx context.Context) (Account, error) {
-	device, err := c.device(ctx)
-	if err != nil {
-		return Account{}, err
-	}
-
-	// The device name and link date are only recorded in accounts.json.
+	// The device name and the link/unlink dates are only recorded in accounts.json.
 	entry, err := c.selectAccount()
 	if err != nil {
 		return Account{}, err
 	}
 
+	device, err := c.device(ctx)
+	if errors.Is(err, ErrNotLinked) && entry.Unlinked() {
+		// signalmeow may have cleared the credentials of a logged-out device.
+		return entry, nil
+	}
+
+	if err != nil {
+		return Account{}, err
+	}
+
 	acc := accountFromDevice(&device.DeviceData)
-	acc.DeviceName, acc.LinkedAt = entry.DeviceName, entry.LinkedAt
+	acc.DeviceName, acc.LinkedAt, acc.UnlinkedAt = entry.DeviceName, entry.LinkedAt, entry.UnlinkedAt
 
 	return acc, nil
 }
@@ -130,6 +137,16 @@ func (c *meowClient) Connect(ctx context.Context) error {
 	}
 
 	ctx = c.zlog.WithContext(ctx)
+
+	acc, err := c.selectAccount()
+	if err != nil {
+		return err
+	}
+
+	// Fail fast instead of letting the server reject the websocket again.
+	if acc.Unlinked() {
+		return UnlinkedError(acc)
+	}
 
 	device, err := c.device(ctx)
 	if err != nil {
@@ -144,6 +161,7 @@ func (c *meowClient) Connect(ctx context.Context) error {
 	}
 
 	c.ownACI = device.ACI.String()
+	c.account = acc
 	c.cli = signalmeow.NewClient(device, c.zlog, c.handle)
 
 	statuses, err := c.cli.StartReceiveLoops(ctx)
@@ -298,7 +316,7 @@ func (c *meowClient) selectAccount() (Account, error) {
 	for _, entry := range entries {
 		accounts = append(accounts, Account{
 			Number: entry.Number, ACI: entry.ACI, PNI: entry.PNI, DeviceID: entry.DeviceID,
-			DeviceName: entry.DeviceName, LinkedAt: entry.LinkedAt,
+			DeviceName: entry.DeviceName, LinkedAt: entry.LinkedAt, UnlinkedAt: entry.UnlinkedAt,
 		})
 	}
 
@@ -308,7 +326,7 @@ func (c *meowClient) selectAccount() (Account, error) {
 // handle is signalmeow's event handler. Its return value decides whether the envelope is acked,
 // so it only returns true once the event has been handed to the consumer.
 func (c *meowClient) handle(raw events.SignalEvent) bool {
-	evt := convertEvent(raw, c.ownACI)
+	evt := c.checkLoggedOut(convertEvent(raw, c.ownACI))
 	if evt == nil {
 		c.log.Debug("ignoring event", "type", fmt.Sprintf("%T", raw))
 
@@ -328,10 +346,34 @@ func (c *meowClient) forwardStatuses(statuses <-chan signalmeow.SignalConnection
 	for status := range statuses {
 		c.log.Debug("connection status", "event", status.Event.String(), "error", status.Err)
 
-		if evt := convertStatus(status); evt != nil {
+		if evt := c.checkLoggedOut(convertStatus(status)); evt != nil {
 			c.emit(evt)
 		}
 	}
+}
+
+// checkLoggedOut marks the connected account as unlinked when evt says the server logged the
+// device out, and replaces the event's cause with UnlinkedError. Other events pass through.
+func (c *meowClient) checkLoggedOut(evt Event) Event {
+	conn, ok := evt.(*Connection)
+	if !ok || conn.State != StateLoggedOut {
+		return evt
+	}
+
+	return &Connection{State: StateLoggedOut, Err: c.markUnlinked(c.account, conn.Err)}
+}
+
+// markUnlinked records in accounts.json that the server no longer accepts acc's device and
+// returns the error to report. The server's own error only goes to the debug log.
+func (c *meowClient) markUnlinked(acc Account, cause error) error {
+	c.log.Debug("server logged out this device", "account", acc.Number, "error", cause)
+
+	err := c.dir.MarkUnlinked(acc.ACI, time.Now().UTC().Truncate(time.Second))
+	if err != nil {
+		c.log.Warn("mark account as unlinked", "account", acc.Number, "error", err)
+	}
+
+	return UnlinkedError(acc)
 }
 
 // emit delivers evt to the consumer. It reports false if the client was closed first.

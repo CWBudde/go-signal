@@ -26,6 +26,9 @@ type AccountEntry struct {
 	// DeviceName is the name the device was linked with.
 	DeviceName string    `json:"deviceName,omitempty"`
 	LinkedAt   time.Time `json:"linkedAt,omitzero"`
+	// UnlinkedAt is when the server was found to no longer accept the device (unlinked on the
+	// phone); zero while linked. Relinking (PutAccount) clears it.
+	UnlinkedAt time.Time `json:"unlinkedAt,omitzero"`
 }
 
 type accountsDoc struct {
@@ -86,6 +89,28 @@ func (d *Dir) PutAccount(entry AccountEntry) error {
 	}
 
 	return d.writeAccounts(accounts)
+}
+
+// MarkUnlinked records that the account with the given ACI was unlinked at the given time. An
+// earlier mark is kept, and a missing entry is not an error (the account may have been removed
+// meanwhile).
+func (d *Dir) MarkUnlinked(aci string, at time.Time) error {
+	accounts, err := d.Accounts()
+	if err != nil {
+		return err
+	}
+
+	for i := range accounts {
+		if accounts[i].ACI != aci || !accounts[i].UnlinkedAt.IsZero() {
+			continue
+		}
+
+		accounts[i].UnlinkedAt = at
+
+		return d.writeAccounts(accounts)
+	}
+
+	return nil
 }
 
 // RemoveAccount deletes the account with the given ACI: its accounts.json entry, then its

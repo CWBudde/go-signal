@@ -3,9 +3,11 @@ package signaltest
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"sync"
+	"time"
 
 	"github.com/cwbudde/go-signal/internal/signal"
 )
@@ -16,13 +18,19 @@ const LinkURI = "sgnl://linkdevice?uuid=fake&pub_key=fake"
 // Fake is shared state behind the clients its Factory opens, so that e.g. a `link` followed by a
 // `receive` in the same test see the same accounts. Like the real account lock, only one open
 // client at a time can be connected per account (ErrAccountInUse). Set the exported fields before use.
+//
+// A remote unlink is simulated like the real client sees it: a signal.StateLoggedOut Connection
+// in Incoming, or DevicesErr wrapping signal.ErrDeviceUnlinked, marks the account as unlinked in
+// Linked (UnlinkedAt) and reports signal.UnlinkedError. Connect and Devices then fail with it
+// right away, and Unlink skips the server as with LocalOnly.
 type Fake struct {
 	// Linked are the stored accounts, selected like the real client does (signal.SelectAccount).
 	// Link adds LinkAs, replacing an entry with the same ACI.
 	Linked []signal.Account
 	// LinkAs is the account Link creates.
 	LinkAs signal.Account
-	// Incoming is delivered on Events right after Connect, in order. Set it before Factory.
+	// Incoming is delivered on Events right after Connect, in order. Set it before Factory. A
+	// StateLoggedOut Connection marks the account as unlinked; its Err becomes UnlinkedError.
 	Incoming []signal.Event
 	// Devices is what Devices returns for any account.
 	Devices []signal.Device
@@ -126,6 +134,18 @@ func (f *Fake) account(opts signal.Options) (signal.Account, error) {
 	return acc, nil
 }
 
+// markUnlinked mirrors the real client recording a logout in accounts.json and returns the
+// error it reports; the caller holds f.mu.
+func (f *Fake) markUnlinked(acc signal.Account) error {
+	for i := range f.Linked {
+		if f.Linked[i].ACI == acc.ACI && !f.Linked[i].Unlinked() {
+			f.Linked[i].UnlinkedAt = time.Now().UTC().Truncate(time.Second)
+		}
+	}
+
+	return signal.UnlinkedError(acc)
+}
+
 // checkInUse mirrors the account lock; the caller holds f.mu.
 func (f *Fake) checkInUse(aci string) error {
 	if f.InUse {
@@ -184,6 +204,10 @@ func (c *client) Connect(context.Context) error {
 		return err
 	}
 
+	if acc.Unlinked() {
+		return signal.UnlinkedError(acc)
+	}
+
 	if c.fake.ConnectErr != nil {
 		return c.fake.ConnectErr
 	}
@@ -197,6 +221,10 @@ func (c *client) Connect(context.Context) error {
 	c.fake.connects = append(c.fake.connects, acc.ACI)
 
 	for _, evt := range c.fake.Incoming {
+		if conn, ok := evt.(*signal.Connection); ok && conn.State == signal.StateLoggedOut {
+			evt = &signal.Connection{State: signal.StateLoggedOut, Err: c.fake.markUnlinked(acc)}
+		}
+
 		c.events <- evt
 	}
 
@@ -234,9 +262,17 @@ func (c *client) Devices(context.Context) ([]signal.Device, error) {
 	c.fake.mu.Lock()
 	defer c.fake.mu.Unlock()
 
-	_, err := c.fake.account(c.opts)
+	acc, err := c.fake.account(c.opts)
 	if err != nil {
 		return nil, err
+	}
+
+	if acc.Unlinked() {
+		return nil, signal.UnlinkedError(acc)
+	}
+
+	if errors.Is(c.fake.DevicesErr, signal.ErrDeviceUnlinked) {
+		return nil, c.fake.markUnlinked(acc)
 	}
 
 	if c.fake.DevicesErr != nil {
@@ -259,6 +295,9 @@ func (c *client) Unlink(_ context.Context, opts signal.UnlinkOptions) (signal.Ac
 	if err != nil {
 		return signal.Account{}, err
 	}
+
+	// The server already removed a device marked as unlinked.
+	opts.LocalOnly = opts.LocalOnly || acc.Unlinked()
 
 	if !opts.LocalOnly && c.fake.UnlinkErr != nil {
 		return signal.Account{}, c.fake.UnlinkErr

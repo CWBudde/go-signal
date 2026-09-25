@@ -22,12 +22,14 @@ func TestZerologBridge(t *testing.T) {
 
 	zlog.Info().Str("websocket_type", "authed").Msg("connecting")
 	zlog.Error().Err(errBoom).Msg("failed")
+	zlog.Error().Err(errBoom).Msg("Authed websocket logged out")
 
 	dec := json.NewDecoder(&buf)
 
 	want := []struct{ level, msg, key, value string }{
 		{"DEBUG", "connecting", "websocket_type", "authed"},
 		{"ERROR", "failed", "error", "boom"},
+		{"DEBUG", "Authed websocket logged out", "error", "boom"},
 	}
 	for _, line := range want {
 		var got map[string]any

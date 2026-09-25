@@ -3,12 +3,15 @@
 package signal_test
 
 import (
+	"errors"
+	"fmt"
 	"io"
 	"reflect"
 	"testing"
 
 	"github.com/cwbudde/go-signal/internal/signal"
 	"github.com/google/uuid"
+	"go.mau.fi/mautrix-signal/pkg/signalmeow"
 	"go.mau.fi/mautrix-signal/pkg/signalmeow/events"
 	"go.mau.fi/mautrix-signal/pkg/signalmeow/protobuf/signalpb"
 )
@@ -167,6 +170,50 @@ func TestConvertEvent(t *testing.T) { //nolint:funlen // table-driven
 			t.Parallel()
 
 			got := signal.ConvertEvent(test.in, bob.String())
+			if !reflect.DeepEqual(got, test.want) {
+				t.Errorf("got  %#v\nwant %#v", got, test.want)
+			}
+		})
+	}
+}
+
+func TestConvertStatus(t *testing.T) {
+	t.Parallel()
+
+	//nolint:err113 // signalmeow's websocket errors are dynamic
+	var (
+		forbidden    = errors.New("403 opening websocket, we are logged out")
+		unauthorized = fmt.Errorf("unexpected status opening websocket: %v", "401 Unauthorized")
+		teapot       = fmt.Errorf("unexpected status opening websocket: %v", "418 I'm a teapot")
+	)
+
+	tests := []struct {
+		name string
+		in   signalmeow.SignalConnectionStatus
+		want signal.Event
+	}{
+		{
+			"connected",
+			signalmeow.SignalConnectionStatus{Event: signalmeow.SignalConnectionEventConnected},
+			&signal.Connection{State: signal.StateConnected},
+		},
+		{"logged out (403)", signalmeow.SignalConnectionStatus{
+			Event: signalmeow.SignalConnectionEventLoggedOut, Err: forbidden,
+		}, &signal.Connection{State: signal.StateLoggedOut, Err: forbidden}},
+		{"unauthorized (401)", signalmeow.SignalConnectionStatus{
+			Event: signalmeow.SignalConnectionEventFatalError, Err: unauthorized,
+		}, &signal.Connection{State: signal.StateLoggedOut, Err: unauthorized}},
+		{"other fatal error", signalmeow.SignalConnectionStatus{
+			Event: signalmeow.SignalConnectionEventFatalError, Err: teapot,
+		}, &signal.Connection{State: signal.StateError, Err: teapot}},
+		{"clean shutdown", signalmeow.SignalConnectionStatus{Event: signalmeow.SignalConnectionCleanShutdown}, nil},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := signal.ConvertStatus(test.in)
 			if !reflect.DeepEqual(got, test.want) {
 				t.Errorf("got  %#v\nwant %#v", got, test.want)
 			}

@@ -2,6 +2,7 @@ package signal
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/cwbudde/go-signal/internal/store"
@@ -16,8 +17,10 @@ var ErrNotLinked = errors.New("no linked account; run `go-signal link` first")
 // ErrAccountNotFound means -a/--account matches none of the linked accounts.
 var ErrAccountNotFound = errors.New("account not found")
 
-// ErrLoggedOut means the server no longer accepts this device (e.g. it was unlinked on the phone).
-var ErrLoggedOut = errors.New("device was logged out by the server")
+// ErrDeviceUnlinked means the server no longer accepts this device: it was unlinked (e.g. on the
+// phone) or its credentials are no longer valid. The account is then marked as unlinked in
+// accounts.json, and later commands fail with it right away (see UnlinkedError).
+var ErrDeviceUnlinked = errors.New("this device was unlinked from the account")
 
 // ErrAccountInUse means another go-signal process is connected as the same account.
 var ErrAccountInUse = store.ErrAccountInUse
@@ -38,6 +41,19 @@ type Account struct {
 	DeviceName string
 	// LinkedAt is when this device was linked; zero if unknown.
 	LinkedAt time.Time
+	// UnlinkedAt is when go-signal found out that the device was unlinked; zero while linked.
+	UnlinkedAt time.Time
+}
+
+// Unlinked reports whether the account is marked as unlinked.
+func (a Account) Unlinked() bool {
+	return !a.UnlinkedAt.IsZero()
+}
+
+// UnlinkedError returns ErrDeviceUnlinked for acc, with what to do next.
+func UnlinkedError(acc Account) error {
+	return fmt.Errorf("%w %s; run `go-signal -a %s account unlink --yes --local-only` to delete its local data, "+
+		"then `go-signal link` to link it again", ErrDeviceUnlinked, acc.Number, acc.Number)
 }
 
 // Device is one device of an account, as the server lists it.

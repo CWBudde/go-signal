@@ -116,11 +116,11 @@ func TestDevicesList(t *testing.T) {
 func TestDevicesListError(t *testing.T) {
 	t.Parallel()
 
-	fake := &signaltest.Fake{Linked: []signal.Account{*testAccount()}, DevicesErr: signal.ErrLoggedOut}
+	fake := &signaltest.Fake{Linked: []signal.Account{*testAccount()}, DevicesErr: signal.ErrDeviceUnlinked}
 
 	_, err := run(t, fake, "devices", "list")
-	if !errors.Is(err, signal.ErrLoggedOut) {
-		t.Fatalf("got %v, want ErrLoggedOut", err)
+	if !errors.Is(err, signal.ErrDeviceUnlinked) {
+		t.Fatalf("got %v, want ErrDeviceUnlinked", err)
 	}
 }
 

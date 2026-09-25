@@ -3,6 +3,8 @@
 package signal
 
 import (
+	"strings"
+
 	"github.com/google/uuid"
 	"go.mau.fi/mautrix-signal/pkg/libsignalgo"
 	"go.mau.fi/mautrix-signal/pkg/signalmeow"
@@ -153,11 +155,28 @@ func convertStatus(status signalmeow.SignalConnectionStatus) Event {
 		return &Connection{State: StateDisconnected, Err: status.Err}
 	case signalmeow.SignalConnectionEventLoggedOut:
 		return &Connection{State: StateLoggedOut, Err: status.Err}
-	case signalmeow.SignalConnectionEventError, signalmeow.SignalConnectionEventFatalError:
+	case signalmeow.SignalConnectionEventFatalError:
+		if isUnauthorized(status.Err) {
+			return &Connection{State: StateLoggedOut, Err: status.Err}
+		}
+
+		return &Connection{State: StateError, Err: status.Err}
+	case signalmeow.SignalConnectionEventError:
 		return &Connection{State: StateError, Err: status.Err}
 	case signalmeow.SignalConnectionEventNone, signalmeow.SignalConnectionCleanShutdown:
 		return nil
 	default:
 		return nil
 	}
+}
+
+// websocketUnauthorized is how signalmeow reports a 401 when opening the websocket. It only maps
+// 403 to a logout and gives up on any other 4xx with an unwrapped error, so the status can only
+// be recognised by its text.
+const websocketUnauthorized = "opening websocket: 401"
+
+// isUnauthorized reports whether err is signalmeow's websocket 401, which (like 403) means the
+// server no longer accepts the device's credentials.
+func isUnauthorized(err error) bool {
+	return err != nil && strings.Contains(err.Error(), websocketUnauthorized)
 }

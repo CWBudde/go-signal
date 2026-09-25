@@ -16,11 +16,15 @@ type Client interface {
 	Link(ctx context.Context, deviceName string, onURI func(uri string)) (Account, error)
 
 	// Account returns the selected linked account without connecting. It fails with
-	// ErrNotLinked when there is none.
+	// ErrNotLinked when there is none. An account marked as unlinked is still returned (with
+	// UnlinkedAt set).
 	Account(ctx context.Context) (Account, error)
 
 	// Connect starts receiving for the selected account. Events are delivered on Events until
-	// Close. Connection changes arrive there as *Connection events.
+	// Close. Connection changes arrive there as *Connection events. When the server logs the
+	// device out (it was unlinked on the phone), the account is marked as unlinked and a
+	// StateLoggedOut event carries UnlinkedError. On an account already marked, Connect fails
+	// with it right away, without contacting the server.
 	Connect(ctx context.Context) error
 
 	// Events returns the channel of incoming events. It is closed by Close. An event counts as
@@ -31,14 +35,16 @@ type Client interface {
 	Send(ctx context.Context, req SendRequest) (SendResult, error)
 
 	// Devices lists all devices of the selected account as the server knows them. It needs
-	// neither Connect nor the account lock.
+	// neither Connect nor the account lock. Like Connect, it fails with ErrDeviceUnlinked on an
+	// account marked as unlinked, and marks the account when the server rejects the device.
 	Devices(ctx context.Context) ([]Device, error)
 
 	// Unlink removes this device from the selected account on the server (unless
 	// opts.LocalOnly) and then deletes the account's local data. It takes the account lock, so
 	// it fails with ErrAccountInUse while another process is connected. A device the server
-	// already logged out (ErrLoggedOut) counts as removed. It returns the removed account as
-	// recorded in accounts.json.
+	// already logged out (ErrDeviceUnlinked) counts as removed, and an account marked as unlinked
+	// skips the server as with LocalOnly. It returns the removed account as recorded in
+	// accounts.json.
 	Unlink(ctx context.Context, opts UnlinkOptions) (Account, error)
 
 	// Close disconnects and releases the store.

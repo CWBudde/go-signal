@@ -19,6 +19,7 @@ type accountJSON struct {
 	DeviceID   int       `json:"deviceId"`
 	DeviceName string    `json:"deviceName,omitempty"`
 	LinkedAt   time.Time `json:"linkedAt,omitzero"`
+	UnlinkedAt time.Time `json:"unlinkedAt,omitzero"`
 }
 
 type accountDoc struct {
@@ -41,9 +42,10 @@ type devicesDoc struct {
 }
 
 type unlinkedJSON struct {
-	Number    string `json:"number"`
-	ACI       string `json:"aci"`
-	LocalOnly bool   `json:"localOnly"`
+	Number     string    `json:"number"`
+	ACI        string    `json:"aci"`
+	LocalOnly  bool      `json:"localOnly"`
+	UnlinkedAt time.Time `json:"unlinkedAt,omitzero"`
 }
 
 type unlinkedDoc struct {
@@ -61,6 +63,7 @@ func (p *Printer) Account(acc signal.Account) error {
 			DeviceID:   acc.DeviceID,
 			DeviceName: acc.DeviceName,
 			LinkedAt:   utc(acc.LinkedAt),
+			UnlinkedAt: utc(acc.UnlinkedAt),
 		}})
 	}
 
@@ -71,6 +74,7 @@ func (p *Printer) Account(acc signal.Account) error {
 	fmt.Fprintf(table, "Device ID:\t%d\n", acc.DeviceID)
 	fmt.Fprintf(table, "Device name:\t%s\n", orDash(acc.DeviceName))
 	fmt.Fprintf(table, "Linked at:\t%s\n", p.dateTime(acc.LinkedAt))
+	fmt.Fprintf(table, "Status:\t%s\n", p.status(acc))
 
 	return flush(table)
 }
@@ -112,15 +116,20 @@ func (p *Printer) Devices(devices []signal.Device) error {
 func (p *Printer) Unlinked(acc signal.Account, localOnly bool) error {
 	if p.format == JSON {
 		return p.writeJSON(unlinkedDoc{Version: SchemaVersion, Unlinked: unlinkedJSON{
-			Number: acc.Number, ACI: acc.ACI, LocalOnly: localOnly,
+			Number: acc.Number, ACI: acc.ACI, LocalOnly: localOnly, UnlinkedAt: utc(acc.UnlinkedAt),
 		}})
 	}
 
 	var err error
-	if localOnly {
+
+	switch {
+	case acc.Unlinked():
+		_, err = fmt.Fprintf(p.w, "Deleted the local data of %s (ACI %s); the device had already been unlinked.\n",
+			acc.Number, acc.ACI)
+	case localOnly:
 		_, err = fmt.Fprintf(p.w, "Deleted the local data of %s (ACI %s). The device may still be listed on your phone.\n",
 			acc.Number, acc.ACI)
-	} else {
+	default:
 		_, err = fmt.Fprintf(p.w, "Unlinked %s (ACI %s) and deleted its local data.\n", acc.Number, acc.ACI)
 	}
 
@@ -129,6 +138,15 @@ func (p *Printer) Unlinked(acc signal.Account, localOnly bool) error {
 	}
 
 	return nil
+}
+
+// status describes whether the account is still linked, as far as go-signal knows.
+func (p *Printer) status(acc signal.Account) string {
+	if acc.Unlinked() {
+		return "unlinked (noticed " + p.dateTime(acc.UnlinkedAt) + ")"
+	}
+
+	return "linked"
 }
 
 func flush(table *tabwriter.Writer) error {

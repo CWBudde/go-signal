@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -263,6 +264,106 @@ func TestUnlinkAccountInUse(t *testing.T) {
 	}
 }
 
+func TestUnlinkedAccountFailsFast(t *testing.T) {
+	t.Parallel()
+
+	unlinkedAt := time.Date(2026, 9, 25, 8, 0, 0, 0, time.UTC)
+	dataDir := seedAccounts(t, signal.Account{Number: seededNumber, ACI: seededACI, DeviceID: 2, UnlinkedAt: unlinkedAt})
+
+	client, err := signal.Open(t.Context(), signal.Options{DataDir: dataDir})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer client.Close()
+
+	acc, err := client.Account(t.Context())
+	if err != nil || !acc.UnlinkedAt.Equal(unlinkedAt) {
+		t.Errorf("Account: %+v, %v", acc, err)
+	}
+
+	// Neither call may reach the network: both fail before opening a connection.
+	err = client.Connect(t.Context())
+	if !errors.Is(err, signal.ErrDeviceUnlinked) || !strings.Contains(err.Error(), seededNumber) {
+		t.Errorf("Connect: got %v, want ErrDeviceUnlinked", err)
+	}
+
+	_, err = client.Devices(t.Context())
+	if !errors.Is(err, signal.ErrDeviceUnlinked) {
+		t.Errorf("Devices: got %v, want ErrDeviceUnlinked", err)
+	}
+}
+
+func TestUnlinkedAccountWithoutCredentials(t *testing.T) {
+	t.Parallel()
+
+	unlinkedAt := time.Date(2026, 9, 25, 8, 0, 0, 0, time.UTC)
+	dataDir := seedAccounts(t, signal.Account{Number: seededNumber, ACI: seededACI, DeviceID: 2, UnlinkedAt: unlinkedAt})
+	clearPassword(t, dataDir, seededACI)
+
+	client, err := signal.Open(t.Context(), signal.Options{DataDir: dataDir})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer client.Close()
+
+	// signalmeow clears the password of a logged-out device; the account is still shown.
+	acc, err := client.Account(t.Context())
+	if err != nil || acc.Number != seededNumber || !acc.Unlinked() {
+		t.Errorf("Account: %+v, %v", acc, err)
+	}
+}
+
+func TestUnlinkUnlinkedAccount(t *testing.T) {
+	t.Parallel()
+
+	unlinkedAt := time.Date(2026, 9, 25, 8, 0, 0, 0, time.UTC)
+	dataDir := seedAccounts(t, signal.Account{Number: seededNumber, ACI: seededACI, DeviceID: 2, UnlinkedAt: unlinkedAt})
+
+	client, err := signal.Open(t.Context(), signal.Options{DataDir: dataDir})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer client.Close()
+
+	// Without LocalOnly, but the server is skipped for an account marked as unlinked.
+	acc, err := client.Unlink(t.Context(), signal.UnlinkOptions{})
+	if err != nil || !acc.Unlinked() {
+		t.Fatalf("unlink: %+v, %v", acc, err)
+	}
+
+	_, err = os.Stat(filepath.Join(dataDir, seededACI))
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("account dir still exists: %v", err)
+	}
+}
+
+// clearPassword logs the device of aci out the way signalmeow's ClearKeysAndDisconnect does.
+func clearPassword(t *testing.T, dataDir, aci string) {
+	t.Helper()
+
+	dir, err := store.OpenDir(dataDir, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := dir.OpenAccount(t.Context(), aci, zerolog.Nop())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer data.Close()
+
+	device, err := data.Devices.DeviceByACI(t.Context(), uuid.MustParse(aci))
+	if err != nil || device == nil {
+		t.Fatalf("load device: %v", err)
+	}
+
+	err = device.ClearPassword(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 // seedAccount seeds a data dir with the single account seededNumber / seededACI.
 func seedAccount(t *testing.T) string {
 	t.Helper()
@@ -287,7 +388,7 @@ func seedAccounts(t *testing.T, accounts ...signal.Account) string {
 
 		err = dir.PutAccount(store.AccountEntry{
 			Number: acc.Number, ACI: acc.ACI, DeviceID: acc.DeviceID,
-			DeviceName: acc.DeviceName, LinkedAt: acc.LinkedAt,
+			DeviceName: acc.DeviceName, LinkedAt: acc.LinkedAt, UnlinkedAt: acc.UnlinkedAt,
 		})
 		if err != nil {
 			t.Fatal(err)

@@ -82,10 +82,15 @@ func receive(ctx context.Context, clients *clientOpener, out io.Writer) error {
 	}
 }
 
+// loggedOutError returns the error of a StateLoggedOut event. The client already reports
+// signal.UnlinkedError; anything else is wrapped so that it still maps to ExitUnlinked.
 func loggedOutError(cause error) error {
-	if cause == nil {
-		return signal.ErrLoggedOut
+	switch {
+	case errors.Is(cause, signal.ErrDeviceUnlinked):
+		return cause
+	case cause == nil:
+		return signal.ErrDeviceUnlinked
+	default:
+		return fmt.Errorf("%w: %w", signal.ErrDeviceUnlinked, cause)
 	}
-
-	return fmt.Errorf("%w: %w", signal.ErrLoggedOut, cause)
 }

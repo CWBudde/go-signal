@@ -226,3 +226,43 @@ func TestRemoveAccount(t *testing.T) {
 		t.Errorf("second remove: %v", err)
 	}
 }
+
+func TestMarkUnlinked(t *testing.T) {
+	t.Parallel()
+
+	dir := openDir(t, io.Discard)
+
+	first := store.AccountEntry{Number: "+15550100", ACI: testACI, DeviceID: 2}
+	second := store.AccountEntry{Number: "+15550101", ACI: "33333333-3333-3333-3333-333333333333", DeviceID: 3}
+
+	putAccount(t, dir, first)
+	putAccount(t, dir, second)
+
+	at := time.Date(2026, 9, 25, 8, 0, 0, 0, time.UTC)
+	markUnlinked(t, dir, testACI, at)
+	// A later detection keeps the first mark, and an unknown ACI is ignored.
+	markUnlinked(t, dir, testACI, at.Add(time.Hour))
+	markUnlinked(t, dir, "44444444-4444-4444-4444-444444444444", at)
+
+	accounts, err := dir.Accounts()
+	if err != nil || len(accounts) != 2 || !accounts[0].UnlinkedAt.Equal(at) || accounts[1] != second {
+		t.Fatalf("after mark: %+v, %v", accounts, err)
+	}
+
+	// Relinking the account replaces its entry and clears the mark.
+	putAccount(t, dir, first)
+
+	accounts, err = dir.Accounts()
+	if err != nil || accounts[0] != first {
+		t.Errorf("after relink: %+v, %v", accounts, err)
+	}
+}
+
+func markUnlinked(t *testing.T, dir *store.Dir, aci string, at time.Time) {
+	t.Helper()
+
+	err := dir.MarkUnlinked(aci, at)
+	if err != nil {
+		t.Fatalf("mark %s: %v", aci, err)
+	}
+}

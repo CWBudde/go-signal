@@ -65,7 +65,8 @@ func newAccountUnlinkCmd(clients *clientOpener, printers *printerFactory) *cobra
 		Short: "Remove this device from the account and delete its local data",
 		Long: `Unlink removes this device from the Signal account (as "Unlink" on the phone would) and
 then deletes the account's local data. With --local-only it skips the server, e.g. when the
-device was already removed on the phone or the server can't be reached.`,
+device was already removed on the phone or the server can't be reached. An account that
+go-signal has seen being unlinked (see "account show") skips the server automatically.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if !yes {
@@ -88,7 +89,7 @@ device was already removed on the phone or the server can't be reached.`,
 				return fmt.Errorf("account unlink: %w", err)
 			}
 
-			return printer.Unlinked(acc, opts.LocalOnly)
+			return printer.Unlinked(acc, opts.LocalOnly || acc.Unlinked())
 		},
 	}
 

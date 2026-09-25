@@ -131,8 +131,8 @@ func TestReceiveLoggedOut(t *testing.T) {
 	}
 
 	_, err := run(t, fake, "receive", "--timeout", "5s")
-	if !errors.Is(err, signal.ErrLoggedOut) {
-		t.Fatalf("got %v, want ErrLoggedOut", err)
+	if !errors.Is(err, signal.ErrDeviceUnlinked) {
+		t.Fatalf("got %v, want ErrDeviceUnlinked", err)
 	}
 }
 

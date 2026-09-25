@@ -53,12 +53,25 @@ type deviceInfo struct {
 func (c *meowClient) Devices(ctx context.Context) ([]Device, error) {
 	ctx = c.zlog.WithContext(ctx)
 
+	acc, err := c.selectAccount()
+	if err != nil {
+		return nil, err
+	}
+
+	if acc.Unlinked() {
+		return nil, UnlinkedError(acc)
+	}
+
 	device, err := c.device(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	body, err := serverRequest(ctx, &device.DeviceData, http.MethodGet, "/v1/devices/")
+	if errors.Is(err, ErrDeviceUnlinked) {
+		return nil, c.markUnlinked(acc, err)
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("list devices: %w", err)
 	}
@@ -80,8 +93,9 @@ func (c *meowClient) Unlink(ctx context.Context, opts UnlinkOptions) (Account, e
 
 	var device *mstore.Device
 
-	// Open the account (which may switch databases) before taking its lock.
-	if !opts.LocalOnly {
+	// Open the account (which may switch databases) before taking its lock. The server already
+	// removed a device marked as unlinked, so only the local data is left to delete.
+	if !opts.LocalOnly && !acc.Unlinked() {
 		device, err = c.unlinkDevice(ctx)
 		if err != nil {
 			return Account{}, err
@@ -140,7 +154,7 @@ func (c *meowClient) removeLocal(aci string) error {
 func (c *meowClient) removeDevice(ctx context.Context, device *mstore.Device) error {
 	_, err := serverRequest(ctx, &device.DeviceData, http.MethodDelete,
 		"/v1/devices/"+strconv.Itoa(device.DeviceID))
-	if errors.Is(err, ErrLoggedOut) {
+	if errors.Is(err, ErrDeviceUnlinked) {
 		c.log.Info("device was already removed from the account", "error", err)
 
 		return nil
@@ -154,7 +168,7 @@ func (c *meowClient) removeDevice(ctx context.Context, device *mstore.Device) er
 }
 
 // serverRequest sends an authenticated REST request to the chat server and returns the body.
-// 401 and 403 mean the server no longer knows this device: ErrLoggedOut.
+// 401 and 403 mean the server no longer knows this device: ErrDeviceUnlinked.
 func serverRequest(ctx context.Context, device *mstore.DeviceData, method, path string) ([]byte, error) {
 	username, password := device.BasicAuthCreds()
 
@@ -173,7 +187,7 @@ func serverRequest(ctx context.Context, device *mstore.DeviceData, method, path 
 
 	switch {
 	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
-		return nil, fmt.Errorf("%w (HTTP %d)", ErrLoggedOut, resp.StatusCode)
+		return nil, fmt.Errorf("%w (HTTP %d)", ErrDeviceUnlinked, resp.StatusCode)
 	case resp.StatusCode < 200 || resp.StatusCode >= 300:
 		return nil, fmt.Errorf("%w: %s %s: HTTP %d", errServerStatus, method, path, resp.StatusCode)
 	}
