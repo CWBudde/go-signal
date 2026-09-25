@@ -455,11 +455,20 @@ lives in `cmd/` (MCP gets its own inbox in 5.4).
 
 #### 3.6 Receive: modes
 
-- [ ] One-shot: drain queued messages, exit after `--timeout` of inactivity or `--max N` events
+- [x] One-shot: drain queued messages, exit after `--timeout` of inactivity or `--max N` events
+      (`--timeout` is now an inactivity timeout, default 5 s as in signal-cli, reset by every
+      event including connection changes; receive no longer stops at the first message. `--max`
+      counts content events, not `connection`/`queueEmpty`, and works with `--follow` too;
+      events after the last counted one are not read, so they stay on the server)
 - [x] `--follow`: stream until cancelled (landed with 3.1; `-f`, excludes `--timeout`)
-- [ ] Exit codes: 0 on normal end, distinct code for "unlinked" (from 2.5: `cmd.ExitUnlinked` = 3)
+- [x] Exit codes: 0 on normal end, distinct code for "unlinked" (from 2.5: `cmd.ExitUnlinked` = 3)
 
 **Done when:** `receive` works in cron (one-shot) and as a long-running process (`--follow`).
+(Done with the fake; not yet verified against the live server.)
+
+Notes: waiting for `queueEmpty` instead of an idle timeout would end a drain sooner, but
+signalmeow sends it again after every reconnect and not at all when the websocket never comes
+up, so the timeout stays the only end condition.
 
 #### 3.7 Attachments on receive
 

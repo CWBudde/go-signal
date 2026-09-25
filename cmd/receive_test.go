@@ -94,7 +94,7 @@ func TestLinkError(t *testing.T) {
 	}
 }
 
-func TestReceiveStopsAtFirstMessage(t *testing.T) {
+func TestReceiveDrainsUntilIdle(t *testing.T) {
 	t.Parallel()
 
 	fake := &signaltest.Fake{
@@ -103,20 +103,27 @@ func TestReceiveStopsAtFirstMessage(t *testing.T) {
 			&signal.Connection{State: signal.StateConnected},
 			&signal.Message{Body: "first"},
 			&signal.Message{Body: "second"},
+			&signal.QueueEmpty{},
 		},
 	}
 
-	out, err := run(t, fake, "receive", "--timeout", "5s")
+	start := time.Now()
+
+	out, err := run(t, fake, "receive", "--timeout", "50ms")
 	if err != nil {
 		t.Fatalf("receive: %v", err)
 	}
 
-	if !strings.Contains(out, "first") {
-		t.Errorf("missing events in output: %q", out)
+	if !strings.Contains(out, "first") || !strings.Contains(out, "second") {
+		t.Errorf("receive did not drain the queue: %q", out)
 	}
 
-	if strings.Contains(out, "second") {
-		t.Errorf("receive did not stop after the first message: %q", out)
+	if got := fake.Delivered(); got != len(fake.Incoming) {
+		t.Errorf("delivered %d events, want %d", got, len(fake.Incoming))
+	}
+
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		t.Errorf("receive took %v to stop after the idle timeout", elapsed)
 	}
 }
 
@@ -187,22 +194,46 @@ const (
 	second = "second"
 )
 
-func TestReceiveStopLeavesUnreadEvents(t *testing.T) {
+func TestReceiveMaxLeavesUnreadEvents(t *testing.T) {
 	t.Parallel()
 
-	fake := &signaltest.Fake{
-		Linked:   []signal.Account{*testAccount()},
-		Incoming: []signal.Event{&signal.Message{Body: first}, &signal.Message{Body: second}},
-	}
+	for _, mode := range []string{"--timeout=5s", "--follow"} {
+		fake := &signaltest.Fake{
+			Linked: []signal.Account{*testAccount()},
+			Incoming: []signal.Event{
+				&signal.Connection{State: signal.StateConnected},
+				&signal.Message{Body: first},
+				&signal.QueueEmpty{},
+				&signal.Typing{Started: true},
+				&signal.Message{Body: second},
+			},
+		}
 
-	_, err := run(t, fake, "receive", "--timeout", "5s")
-	if err != nil {
-		t.Fatalf("receive: %v", err)
-	}
+		out, err := run(t, fake, "receive", "--max", "2", mode)
+		if err != nil {
+			t.Fatalf("receive %s: %v", mode, err)
+		}
 
-	// Only what was read counts as delivered (and would be acked).
-	if got := fake.Delivered(); got != 1 {
-		t.Errorf("delivered %d events, want 1", got)
+		if strings.Contains(out, second) {
+			t.Errorf("receive %s did not stop after 2 events: %q", mode, out)
+		}
+
+		// Connection changes and queueEmpty don't count; only what was read counts as
+		// delivered (and would be acked).
+		if got := fake.Delivered(); got != 4 {
+			t.Errorf("receive %s delivered %d events, want 4", mode, got)
+		}
+	}
+}
+
+func TestReceiveMaxNegative(t *testing.T) {
+	t.Parallel()
+
+	fake := &signaltest.Fake{Linked: []signal.Account{*testAccount()}}
+
+	_, err := run(t, fake, "receive", "--max", "-1")
+	if err == nil {
+		t.Fatal("negative --max accepted")
 	}
 }
 
