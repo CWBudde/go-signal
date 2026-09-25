@@ -391,14 +391,29 @@ requests are queued, which also blocks responses to our requests (like CDSI cred
 
 #### 3.5 Receive: event model and output
 
-- [ ] Map signalmeow events to our `Event` types: data message, receipt (delivery/read/viewed),
-      typing, reaction, edit, remote delete, sync-sent, sync-read
-- [ ] Plain renderer: one line per event, `[time] <sender> → <dest>: <text>`, placeholders for
-      stickers/attachments/unknown content
-- [ ] JSON renderer: NDJSON, one event per line, documented in `docs/json.md`, golden files
-- [ ] Unknown/unsupported content is reported (type name) rather than silently dropped
+- [x] Map signalmeow events to our `Event` types: data message, receipt (delivery/read/viewed),
+      typing, reaction, edit, remote delete, sync-sent, sync-read (sync transcripts are
+      `Message`/`Edit` with `Envelope.Sync`, and `Chat` is the destination, as signalmeow reports
+      it; messages gained `Sticker`, `ViewOnce` and `Unsupported` parts)
+- [x] Plain renderer: one line per event, `[time] <sender> → <dest>: <text>`, placeholders for
+      stickers/attachments/unknown content (`output.Printer.Event`; `me` is our account, groups
+      are `group:<id>`; control and bidi characters are escaped; `connection`/`queueEmpty` only go
+      to the log; receipts have no time because signalmeow doesn't pass it on)
+- [x] JSON renderer: NDJSON, one event per line, documented in `docs/json.md`, golden files
+      (`cmd/testdata/receive_events*.golden`; connection changes and `queueEmpty` are events too)
+- [x] Unknown/unsupported content is reported (type name) rather than silently dropped
+      (`signal.Unsupported`: calls, group/timer/profile-key updates, end session, contact cards,
+      payments, polls, pins, admin deletes, delete-for-me and message-request syncs; only
+      signalmeow's store-only `ContactList`/`ACIFound` are ignored)
 
-**Done when:** every event type above has a golden-file test for plain and JSON output.
+**Done when:** every event type above has a golden-file test for plain and JSON output. (Done; one
+golden stream per format covers every event type. Not yet verified against the live server.)
+
+Notes: signalmeow drops stories, null messages, delivery receipts from our own devices and the
+sync keys/contacts blobs before they reach us. The destination number of a sync transcript isn't
+passed on (signalmeow only stores it). Mentions still show as U+FFFC; plain lines don't show the
+ms timestamp that `react --target`/`--quote` need (JSON has it). The receive loop itself still
+lives in `cmd/` (MCP gets its own inbox in 5.4).
 
 #### 3.6 Receive: modes
 

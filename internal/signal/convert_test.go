@@ -3,6 +3,7 @@
 package signal_test
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/cwbudde/go-signal/internal/signal"
 	"github.com/google/uuid"
+	"go.mau.fi/mautrix-signal/pkg/libsignalgo"
 	"go.mau.fi/mautrix-signal/pkg/signalmeow"
 	"go.mau.fi/mautrix-signal/pkg/signalmeow/events"
 	"go.mau.fi/mautrix-signal/pkg/signalmeow/protobuf/signalpb"
@@ -23,6 +25,163 @@ func chatEvent(sender uuid.UUID, chatID string, content signalpb.ChatEventConten
 	}
 }
 
+type convertTest struct {
+	name string
+	in   events.SignalEvent
+	want signal.Event
+}
+
+// contentTests cover sync transcripts, rich content and what becomes an *Unsupported event. bob
+// is our own account.
+//
+//nolint:funlen // table-driven
+func contentTests(alice, bob uuid.UUID, groupID string) []convertTest {
+	aliceR := signal.Recipient{ACI: alice.String()}
+	bobR := signal.Recipient{ACI: bob.String()}
+	direct := signal.Envelope{Sender: aliceR, Chat: signal.Chat{Recipient: aliceR}, Timestamp: 50, ServerTimestamp: 99}
+	group := signal.Envelope{Sender: aliceR, Chat: signal.Chat{GroupID: groupID}, Timestamp: 50, ServerTimestamp: 99}
+	unsupported := func(env signal.Envelope, typ string) *signal.Unsupported {
+		return &signal.Unsupported{Envelope: env, Type: typ}
+	}
+	dataMessage := func(msg *signalpb.DataMessage) *events.ChatEvent {
+		msg.Timestamp = new(uint64(50))
+
+		return chatEvent(alice, alice.String(), msg)
+	}
+
+	return []convertTest{
+		{
+			name: "sync transcript to a contact carries the destination",
+			in:   chatEvent(bob, alice.String(), &signalpb.DataMessage{Timestamp: new(uint64(42)), Body: new("hi")}),
+			want: &signal.Message{
+				Envelope: signal.Envelope{
+					Sender: bobR, Chat: signal.Chat{Recipient: aliceR}, Timestamp: 42, ServerTimestamp: 99, Sync: true,
+				},
+				Body: "hi",
+			},
+		},
+		{
+			name: "sync transcript of an edit",
+			in: chatEvent(bob, alice.String(), &signalpb.EditMessage{
+				TargetSentTimestamp: new(uint64(42)),
+				DataMessage:         &signalpb.DataMessage{Timestamp: new(uint64(45)), Body: new("fixed")},
+			}),
+			want: &signal.Edit{
+				Envelope: signal.Envelope{
+					Sender: bobR, Chat: signal.Chat{Recipient: aliceR}, Timestamp: 45, ServerTimestamp: 99, Sync: true,
+				},
+				TargetTimestamp: 42, Body: "fixed",
+			},
+		},
+		{
+			name: "sticker",
+			in: dataMessage(&signalpb.DataMessage{Sticker: &signalpb.DataMessage_Sticker{
+				PackId: []byte{0xca, 0xfe}, StickerId: new(uint32(3)), Emoji: new("😀"),
+			}}),
+			want: &signal.Message{
+				Envelope: direct,
+				Sticker:  &signal.Sticker{PackID: "cafe", StickerID: 3, Emoji: "😀"},
+			},
+		},
+		{
+			name: "view-once story reply",
+			in: dataMessage(&signalpb.DataMessage{
+				Body:         new("nice"),
+				IsViewOnce:   new(true),
+				StoryContext: &signalpb.DataMessage_StoryContext{},
+			}),
+			want: &signal.Message{Envelope: direct, Body: "nice", ViewOnce: true, Unsupported: []string{"storyReply"}},
+		},
+		{
+			name: "contact card",
+			in:   dataMessage(&signalpb.DataMessage{Contact: []*signalpb.DataMessage_Contact{{}}}),
+			want: unsupported(direct, "contact"),
+		},
+		{
+			name: "poll",
+			in:   dataMessage(&signalpb.DataMessage{PollCreate: &signalpb.DataMessage_PollCreate{}}),
+			want: unsupported(direct, "pollCreate"),
+		},
+		{
+			name: "end session",
+			in:   dataMessage(&signalpb.DataMessage{Flags: new(uint32(1))}),
+			want: unsupported(direct, "endSession"),
+		},
+		{
+			name: "expiration timer update",
+			in: dataMessage(&signalpb.DataMessage{
+				Flags: new(uint32(signalpb.DataMessage_EXPIRATION_TIMER_UPDATE)), ExpireTimer: new(uint32(60)),
+			}),
+			want: unsupported(direct, "expirationTimerUpdate"),
+		},
+		{
+			name: "profile key update",
+			in: dataMessage(&signalpb.DataMessage{
+				Flags: new(uint32(signalpb.DataMessage_PROFILE_KEY_UPDATE)), ProfileKey: []byte{1},
+			}),
+			want: unsupported(direct, "profileKeyUpdate"),
+		},
+		{
+			name: "group update",
+			in: chatEvent(alice, groupID, &signalpb.DataMessage{
+				Timestamp: new(uint64(50)),
+				GroupV2:   &signalpb.GroupContextV2{Revision: new(uint32(2)), GroupChange: []byte{1}},
+			}),
+			want: unsupported(group, "groupUpdate"),
+		},
+		{
+			name: "empty data message",
+			in:   dataMessage(&signalpb.DataMessage{}),
+			want: unsupported(direct, "dataMessage"),
+		},
+		{
+			name: "call",
+			in: &events.Call{
+				Info:      events.MessageInfo{Sender: alice, ChatID: alice.String(), ServerTimestamp: 99},
+				Timestamp: 50,
+				IsRinging: true,
+			},
+			want: unsupported(direct, "call"),
+		},
+		{
+			name: "delete for me",
+			in:   &events.DeleteForMe{Timestamp: 50, SyncMessage_DeleteForMe: &signalpb.SyncMessage_DeleteForMe{}},
+			want: unsupported(signal.Envelope{Sender: bobR, Timestamp: 50, Sync: true}, "deleteForMe"),
+		},
+		{
+			name: "message request response in a 1:1 chat",
+			in: &events.MessageRequestResponse{
+				Timestamp: 50, ThreadACI: alice, Type: signalpb.SyncMessage_MessageRequestResponse_ACCEPT,
+			},
+			want: unsupported(
+				signal.Envelope{Sender: bobR, Chat: signal.Chat{Recipient: aliceR}, Timestamp: 50, Sync: true},
+				"messageRequestResponse",
+			),
+		},
+		{
+			name: "message request response in a group",
+			in: &events.MessageRequestResponse{
+				Timestamp: 50,
+				GroupID:   groupIdentifier(groupID),
+				Type:      signalpb.SyncMessage_MessageRequestResponse_BLOCK,
+			},
+			want: unsupported(
+				signal.Envelope{Sender: bobR, Chat: signal.Chat{GroupID: groupID}, Timestamp: 50, Sync: true},
+				"messageRequestResponse",
+			),
+		},
+	}
+}
+
+func groupIdentifier(id string) *libsignalgo.GroupIdentifier {
+	raw, err := base64.StdEncoding.DecodeString(id)
+	if err != nil || len(raw) != libsignalgo.GroupIdentifierLength {
+		panic("invalid group ID " + id)
+	}
+
+	return (*libsignalgo.GroupIdentifier)(raw)
+}
+
 func TestConvertEvent(t *testing.T) { //nolint:funlen // table-driven
 	t.Parallel()
 
@@ -33,11 +192,7 @@ func TestConvertEvent(t *testing.T) { //nolint:funlen // table-driven
 	groupID := "Z3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXA="
 	errDecrypt := io.ErrUnexpectedEOF
 
-	tests := []struct {
-		name string
-		in   events.SignalEvent
-		want signal.Event
-	}{
+	tests := append(contentTests(alice, bob, groupID), []convertTest{
 		{
 			name: "direct message",
 			in: chatEvent(alice, alice.String(), &signalpb.DataMessage{
@@ -159,11 +314,16 @@ func TestConvertEvent(t *testing.T) { //nolint:funlen // table-driven
 			want: &signal.Connection{State: signal.StateLoggedOut},
 		},
 		{
-			name: "unsupported event",
-			in:   &events.Call{},
+			name: "contact list is a store update",
+			in:   &events.ContactList{},
 			want: nil,
 		},
-	}
+		{
+			name: "ACI found is a store update",
+			in:   &events.ACIFound{},
+			want: nil,
+		},
+	}...)
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

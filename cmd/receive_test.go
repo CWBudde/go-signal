@@ -111,7 +111,7 @@ func TestReceiveStopsAtFirstMessage(t *testing.T) {
 		t.Fatalf("receive: %v", err)
 	}
 
-	if !strings.Contains(out, "*signal.Connection") || !strings.Contains(out, "first") {
+	if !strings.Contains(out, "first") {
 		t.Errorf("missing events in output: %q", out)
 	}
 

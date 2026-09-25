@@ -1,0 +1,22 @@
+[2026-09-20 12:30:01 UTC] aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa → me: [quote 11111111-1111-1111-1111-111111111111 2026-09-20 12:30:00 UTC: what are you up to this afternoon, anyt…] hello\nworld [attachment image/jpeg 12.3 KB photo.jpg]
+[2026-09-20 12:30:02 UTC] aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa → group:Z3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXA=: hi all
+[2026-09-20 12:30:03 UTC] bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb → me: [sticker 😀]
+[2026-09-20 12:30:04 UTC] bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb → me: [view-once attachment video/mp4 3.4 MB]
+[2026-09-20 12:30:05 UTC] bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb → me: nice story [unsupported storyReply]
+[2026-09-20 12:30:06 UTC] me → bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb: sent from the phone
+[2026-09-20 12:30:07 UTC] me → group:Z3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXA=: to the group
+[2026-09-20 12:30:08 UTC] me → me: note to self
+[2026-09-20 12:30:09 UTC] aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa → me: [edit of message sent 2026-09-20 12:30:01 UTC] hello there
+[2026-09-20 12:30:10 UTC] aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa → group:Z3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXA=: [deleted message sent 2026-09-20 12:30:02 UTC]
+[2026-09-20 12:30:11 UTC] bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb → me: [reaction 👍 to message of aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa sent 2026-09-20 12:30:01 UTC]
+[2026-09-20 12:30:12 UTC] bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb → me: [removed reaction 👍 from message of aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa sent 2026-09-20 12:30:01 UTC]
+[2026-09-20 12:30:13 UTC] aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa → group:Z3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXA=: [typing]
+[2026-09-20 12:30:14 UTC] aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa → group:Z3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXA=: [stopped typing]
+bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb → me: [delivery receipt for message sent 2026-09-20 12:30:06 UTC]
+bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb → me: [read receipt for messages sent 2026-09-20 12:30:06 UTC, 2026-09-20 12:30:07 UTC]
+bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb → me: [viewed receipt for message sent 2026-09-20 12:30:06 UTC]
+[2026-09-20 12:30:15 UTC] me: [read on another device: aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa 2026-09-20 12:30:01 UTC, bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb 2026-09-20 12:30:03 UTC]
+[2026-09-20 12:30:16 UTC] aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa → me: [unsupported call]
+[2026-09-20 12:30:17 UTC] bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb → group:Z3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXA=: [unsupported groupUpdate]
+[2026-09-20 12:30:18 UTC] me: [unsupported deleteForMe]
+[2026-09-20 12:30:19 UTC] aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa → me: [decryption failed: unexpected EOF]

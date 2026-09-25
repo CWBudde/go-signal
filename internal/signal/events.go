@@ -1,13 +1,17 @@
 package signal
 
 // Event is an incoming event. It is a closed sum type; switch on the concrete pointer types:
-// *Message, *Edit, *Delete, *Reaction, *Typing, *Receipt, *ReadSync, *DecryptionFailure,
-// *QueueEmpty and *Connection.
+// *Message, *Edit, *Delete, *Reaction, *Typing, *Receipt, *ReadSync, *Unsupported,
+// *DecryptionFailure, *QueueEmpty and *Connection.
 type Event interface {
 	isEvent()
 }
 
 // Envelope is the metadata shared by events that come from a message.
+//
+// Chat is the conversation: the group, or for 1:1 chats the other party. For an incoming 1:1
+// message that is the sender; for a sync transcript (Sync, Sender is our own ACI) it is the
+// recipient the message was sent to, which is our own ACI for note-to-self.
 type Envelope struct {
 	Sender Recipient
 	Chat   Chat
@@ -19,13 +23,29 @@ type Envelope struct {
 	Sync bool
 }
 
-// Message is a regular data message.
+// Message is a regular data message: it has a body, attachments or a sticker. With
+// Envelope.Sync it is a sync transcript of a message we sent from another device.
 type Message struct {
 	Envelope
 
 	Body        string
 	Attachments []Attachment
+	Sticker     *Sticker
 	Quote       *Quote
+	// ViewOnce marks a view-once message (its attachments can be opened once).
+	ViewOnce bool
+	// Unsupported names parts of the message that go-signal can't show yet, e.g. "contact" or
+	// "storyReply" (see Unsupported for the names).
+	Unsupported []string
+}
+
+// Sticker is a sticker from a sticker pack.
+type Sticker struct {
+	// PackID is the hex-encoded ID of the sticker pack.
+	PackID    string
+	StickerID uint32
+	// Emoji is the emoji the sticker stands for, if the sender set one.
+	Emoji string
 }
 
 // Edit replaces the body of an earlier message.
@@ -102,6 +122,24 @@ type ReadSync struct {
 	Messages  []ReadMark
 }
 
+// Unsupported reports content that go-signal doesn't handle yet, so that it isn't dropped
+// silently. Type names what it is:
+//
+//   - "call" (1:1 call offer or hangup, or a group call update)
+//   - data messages without body, attachments or sticker: "groupUpdate", "expirationTimerUpdate",
+//     "profileKeyUpdate", "endSession", "contact", "payment", "giftBadge", "pollCreate",
+//     "pollVote", "pollTerminate", "pinMessage", "unpinMessage", "adminDelete", or
+//     "dataMessage" when nothing is recognised
+//   - sync messages from our other devices: "deleteForMe" (messages deleted locally there) and
+//     "messageRequestResponse" (a message request accepted, blocked, …)
+//
+// Envelope.Timestamp may be 0 when the content carries none.
+type Unsupported struct {
+	Envelope
+
+	Type string
+}
+
 // DecryptionFailure reports an envelope that could not be decrypted.
 type DecryptionFailure struct {
 	Sender    Recipient
@@ -157,6 +195,7 @@ func (*Reaction) isEvent()          {}
 func (*Typing) isEvent()            {}
 func (*Receipt) isEvent()           {}
 func (*ReadSync) isEvent()          {}
+func (*Unsupported) isEvent()       {}
 func (*DecryptionFailure) isEvent() {}
 func (*QueueEmpty) isEvent()        {}
 func (*Connection) isEvent()        {}

@@ -4,17 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"time"
 
+	"github.com/cwbudde/go-signal/internal/output"
 	"github.com/cwbudde/go-signal/internal/signal"
 	"github.com/spf13/cobra"
 )
 
 const defaultReceiveTimeout = time.Minute
 
-func newReceiveCmd(clients *clientOpener) *cobra.Command {
+func newReceiveCmd(clients *clientOpener, printers *printerFactory) *cobra.Command {
 	var (
 		timeout time.Duration
 		follow  bool
@@ -27,10 +27,20 @@ func newReceiveCmd(clients *clientOpener) *cobra.Command {
 
 With --follow, receive streams events until it is interrupted (SIGINT/SIGTERM). Interrupting
 receive ends it normally: events already printed are acknowledged to the server, the rest is
-delivered again next time. A second signal exits right away.`,
+delivered again next time. A second signal exits right away.
+
+Plain output prints one line per event: "[time] <sender> → <dest>: <text>", with placeholders
+such as [attachment image/jpeg 12.3 KB photo.jpg] or [unsupported call] for content that can't
+be shown as text. "me" is this account. With -o json, every event (including connection
+changes) is one JSON document per line (NDJSON, see docs/json.md).`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := cmd.Context()
+
+			printer, err := printers.printer(cmd.OutOrStdout())
+			if err != nil {
+				return err
+			}
 
 			if !follow {
 				var cancel context.CancelFunc
@@ -39,7 +49,7 @@ delivered again next time. A second signal exits right away.`,
 				defer cancel()
 			}
 
-			err := receive(ctx, clients, cmd.OutOrStdout(), follow)
+			err = receive(ctx, clients, printer, follow)
 
 			switch {
 			case errors.Is(err, context.DeadlineExceeded):
@@ -66,8 +76,8 @@ delivered again next time. A second signal exits right away.`,
 }
 
 // receive prints events until the first message (unless follow), the connection is lost for
-// good, or ctx is done. Structured output replaces the %+v dump in Phase 3.5.
-func receive(ctx context.Context, clients *clientOpener, out io.Writer, follow bool) error {
+// good, or ctx is done.
+func receive(ctx context.Context, clients *clientOpener, printer *output.Printer, follow bool) error {
 	client, err := clients.open(ctx)
 	if err != nil {
 		return err
@@ -88,7 +98,10 @@ func receive(ctx context.Context, clients *clientOpener, out io.Writer, follow b
 				return nil
 			}
 
-			fmt.Fprintf(out, "%T %+v\n", evt, evt)
+			err := printer.Event(evt)
+			if err != nil {
+				return fmt.Errorf("print event: %w", err)
+			}
 
 			done, err := lastEvent(evt, follow)
 			if done {

@@ -58,9 +58,13 @@ func (p *Printer) Format() Format {
 	return p.format
 }
 
-// writeJSON writes doc as one compact line.
+// writeJSON writes doc as one compact line. Like message text, <, > and & are written as they
+// are, not escaped for HTML.
 func (p *Printer) writeJSON(doc any) error {
-	err := json.NewEncoder(p.w).Encode(doc)
+	enc := json.NewEncoder(p.w)
+	enc.SetEscapeHTML(false)
+
+	err := enc.Encode(doc)
 	if err != nil {
 		return fmt.Errorf("write json: %w", err)
 	}

@@ -195,7 +195,7 @@ messages, and run it as a JSON-RPC daemon for scripts and bots.`,
 		newAccountCmd(clients, printers),
 		newDevicesCmd(clients, printers),
 		newLinkCmd(clients),
-		newReceiveCmd(clients),
+		newReceiveCmd(clients, printers),
 		newVersionCmd(),
 	)
 

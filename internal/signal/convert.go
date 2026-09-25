@@ -3,6 +3,9 @@
 package signal
 
 import (
+	"encoding/base64"
+	"encoding/hex"
+	"fmt"
 	"strings"
 
 	"github.com/google/uuid"
@@ -12,8 +15,11 @@ import (
 	"go.mau.fi/mautrix-signal/pkg/signalmeow/protobuf/signalpb"
 )
 
-// convertEvent maps a signalmeow event to ours. ownACI marks sync transcripts. It returns nil
-// for events the facade doesn't expose (yet).
+// convertEvent maps a signalmeow event to ours. ownACI marks sync transcripts. Content we can't
+// show yet becomes an *Unsupported event. It returns nil only for events that concern
+// signalmeow's store alone (ContactList, ACIFound) and for unknown event types.
+//
+//nolint:cyclop // one case per event type
 func convertEvent(raw events.SignalEvent, ownACI string) Event {
 	switch evt := raw.(type) {
 	case *events.ChatEvent:
@@ -34,24 +40,49 @@ func convertEvent(raw events.SignalEvent, ownACI string) Event {
 		}
 
 		return &ReadSync{Timestamp: evt.Timestamp, Messages: marks}
+	case *events.Call:
+		env := envelope(evt.Info, ownACI)
+		env.Timestamp = evt.Timestamp
+
+		return &Unsupported{Envelope: env, Type: "call"}
+	case *events.DeleteForMe:
+		return &Unsupported{Envelope: syncEnvelope(ownACI, Chat{}, evt.Timestamp), Type: "deleteForMe"}
+	case *events.MessageRequestResponse:
+		chat := Chat{Recipient: aciRecipient(evt.ThreadACI)}
+		if evt.GroupID != nil {
+			chat = Chat{GroupID: base64.StdEncoding.EncodeToString(evt.GroupID[:])}
+		}
+
+		return &Unsupported{Envelope: syncEnvelope(ownACI, chat, evt.Timestamp), Type: "messageRequestResponse"}
 	case *events.DecryptionError:
 		return &DecryptionFailure{Sender: aciRecipient(evt.Sender), Timestamp: evt.Timestamp, Err: evt.Err}
 	case *events.QueueEmpty:
 		return &QueueEmpty{}
 	case *events.LoggedOut:
 		return &Connection{State: StateLoggedOut, Err: evt.Error}
-	default:
+	default: // *events.ContactList, *events.ACIFound: store updates, nothing to show
 		return nil
 	}
 }
 
-func convertChatEvent(evt *events.ChatEvent, ownACI string) Event {
-	env := Envelope{
-		Sender:          aciRecipient(evt.Info.Sender),
-		Chat:            parseChat(evt.Info.ChatID),
-		ServerTimestamp: evt.Info.ServerTimestamp,
-		Sync:            evt.Info.Sender.String() == ownACI,
+// envelope converts the metadata of a chat event. signalmeow reports a sync transcript with our
+// own ACI as the sender and its destination (recipient or group) as the chat.
+func envelope(info events.MessageInfo, ownACI string) Envelope {
+	return Envelope{
+		Sender:          aciRecipient(info.Sender),
+		Chat:            parseChat(info.ChatID),
+		ServerTimestamp: info.ServerTimestamp,
+		Sync:            info.Sender.String() == ownACI,
 	}
+}
+
+// syncEnvelope is the envelope of a sync message from another of our devices.
+func syncEnvelope(ownACI string, chat Chat, timestamp uint64) Envelope {
+	return Envelope{Sender: Recipient{ACI: ownACI}, Chat: chat, Timestamp: timestamp, Sync: true}
+}
+
+func convertChatEvent(evt *events.ChatEvent, ownACI string) Event {
+	env := envelope(evt.Info, ownACI)
 
 	switch content := evt.Event.(type) {
 	case *signalpb.DataMessage:
@@ -71,7 +102,7 @@ func convertChatEvent(evt *events.ChatEvent, ownACI string) Event {
 
 		return &Typing{Envelope: env, Started: content.GetAction() == signalpb.TypingMessage_STARTED}
 	default:
-		return nil
+		return &Unsupported{Envelope: env, Type: fmt.Sprintf("%T", content)}
 	}
 }
 
@@ -90,7 +121,18 @@ func convertDataMessage(env Envelope, msg *signalpb.DataMessage) Event {
 		return &Delete{Envelope: env, TargetTimestamp: del.GetTargetSentTimestamp()}
 	}
 
-	out := &Message{Envelope: env, Body: msg.GetBody()}
+	unsupported := unsupportedParts(msg)
+
+	if msg.GetBody() == "" && len(msg.GetAttachments()) == 0 && msg.GetSticker() == nil {
+		return &Unsupported{Envelope: env, Type: controlType(msg, unsupported)}
+	}
+
+	out := &Message{
+		Envelope:    env,
+		Body:        msg.GetBody(),
+		ViewOnce:    msg.GetIsViewOnce(),
+		Unsupported: unsupported,
+	}
 
 	for _, att := range msg.GetAttachments() {
 		out.Attachments = append(out.Attachments, Attachment{
@@ -99,6 +141,14 @@ func convertDataMessage(env Envelope, msg *signalpb.DataMessage) Event {
 			Size:        att.GetSize(),
 			Caption:     att.GetCaption(),
 		})
+	}
+
+	if sticker := msg.GetSticker(); sticker != nil {
+		out.Sticker = &Sticker{
+			PackID:    hex.EncodeToString(sticker.GetPackId()),
+			StickerID: sticker.GetStickerId(),
+			Emoji:     sticker.GetEmoji(),
+		}
 	}
 
 	if quote := msg.GetQuote(); quote != nil {
@@ -110,6 +160,57 @@ func convertDataMessage(env Envelope, msg *signalpb.DataMessage) Event {
 	}
 
 	return out
+}
+
+// unsupportedParts names the parts of msg that we can't show yet (see Unsupported).
+func unsupportedParts(msg *signalpb.DataMessage) []string {
+	var parts []string
+
+	for _, part := range []struct {
+		name    string
+		present bool
+	}{
+		{"contact", len(msg.GetContact()) > 0},
+		{"payment", msg.GetPayment() != nil},
+		{"giftBadge", msg.GetGiftBadge() != nil},
+		{"pollCreate", msg.GetPollCreate() != nil},
+		{"pollVote", msg.GetPollVote() != nil},
+		{"pollTerminate", msg.GetPollTerminate() != nil},
+		{"pinMessage", msg.GetPinMessage() != nil},
+		{"unpinMessage", msg.GetUnpinMessage() != nil},
+		{"adminDelete", msg.GetAdminDelete() != nil},
+		{"storyReply", msg.GetStoryContext() != nil},
+	} {
+		if part.present {
+			parts = append(parts, part.name)
+		}
+	}
+
+	return parts
+}
+
+// endSessionFlag is DataMessage.Flags' END_SESSION, which the current protos no longer list.
+const endSessionFlag = 1
+
+// controlType names a data message without body, attachments or sticker: its first unsupported
+// part, else what its flags or group context say it is.
+func controlType(msg *signalpb.DataMessage, unsupported []string) string {
+	flags := msg.GetFlags()
+
+	switch {
+	case len(unsupported) > 0:
+		return unsupported[0]
+	case flags&endSessionFlag != 0:
+		return "endSession"
+	case flags&uint32(signalpb.DataMessage_EXPIRATION_TIMER_UPDATE) != 0:
+		return "expirationTimerUpdate"
+	case flags&uint32(signalpb.DataMessage_PROFILE_KEY_UPDATE) != 0:
+		return "profileKeyUpdate"
+	case msg.GetGroupV2() != nil:
+		return "groupUpdate"
+	default:
+		return "dataMessage"
+	}
 }
 
 // parseChat decodes signalmeow's chat ID: a service ID for 1:1 chats, else a group identifier.
