@@ -143,7 +143,12 @@ func (f *Fake) markUnlinked(acc signal.Account) error {
 		}
 	}
 
-	return signal.UnlinkedError(acc)
+	return unlinkedError(acc)
+}
+
+// unlinkedError is the error the real client reports for an unlinked acc.
+func unlinkedError(acc signal.Account) error {
+	return fmt.Errorf("%w (fake)", signal.UnlinkedError(acc))
 }
 
 // checkInUse mirrors the account lock; the caller holds f.mu.
@@ -205,7 +210,7 @@ func (c *client) Connect(context.Context) error {
 	}
 
 	if acc.Unlinked() {
-		return signal.UnlinkedError(acc)
+		return unlinkedError(acc)
 	}
 
 	if c.fake.ConnectErr != nil {
@@ -268,7 +273,7 @@ func (c *client) Devices(context.Context) ([]signal.Device, error) {
 	}
 
 	if acc.Unlinked() {
-		return nil, signal.UnlinkedError(acc)
+		return nil, unlinkedError(acc)
 	}
 
 	if errors.Is(c.fake.DevicesErr, signal.ErrDeviceUnlinked) {

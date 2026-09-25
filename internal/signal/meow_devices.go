@@ -91,15 +91,10 @@ func (c *meowClient) Unlink(ctx context.Context, opts UnlinkOptions) (Account, e
 		return Account{}, err
 	}
 
-	var device *mstore.Device
-
-	// Open the account (which may switch databases) before taking its lock. The server already
-	// removed a device marked as unlinked, so only the local data is left to delete.
-	if !opts.LocalOnly && !acc.Unlinked() {
-		device, err = c.unlinkDevice(ctx)
-		if err != nil {
-			return Account{}, err
-		}
+	// Open the account (which may switch databases) before taking its lock.
+	device, err := c.unlinkDevice(ctx, acc, opts)
+	if err != nil {
+		return Account{}, err
 	}
 
 	if c.lock == nil {
@@ -124,8 +119,13 @@ func (c *meowClient) Unlink(ctx context.Context, opts UnlinkOptions) (Account, e
 	return acc, nil
 }
 
-// unlinkDevice loads the device to remove from the server.
-func (c *meowClient) unlinkDevice(ctx context.Context) (*mstore.Device, error) {
+// unlinkDevice loads the device to remove from the server, or returns nil when the server is
+// skipped: with LocalOnly, and for an account marked as unlinked (the server already removed it).
+func (c *meowClient) unlinkDevice(ctx context.Context, acc Account, opts UnlinkOptions) (*mstore.Device, error) {
+	if opts.LocalOnly || acc.Unlinked() {
+		return nil, nil //nolint:nilnil // no device to remove is not an error
+	}
+
 	device, err := c.device(ctx)
 	if errors.Is(err, ErrNotLinked) {
 		// The device keys are gone (e.g. cleared after a logout), so the server can't be asked.

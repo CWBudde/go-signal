@@ -278,12 +278,30 @@ own; the creation time is HPKE-sealed, which libsignalgo doesn't wrap, so `hpke.
 
 #### 2.5 Remote unlink handling
 
-- [ ] Detect "device removed" (403/logged-out event from signalmeow) during connect and receive
-- [ ] Report it as a dedicated sentinel error and a non-zero exit code
-- [ ] Mark the account as unlinked in `accounts.json`; `account unlink` then only cleans up locally
+- [x] Detect "device removed" (403/logged-out event from signalmeow) during connect and receive
+      (a websocket 403 arrives as `SignalConnectionEventLoggedOut`, a 401 only as a fatal error
+      whose text is matched, and `events.LoggedOut` after a prekey 422; all become a
+      `StateLoggedOut` Connection event. REST 401/403 in `devices list` count too. signalmeow's
+      "Authed/Unauthed websocket …" error logs are demoted to debug)
+- [x] Report it as a dedicated sentinel error and a non-zero exit code
+      (`signal.ErrDeviceUnlinked`, replacing `ErrLoggedOut`; `signal.UnlinkedError` adds the
+      number and the fix. `cmd.ExitCode` maps it to `cmd.ExitUnlinked` = 3, anything else to 1;
+      documented in the README)
+- [x] Mark the account as unlinked in `accounts.json`; `account unlink` then only cleans up locally
+      (`unlinkedAt` via `store.MarkUnlinked`, carried as `Account.UnlinkedAt`; relinking the ACI
+      replaces the entry and clears it. `receive` and `devices list` then fail fast without a
+      connection, `account show` shows a `Status:` line / `unlinkedAt`, and `account unlink`
+      skips the server and reports `localOnly: true`)
 
 **Done when:** unlinking from the phone produces a clear message on the next command instead of a
-stack of websocket errors.
+stack of websocket errors. (Done; exit code 3 with "this device was unlinked from the account
+<number>; run `go-signal -a <number> account unlink --yes --local-only` …". Tested with the fake
+and a seeded data dir; not yet verified against the live server.)
+
+Notes: `Connect` doesn't wait for the websocket, so an unlink detected while connecting still
+arrives as a `StateLoggedOut` event (which `receive` returns as the error), not from `Connect`.
+When signalmeow clears the credentials of a logged-out device, `account show` falls back to
+`accounts.json`.
 
 ### Phase 3 — Send and receive (the core)
 
@@ -341,7 +359,7 @@ numbers give a clear "not on Signal" error.
 
 - [ ] One-shot: drain queued messages, exit after `--timeout` of inactivity or `--max N` events
 - [ ] `--follow`: stream until cancelled
-- [ ] Exit codes: 0 on normal end, distinct code for "unlinked" (from 2.5)
+- [ ] Exit codes: 0 on normal end, distinct code for "unlinked" (from 2.5: `cmd.ExitUnlinked` = 3)
 
 **Done when:** `receive` works in cron (one-shot) and as a long-running process (`--follow`).
 

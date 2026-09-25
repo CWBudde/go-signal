@@ -56,7 +56,7 @@ func TestAccountShow(t *testing.T) {
 
 			fake := &signaltest.Fake{Linked: []signal.Account{test.account}}
 
-			out, err := run(t, fake, "-o", string(test.format), "account", "show")
+			out, err := run(t, fake, "-o", string(test.format), accountCmd, "show")
 			if err != nil {
 				t.Fatalf("account show: %v", err)
 			}
@@ -73,7 +73,7 @@ func TestAccountShow(t *testing.T) {
 func TestAccountShowNotLinked(t *testing.T) {
 	t.Parallel()
 
-	_, err := run(t, &signaltest.Fake{}, "account", "show")
+	_, err := run(t, &signaltest.Fake{}, accountCmd, "show")
 	if !errors.Is(err, signal.ErrNotLinked) {
 		t.Fatalf("got %v, want ErrNotLinked", err)
 	}
@@ -84,7 +84,7 @@ func TestInvalidOutputFormat(t *testing.T) {
 
 	fake := &signaltest.Fake{Linked: []signal.Account{*testAccount()}}
 
-	_, err := run(t, fake, "-o", "yaml", "account", "show")
+	_, err := run(t, fake, "-o", "yaml", accountCmd, "show")
 	if !errors.Is(err, output.ErrInvalidFormat) {
 		t.Fatalf("got %v, want ErrInvalidFormat", err)
 	}
@@ -132,9 +132,9 @@ func TestAccountUnlink(t *testing.T) {
 		args []string // besides account unlink --yes
 	}{
 		{"account_unlink", nil},
-		{"account_unlink_json", []string{"-o", "json"}},
+		{"account_unlink_json", []string{"-o", string(output.JSON)}},
 		{"account_unlink_local", []string{"--local-only"}},
-		{"account_unlink_local_json", []string{"-o", "json", "--local-only"}},
+		{"account_unlink_local_json", []string{"-o", string(output.JSON), "--local-only"}},
 	}
 
 	for _, test := range tests {
@@ -143,7 +143,7 @@ func TestAccountUnlink(t *testing.T) {
 
 			fake := &signaltest.Fake{Linked: []signal.Account{*testAccount(), secondAccount()}}
 
-			out, err := run(t, fake, append([]string{"-a", testAccount().Number, "account", "unlink", yes}, test.args...)...)
+			out, err := run(t, fake, append([]string{"-a", testAccount().Number, accountCmd, unlinkCmd, yes}, test.args...)...)
 			if err != nil {
 				t.Fatalf("account unlink: %v", err)
 			}
@@ -168,7 +168,7 @@ func TestAccountUnlinkNeedsYes(t *testing.T) {
 
 	fake := &signaltest.Fake{Linked: []signal.Account{*testAccount()}}
 
-	_, err := run(t, fake, "account", "unlink")
+	_, err := run(t, fake, accountCmd, unlinkCmd)
 	if err == nil || !strings.Contains(err.Error(), "--yes") {
 		t.Fatalf("got %v, want the --yes guard", err)
 	}
@@ -184,7 +184,7 @@ func TestAccountUnlinkServerError(t *testing.T) {
 	errOffline := os.ErrDeadlineExceeded
 	fake := &signaltest.Fake{Linked: []signal.Account{*testAccount()}, UnlinkErr: errOffline}
 
-	_, err := run(t, fake, "account", "unlink", yes)
+	_, err := run(t, fake, accountCmd, unlinkCmd, yes)
 	if !errors.Is(err, errOffline) {
 		t.Fatalf("got %v, want the server error", err)
 	}
@@ -193,7 +193,7 @@ func TestAccountUnlinkServerError(t *testing.T) {
 		t.Error("local data deleted although the server failed")
 	}
 
-	_, err = run(t, fake, "account", "unlink", yes, "--local-only")
+	_, err = run(t, fake, accountCmd, unlinkCmd, yes, "--local-only")
 	if err != nil {
 		t.Fatalf("--local-only: %v", err)
 	}
@@ -208,7 +208,7 @@ func TestAccountUnlinkInUse(t *testing.T) {
 
 	fake := &signaltest.Fake{Linked: []signal.Account{*testAccount()}, InUse: true}
 
-	_, err := run(t, fake, "account", "unlink", yes)
+	_, err := run(t, fake, accountCmd, unlinkCmd, yes)
 	if !errors.Is(err, signal.ErrAccountInUse) {
 		t.Fatalf("got %v, want ErrAccountInUse", err)
 	}

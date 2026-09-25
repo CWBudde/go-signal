@@ -12,6 +12,11 @@ import (
 	"github.com/cwbudde/go-signal/internal/signal/signaltest"
 )
 
+const (
+	accountCmd = "account"
+	unlinkCmd  = "unlink"
+)
+
 // unlinkedAccount is namedAccount after go-signal noticed that it was unlinked on the phone.
 func unlinkedAccount() signal.Account {
 	acc := namedAccount()
@@ -67,13 +72,13 @@ func TestRemoteUnlink(t *testing.T) {
 	}
 
 	// account show still works and shows the state.
-	out, err := run(t, fake, "account", "show")
+	out, err := run(t, fake, accountCmd, "show")
 	if err != nil || !strings.Contains(out, "Status:      unlinked") {
 		t.Errorf("account show: %v\n%s", err, out)
 	}
 
 	// account unlink only deletes the local data.
-	_, err = run(t, fake, "account", "unlink", yes)
+	_, err = run(t, fake, accountCmd, unlinkCmd, yes)
 	if err != nil {
 		t.Fatalf("account unlink: %v", err)
 	}
@@ -124,10 +129,10 @@ func TestUnlinkedGolden(t *testing.T) {
 		name string
 		args []string
 	}{
-		{"account_show_unlinked", []string{"account", "show"}},
-		{"account_show_unlinked_json", []string{"-o", "json", "account", "show"}},
-		{"account_unlink_unlinked", []string{"account", "unlink", yes}},
-		{"account_unlink_unlinked_json", []string{"-o", "json", "account", "unlink", yes}},
+		{"account_show_unlinked", []string{accountCmd, "show"}},
+		{"account_show_unlinked_json", []string{"-o", string(output.JSON), accountCmd, "show"}},
+		{"account_unlink_unlinked", []string{accountCmd, unlinkCmd, yes}},
+		{"account_unlink_unlinked_json", []string{"-o", string(output.JSON), accountCmd, unlinkCmd, yes}},
 	}
 
 	for _, test := range tests {

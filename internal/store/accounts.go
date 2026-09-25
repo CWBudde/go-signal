@@ -91,10 +91,10 @@ func (d *Dir) PutAccount(entry AccountEntry) error {
 	return d.writeAccounts(accounts)
 }
 
-// MarkUnlinked records that the account with the given ACI was unlinked at the given time. An
+// MarkUnlinked records that the account with the given ACI was found unlinked at unlinkedAt. An
 // earlier mark is kept, and a missing entry is not an error (the account may have been removed
 // meanwhile).
-func (d *Dir) MarkUnlinked(aci string, at time.Time) error {
+func (d *Dir) MarkUnlinked(aci string, unlinkedAt time.Time) error {
 	accounts, err := d.Accounts()
 	if err != nil {
 		return err
@@ -105,7 +105,7 @@ func (d *Dir) MarkUnlinked(aci string, at time.Time) error {
 			continue
 		}
 
-		accounts[i].UnlinkedAt = at
+		accounts[i].UnlinkedAt = unlinkedAt
 
 		return d.writeAccounts(accounts)
 	}

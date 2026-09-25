@@ -14,7 +14,10 @@ import (
 	"github.com/cwbudde/go-signal/internal/store"
 )
 
-const testACI = "11111111-1111-1111-1111-111111111111"
+const (
+	testACI   = "11111111-1111-1111-1111-111111111111"
+	secondACI = "33333333-3333-3333-3333-333333333333"
+)
 
 func openDir(t *testing.T, logs io.Writer) *store.Dir {
 	t.Helper()
@@ -100,7 +103,7 @@ func TestAccountsRoundTrip(t *testing.T) {
 	}
 
 	first := store.AccountEntry{Number: "+15550100", ACI: testACI, DeviceID: 2, LinkedAt: time.Unix(1, 0).UTC()}
-	second := store.AccountEntry{Number: "+15550101", ACI: "33333333-3333-3333-3333-333333333333", DeviceID: 3}
+	second := store.AccountEntry{Number: "+15550101", ACI: secondACI, DeviceID: 3}
 
 	putAccount(t, dir, first)
 	putAccount(t, dir, second)
@@ -190,7 +193,7 @@ func TestRemoveAccount(t *testing.T) {
 	dir := openDir(t, io.Discard)
 
 	first := store.AccountEntry{Number: "+15550100", ACI: testACI, DeviceID: 2, DeviceName: "laptop"}
-	second := store.AccountEntry{Number: "+15550101", ACI: "33333333-3333-3333-3333-333333333333", DeviceID: 3}
+	second := store.AccountEntry{Number: "+15550101", ACI: secondACI, DeviceID: 3}
 
 	putAccount(t, dir, first)
 	putAccount(t, dir, second)
@@ -233,19 +236,19 @@ func TestMarkUnlinked(t *testing.T) {
 	dir := openDir(t, io.Discard)
 
 	first := store.AccountEntry{Number: "+15550100", ACI: testACI, DeviceID: 2}
-	second := store.AccountEntry{Number: "+15550101", ACI: "33333333-3333-3333-3333-333333333333", DeviceID: 3}
+	second := store.AccountEntry{Number: "+15550101", ACI: secondACI, DeviceID: 3}
 
 	putAccount(t, dir, first)
 	putAccount(t, dir, second)
 
-	at := time.Date(2026, 9, 25, 8, 0, 0, 0, time.UTC)
-	markUnlinked(t, dir, testACI, at)
+	unlinkedAt := time.Date(2026, 9, 25, 8, 0, 0, 0, time.UTC)
+	markUnlinked(t, dir, testACI, unlinkedAt)
 	// A later detection keeps the first mark, and an unknown ACI is ignored.
-	markUnlinked(t, dir, testACI, at.Add(time.Hour))
-	markUnlinked(t, dir, "44444444-4444-4444-4444-444444444444", at)
+	markUnlinked(t, dir, testACI, unlinkedAt.Add(time.Hour))
+	markUnlinked(t, dir, "44444444-4444-4444-4444-444444444444", unlinkedAt)
 
 	accounts, err := dir.Accounts()
-	if err != nil || len(accounts) != 2 || !accounts[0].UnlinkedAt.Equal(at) || accounts[1] != second {
+	if err != nil || len(accounts) != 2 || !accounts[0].UnlinkedAt.Equal(unlinkedAt) || accounts[1] != second {
 		t.Fatalf("after mark: %+v, %v", accounts, err)
 	}
 
@@ -258,10 +261,10 @@ func TestMarkUnlinked(t *testing.T) {
 	}
 }
 
-func markUnlinked(t *testing.T, dir *store.Dir, aci string, at time.Time) {
+func markUnlinked(t *testing.T, dir *store.Dir, aci string, unlinkedAt time.Time) {
 	t.Helper()
 
-	err := dir.MarkUnlinked(aci, at)
+	err := dir.MarkUnlinked(aci, unlinkedAt)
 	if err != nil {
 		t.Fatalf("mark %s: %v", aci, err)
 	}

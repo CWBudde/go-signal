@@ -34,6 +34,18 @@ log-format: text
 
 Logs are written to stderr. Stdout is reserved for command output.
 
+## Exit codes
+
+| Code | Meaning                                                                                   |
+| ---- | ----------------------------------------------------------------------------------------- |
+| 0    | Success                                                                                   |
+| 1    | Any other error                                                                           |
+| 3    | This device was unlinked from the account (e.g. on the phone): delete its data and relink |
+
+After an unlink is detected, the account is marked as unlinked and later commands fail with code 3
+right away. `go-signal account unlink --yes` then deletes the local data, and `go-signal link`
+links the device again.
+
 ## Reference
 
 `reference/signal-cli` is a shallow git submodule of the upstream Java implementation. It is used

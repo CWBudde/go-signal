@@ -34,14 +34,15 @@ fields they don't know.
 }
 ```
 
-| Field        | Type   | Description                                                    |
-| ------------ | ------ | -------------------------------------------------------------- |
-| `number`     | string | Phone number of the account                                    |
-| `aci`        | string | Account identity (ACI)                                         |
-| `pni`        | string | Phone number identity (PNI); _optional_                        |
-| `deviceId`   | number | ID of this device within the account (the phone is 1)          |
-| `deviceName` | string | Name this device was linked with; _optional_                   |
-| `linkedAt`   | string | When this device was linked; _optional_ (unknown for old data) |
+| Field        | Type   | Description                                                               |
+| ------------ | ------ | ------------------------------------------------------------------------- |
+| `number`     | string | Phone number of the account                                               |
+| `aci`        | string | Account identity (ACI)                                                    |
+| `pni`        | string | Phone number identity (PNI); _optional_                                   |
+| `deviceId`   | number | ID of this device within the account (the phone is 1)                     |
+| `deviceName` | string | Name this device was linked with; _optional_                              |
+| `linkedAt`   | string | When this device was linked; _optional_ (unknown for old data)            |
+| `unlinkedAt` | string | When go-signal found this device unlinked (e.g. on the phone); _optional_ |
 
 ## `devices list`
 
@@ -84,8 +85,9 @@ fields they don't know.
 }
 ```
 
-| Field       | Type    | Description                                                                |
-| ----------- | ------- | -------------------------------------------------------------------------- |
-| `number`    | string  | Phone number of the removed account                                        |
-| `aci`       | string  | ACI of the removed account                                                 |
-| `localOnly` | boolean | `true` if only local data was deleted (`--local-only`), without the server |
+| Field        | Type    | Description                                                                       |
+| ------------ | ------- | --------------------------------------------------------------------------------- |
+| `number`     | string  | Phone number of the removed account                                               |
+| `aci`        | string  | ACI of the removed account                                                        |
+| `localOnly`  | boolean | `true` if only local data was deleted (`--local-only`), without the server        |
+| `unlinkedAt` | string  | When go-signal found the device unlinked; _optional_ (then `localOnly` is `true`) |
