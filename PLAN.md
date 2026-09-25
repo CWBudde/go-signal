@@ -75,6 +75,7 @@ Consequences:
 main.go                  -> cmd.Execute()
 cmd/                     Cobra commands (link.go, send.go, receive.go, contacts.go, ...)
 internal/signal/         facade over signalmeow: Account, Client, events -> our own types
+internal/signal/signaltest/  in-memory fake Client for tests (no CGO)
 internal/store/          data-dir layout, SQLite (signalmeow store + our own tables)
 internal/output/         plain / json renderers
 internal/app/            use-case layer shared by the CLI and the MCP server (send, react, list, ...)
@@ -193,14 +194,25 @@ tested.)
 
 #### 2.1 Facade skeleton (`internal/signal`)
 
-- [ ] Define our own types: `Account`, `Recipient`, `Event` (sum type: message, receipt, typing,
+- [x] Define our own types: `Account`, `Recipient`, `Event` (sum type: message, receipt, typing,
       reaction, edit, delete, sync, …), `SendRequest`, `SendResult`
-- [ ] `Client` interface used by `cmd/` (link, connect, send, events channel, close)
-- [ ] signalmeow-backed implementation (CGO) and an in-memory fake for tests (no CGO)
-- [ ] Inject the client factory via the root command so `cmd` tests use the fake
+      (`types.go`, `events.go`; sync transcripts are `Message`s with `Envelope.Sync`, read syncs
+      are `ReadSync`, connection changes incl. logout are `Connection` events)
+- [x] `Client` interface used by `cmd/` (link, connect, send, events channel, close), plus
+      `Account` to read the selected account without connecting
+- [x] signalmeow-backed implementation (CGO, `signal.Open`) and an in-memory fake for tests (no
+      CGO, `internal/signal/signaltest`). `Send` on the real client returns `ErrNotImplemented`
+      until Phase 3.3.
+- [x] Inject the client factory via the root command so `cmd` tests use the fake
+      (`cmd.NewRootCmd(cmd.WithClientFactory(fake.Factory))`)
 
 **Done when:** `link` and `receive` from the spike run through the facade, and `cmd` tests run
-with `CGO_ENABLED=0`.
+with `CGO_ENABLED=0`. (Done; `link` verified up to the QR code against the live server.)
+
+Notes: the real client's handler blocks until the consumer reads the event from `Events()`, and
+only then acks the envelope, so unread events are redelivered next time. `Close` still waits 1 s
+for pending acks when anything was acked (Phase 3.1 replaces that). `-a` already selects by
+number or ACI (`ErrAccountNotFound`); the multi-account rules follow in 2.3.
 
 #### 2.2 Data-dir layout and permissions
 

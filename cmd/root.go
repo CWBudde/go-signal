@@ -7,11 +7,12 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"os/signal"
+	ossignal "os/signal"
 	"path/filepath"
 	"strings"
 	"syscall"
 
+	"github.com/cwbudde/go-signal/internal/signal"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -22,7 +23,7 @@ var errInvalidLogFormat = errors.New("invalid log format (want text or json)")
 
 // Execute builds the command tree and runs it.
 func Execute() {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := ossignal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	err := NewRootCmd().ExecuteContext(ctx)
 
 	stop()
@@ -33,10 +34,31 @@ func Execute() {
 	}
 }
 
+// Option customises the command tree built by NewRootCmd.
+type Option func(*rootOptions)
+
+type rootOptions struct {
+	newClient signal.Factory
+}
+
+// WithClientFactory replaces the signalmeow-backed client, e.g. with signaltest.Fake in tests.
+func WithClientFactory(factory signal.Factory) Option {
+	return func(o *rootOptions) {
+		o.newClient = factory
+	}
+}
+
 // NewRootCmd returns the root command with all subcommands attached.
 // Settings resolve with precedence flag > GOSIGNAL_* env > config file > default.
-func NewRootCmd() *cobra.Command {
+func NewRootCmd(opts ...Option) *cobra.Command {
 	cfg := viper.New()
+
+	ro := rootOptions{newClient: signal.Open}
+	for _, opt := range opts {
+		opt(&ro)
+	}
+
+	clients := &clientOpener{cfg: cfg, factory: ro.newClient}
 
 	var cfgFile string
 
@@ -73,12 +95,39 @@ messages, and run it as a JSON-RPC daemon for scripts and bots.`,
 	}
 
 	root.AddCommand(
-		newLinkCmd(cfg),
-		newReceiveCmd(cfg),
+		newLinkCmd(clients),
+		newReceiveCmd(clients),
 		newVersionCmd(),
 	)
 
 	return root
+}
+
+// clientOpener opens a signal.Client configured from the global flags.
+type clientOpener struct {
+	cfg     *viper.Viper
+	factory signal.Factory
+}
+
+func (o *clientOpener) open(ctx context.Context) (signal.Client, error) {
+	client, err := o.factory(ctx, signal.Options{
+		DataDir: o.cfg.GetString("data-dir"),
+		Account: o.cfg.GetString("account"),
+		Logger:  slog.Default(),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("open client: %w", err)
+	}
+
+	return client, nil
+}
+
+// closeClient closes client and logs a failure; used in defers.
+func closeClient(client signal.Client) {
+	err := client.Close()
+	if err != nil {
+		slog.Warn("close client", "error", err)
+	}
 }
 
 // loadConfig reads the config file (if any) and environment variables.

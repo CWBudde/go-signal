@@ -3,6 +3,7 @@ module github.com/cwbudde/go-signal
 go 1.26.0
 
 require (
+	github.com/google/uuid v1.6.0
 	github.com/mattn/go-sqlite3 v1.14.52
 	github.com/mdp/qrterminal/v3 v3.2.1
 	github.com/rs/zerolog v1.35.1
@@ -10,13 +11,13 @@ require (
 	github.com/spf13/viper v1.21.0
 	go.mau.fi/mautrix-signal v0.2609.0
 	go.mau.fi/util v0.10.1
+	google.golang.org/protobuf v1.36.12
 )
 
 require (
 	github.com/coder/websocket v1.8.15 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
@@ -42,6 +43,5 @@ require (
 	golang.org/x/text v0.42.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa // indirect
 	google.golang.org/grpc v1.83.2 // indirect
-	google.golang.org/protobuf v1.36.12 // indirect
 	rsc.io/qr v0.2.0 // indirect
 )

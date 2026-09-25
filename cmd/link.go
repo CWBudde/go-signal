@@ -3,13 +3,11 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/cwbudde/go-signal/internal/signal"
 	"github.com/mdp/qrterminal/v3"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
-func newLinkCmd(cfg *viper.Viper) *cobra.Command {
+func newLinkCmd(clients *clientOpener) *cobra.Command {
 	var deviceName string
 
 	cmd := &cobra.Command{
@@ -21,7 +19,13 @@ phone (Settings > Linked devices) to add go-signal as a linked device.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			out := cmd.OutOrStdout()
 
-			account, err := signal.Link(cmd.Context(), cfg.GetString("data-dir"), deviceName, func(uri string) {
+			client, err := clients.open(cmd.Context())
+			if err != nil {
+				return err
+			}
+			defer closeClient(client)
+
+			account, err := client.Link(cmd.Context(), deviceName, func(uri string) {
 				fmt.Fprintln(out, uri)
 				qrterminal.GenerateHalfBlock(uri, qrterminal.L, out)
 				fmt.Fprintln(out, "Scan this code in Signal on your phone: Settings > Linked devices.")
