@@ -5,6 +5,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -81,4 +82,15 @@ func (a *App) AccountUnlink(ctx context.Context, req UnlinkRequest) (UnlinkResul
 	}
 
 	return UnlinkResult{Account: acc, LocalOnly: req.LocalOnly || acc.Unlinked()}, nil
+}
+
+// connectSendOnly connects the client in send-only mode (see signal.SendOnly). A client that is
+// connected already, like the MCP server's, is used as it is.
+func (a *App) connectSendOnly(ctx context.Context) error {
+	err := a.client.Connect(ctx, signal.SendOnly())
+	if errors.Is(err, signal.ErrAlreadyConnected) {
+		return nil
+	}
+
+	return err //nolint:wrapcheck // the callers wrap it
 }

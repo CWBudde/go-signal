@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"time"
 
 	"github.com/cwbudde/go-signal/internal/app"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -17,7 +18,9 @@ import (
 const Name = "go-signal"
 
 const instructions = `go-signal gives access to one linked Signal account. ` +
-	`Use account_show to see which account (number and ACI) this server acts for.`
+	`Use account_show to see which account (number and ACI) this server acts for, ` +
+	`contacts_list and contacts_show to find users, groups_list and groups_show for groups and their members, ` +
+	`and identities_list for the users' identity keys (safety numbers).`
 
 // Options configures the server.
 type Options struct {
@@ -25,6 +28,9 @@ type Options struct {
 	Version string
 	// Logger receives the SDK's logs, demoted to debug; nil means slog.Default().
 	Logger *slog.Logger
+	// Location is the time zone of the tools' text output (nil means time.Local); structured
+	// output is in UTC.
+	Location *time.Location
 }
 
 // NewServer returns an MCP server whose tools run on a.
@@ -41,7 +47,7 @@ func NewServer(a *app.App, opts Options) *sdk.Server {
 		Capabilities: &sdk.ServerCapabilities{},
 	})
 
-	addReadTools(server, a)
+	addReadTools(server, &tools{app: a, loc: opts.Location, logger: logger})
 
 	return server
 }

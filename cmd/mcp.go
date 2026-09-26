@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/cwbudde/go-signal/internal/app"
 	"github.com/cwbudde/go-signal/internal/mcp"
@@ -10,19 +11,19 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newMCPCmd(clients *clientOpener, appOpts []app.Option) *cobra.Command {
+func newMCPCmd(clients *clientOpener, loc *time.Location, appOpts []app.Option) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mcp",
 		Short: "Model Context Protocol (MCP) server for AI agents",
 		Args:  cobra.NoArgs,
 	}
 
-	cmd.AddCommand(newMCPServeCmd(clients, appOpts))
+	cmd.AddCommand(newMCPServeCmd(clients, loc, appOpts))
 
 	return cmd
 }
 
-func newMCPServeCmd(clients *clientOpener, appOpts []app.Option) *cobra.Command {
+func newMCPServeCmd(clients *clientOpener, loc *time.Location, appOpts []app.Option) *cobra.Command {
 	return &cobra.Command{
 		Use:   "serve",
 		Short: "Serve the account to an MCP client on stdin/stdout",
@@ -56,7 +57,7 @@ Stdout carries only the MCP protocol; logs go to stderr.`,
 
 			return mcp.Serve(
 				ctx, app.New(client, appOpts...),
-				mcp.Options{Version: Version, Logger: slog.Default()},
+				mcp.Options{Version: Version, Logger: slog.Default(), Location: loc},
 				cmd.InOrStdin(), cmd.OutOrStdout(),
 			)
 		},

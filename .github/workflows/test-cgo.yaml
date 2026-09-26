@@ -5,6 +5,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
   cgo:
@@ -54,5 +55,24 @@ jobs:
       - name: Build
         run: just build
 
-      - name: Run tests
-        run: just test
+      # Coverage is taken here rather than in test-unit: only this job compiles the real
+      # signalmeow client (meow*.go is cgo-only).
+      - name: Run tests with coverage
+        run: just test-coverage
+
+      - name: Generate coverage report
+        id: coverage
+        if: always() && hashFiles('coverage.out') != ''
+        run: |
+          just coverage-report
+          cat coverage-results.md >> "$GITHUB_STEP_SUMMARY"
+
+      # Fork PRs get a read-only token, so they only see the report in the step summary.
+      - name: Add coverage PR comment
+        if: >-
+          always() && steps.coverage.outcome == 'success' &&
+          github.event.pull_request.head.repo.full_name == github.repository
+        uses: marocchino/sticky-pull-request-comment@0ea0beb66eb9baf113663a64ec522f60e49231c0 # v3.0.4
+        with:
+          recreate: true
+          path: coverage-results.md

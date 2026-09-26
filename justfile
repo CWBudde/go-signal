@@ -38,10 +38,17 @@ run *args:
 test:
     go test -race -count=1 ./...
 
-# Run tests with coverage
+# Run tests with coverage; -coverpkg lets the cmd tests count towards internal/*, minus the signaltest fake
 test-coverage:
-    go test -coverprofile=coverage.out -covermode=atomic ./...
+    go test -race -count=1 -coverpkg=$(go list ./... | grep -v /signaltest | paste -sd,) -coverprofile=coverage.out -covermode=atomic ./...
+
+# Render coverage.out as coverage.html
+coverage-html:
     go tool cover -html=coverage.out -o coverage.html
+
+# Generate coverage-results.md from coverage.out
+coverage-report:
+    ./scripts/coverage-report.sh
 
 # Run golangci-lint
 lint:
@@ -105,7 +112,7 @@ check-libsignal:
 
 # Clean build artifacts
 clean:
-    rm -rf bin/ dist/ coverage.out coverage.html
+    rm -rf bin/ dist/ coverage.out coverage.html coverage-results.md
 
 # Show help
 help:

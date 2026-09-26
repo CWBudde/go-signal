@@ -15,10 +15,10 @@ import (
 var ErrAmbiguousGroup = errors.New("several groups have this title; use the group ID")
 
 // GroupsList fetches every known group with its state from the server (signal.Client.Groups).
-// It connects in send-only mode, so the client must not be connected yet: incoming messages
+// It connects in send-only mode (unless the client is connected already): incoming messages
 // stay on the server for the next receive.
 func (a *App) GroupsList(ctx context.Context) ([]signal.Group, error) {
-	err := a.client.Connect(ctx, signal.SendOnly())
+	err := a.connectSendOnly(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("groups list: connect: %w", err)
 	}
@@ -39,7 +39,7 @@ func (a *App) GroupsShow(ctx context.Context, arg string) (signal.Group, error) 
 		return signal.Group{}, fmt.Errorf("groups show: %w", err)
 	}
 
-	err = a.client.Connect(ctx, signal.SendOnly())
+	err = a.connectSendOnly(ctx)
 	if err != nil {
 		return signal.Group{}, fmt.Errorf("groups show: connect: %w", err)
 	}
@@ -71,7 +71,7 @@ func (a *App) GroupsLeave(ctx context.Context, req LeaveRequest) (signal.LeaveRe
 		return signal.LeaveResult{}, fmt.Errorf("groups leave: %w", err)
 	}
 
-	err = a.client.Connect(ctx, signal.SendOnly())
+	err = a.connectSendOnly(ctx)
 	if err != nil {
 		return signal.LeaveResult{}, fmt.Errorf("groups leave: connect: %w", err)
 	}

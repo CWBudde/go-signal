@@ -145,7 +145,7 @@ func (a *App) setBlocked(ctx context.Context, action string, args []string, bloc
 		return BlockResult{}, fmt.Errorf("%s: %w", action, err)
 	}
 
-	err = a.client.Connect(ctx, signal.SendOnly())
+	err = a.connectSendOnly(ctx)
 	if err != nil {
 		return BlockResult{}, fmt.Errorf("%s: connect: %w", action, err)
 	}

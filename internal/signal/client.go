@@ -26,7 +26,8 @@ type Client interface { //nolint:interfacebloat // the one facade over signalmeo
 	// the setup), so that Close can shut it down gracefully. When the server logs the
 	// device out (it was unlinked on the phone), the account is marked as unlinked and a
 	// StateLoggedOut event carries UnlinkedError. On an account already marked, Connect fails
-	// with it right away, without contacting the server.
+	// with it right away, without contacting the server. A second Connect fails with
+	// ErrAlreadyConnected.
 	//
 	// With the SendOnly option, Connect is for commands that only send: incoming messages are
 	// not handed out on Events but left on the server (not acked), so the next receive gets

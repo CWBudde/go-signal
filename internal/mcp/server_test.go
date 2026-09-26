@@ -3,6 +3,7 @@ package mcp_test
 import (
 	"encoding/json"
 	"io"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -32,7 +33,8 @@ func testAccount() signal.Account {
 }
 
 // connect starts a server on a client of fake and returns an MCP client session connected to it
-// through the SDK's in-memory transport. Both end with the test.
+// through the SDK's in-memory transport. Both end with the test. Like `mcp serve`, it connects
+// the client in send-only mode first, if fake has an account.
 func connect(t *testing.T, fake *signaltest.Fake) *sdk.ClientSession {
 	t.Helper()
 
@@ -48,7 +50,14 @@ func connect(t *testing.T, fake *signaltest.Fake) *sdk.ClientSession {
 		}
 	})
 
-	server := mcp.NewServer(app.New(client), mcp.Options{Version: testVersion})
+	if len(fake.Linked) > 0 {
+		err = client.Connect(t.Context(), signal.SendOnly())
+		if err != nil {
+			t.Fatalf("connect: %v", err)
+		}
+	}
+
+	server := mcp.NewServer(app.New(client), mcp.Options{Version: testVersion, Location: time.UTC})
 	serverTransport, clientTransport := sdk.NewInMemoryTransports()
 
 	serverSession, err := server.Connect(t.Context(), serverTransport, nil)
@@ -112,8 +121,11 @@ func TestListTools(t *testing.T) {
 		}
 	}
 
-	if len(names) != 1 || names[0] != accountShowTool {
-		t.Errorf("tools %v, want [account_show]", names)
+	want := []string{
+		accountShowTool, "contacts_list", "contacts_show", "groups_list", "groups_show", "identities_list",
+	}
+	if !slices.Equal(names, want) {
+		t.Errorf("tools %v, want %v", names, want)
 	}
 }
 

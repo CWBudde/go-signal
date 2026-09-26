@@ -318,6 +318,10 @@ func (c *client) Connect(_ context.Context, opts ...signal.ConnectOption) error 
 	c.fake.mu.Lock()
 	defer c.fake.mu.Unlock()
 
+	if c.connected != "" {
+		return signal.ErrAlreadyConnected
+	}
+
 	acc, err := c.fake.account(c.opts)
 	if err != nil {
 		return err
@@ -339,18 +343,7 @@ func (c *client) Connect(_ context.Context, opts ...signal.ConnectOption) error 
 	c.connected = acc.ACI
 	c.fake.connects = append(c.fake.connects, acc.ACI)
 
-	incoming := make([]signal.Event, 0, len(c.fake.Incoming))
-	for _, evt := range c.fake.Incoming {
-		if conn, ok := evt.(*signal.Connection); ok && conn.State == signal.StateLoggedOut {
-			evt = &signal.Connection{State: signal.StateLoggedOut, Err: c.fake.markUnlinked(acc)}
-		}
-
-		if changed, ok := evt.(*signal.IdentityChanged); ok {
-			c.fake.changeIdentity(changed)
-		}
-
-		incoming = append(incoming, evt)
-	}
+	incoming := c.fake.connectEvents(acc)
 
 	if signal.NewConnectOptions(opts...).SendOnly {
 		c.lost = lostError(incoming)
@@ -362,6 +355,25 @@ func (c *client) Connect(_ context.Context, opts ...signal.ConnectOption) error 
 	go c.feed(incoming)
 
 	return nil
+}
+
+// connectEvents returns Incoming for acc, which connects: a logout marks acc as unlinked, and an
+// identity change changes the stored key. The caller holds f.mu.
+func (f *Fake) connectEvents(acc signal.Account) []signal.Event {
+	incoming := make([]signal.Event, 0, len(f.Incoming))
+	for _, evt := range f.Incoming {
+		if conn, ok := evt.(*signal.Connection); ok && conn.State == signal.StateLoggedOut {
+			evt = &signal.Connection{State: signal.StateLoggedOut, Err: f.markUnlinked(acc)}
+		}
+
+		if changed, ok := evt.(*signal.IdentityChanged); ok {
+			f.changeIdentity(changed)
+		}
+
+		incoming = append(incoming, evt)
+	}
+
+	return incoming
 }
 
 func (c *client) Events() <-chan signal.Event {

@@ -88,7 +88,7 @@ func (r TargetResult) FailedMembers() int {
 }
 
 // Send sends a message to every recipient in req with the same timestamp. It connects the
-// client in send-only mode (signal.SendOnly), so the client must not be connected yet: incoming
+// client in send-only mode (signal.SendOnly) unless it is connected already: incoming
 // messages stay on the server for the next receive. Invalid arguments and unreadable or too
 // large attachments fail before connecting; recipients, mentioned users or a quote author that
 // can't be resolved (e.g. signal.ErrNotOnSignal) fail before anything is uploaded or sent. The
@@ -114,7 +114,7 @@ func (a *App) Send(ctx context.Context, req SendRequest) (SendResult, error) {
 func (a *App) sendContent(
 	ctx context.Context, action string, recipients []string, build func(context.Context) (content, error),
 ) (SendResult, error) {
-	err := a.client.Connect(ctx, signal.SendOnly())
+	err := a.connectSendOnly(ctx)
 	if err != nil {
 		return SendResult{}, fmt.Errorf("%s: connect: %w", action, err)
 	}

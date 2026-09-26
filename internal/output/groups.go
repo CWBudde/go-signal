@@ -7,6 +7,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/cwbudde/go-signal/internal/app"
 	"github.com/cwbudde/go-signal/internal/signal"
 )
 
@@ -81,14 +82,11 @@ type leftDoc struct {
 	Left    LeftGroupJSON `json:"left"`
 }
 
-// NewGroupJSON converts group to its JSON form. A group that couldn't be fetched (group.Err) has
-// no member lists.
-func NewGroupJSON(group signal.Group) GroupJSON {
-	return newGroupJSON(group, bareRecipient)
-}
+// NewGroupJSON converts group to its JSON form, naming the members from names (the zero Names
+// leaves the names out). A group that couldn't be fetched (group.Err) has no member lists.
+func NewGroupJSON(group signal.Group, names app.Names) GroupJSON {
+	rcpt := func(r signal.Recipient) recipientJSON { return newRecipientJSON(r, names) }
 
-// newGroupJSON converts group, with rcpt converting its members.
-func newGroupJSON(group signal.Group, rcpt func(signal.Recipient) recipientJSON) GroupJSON {
 	out := GroupJSON{
 		ID:                group.ID,
 		Title:             group.Title,
@@ -140,13 +138,9 @@ func newGroupJSON(group signal.Group, rcpt func(signal.Recipient) recipientJSON)
 	return out
 }
 
-// NewLeftGroupJSON converts the result of leaving a group to its JSON form.
-func NewLeftGroupJSON(res signal.LeaveResult) LeftGroupJSON {
-	return newLeftGroupJSON(res, bareRecipient)
-}
-
-// newLeftGroupJSON converts res, with rcpt converting the promoted members.
-func newLeftGroupJSON(res signal.LeaveResult, rcpt func(signal.Recipient) recipientJSON) LeftGroupJSON {
+// NewLeftGroupJSON converts the result of leaving a group to its JSON form, naming the promoted
+// members from names.
+func NewLeftGroupJSON(res signal.LeaveResult, names app.Names) LeftGroupJSON {
 	out := LeftGroupJSON{
 		ID:         res.Group.ID,
 		Title:      res.Group.Title,
@@ -157,7 +151,7 @@ func newLeftGroupJSON(res signal.LeaveResult, rcpt func(signal.Recipient) recipi
 	}
 
 	for _, promoted := range res.Promoted {
-		out.Promoted = append(out.Promoted, rcpt(promoted))
+		out.Promoted = append(out.Promoted, newRecipientJSON(promoted, names))
 	}
 
 	return out
@@ -168,7 +162,7 @@ func (p *Printer) Groups(groups []signal.Group) error {
 	if p.format == JSON {
 		doc := groupsDoc{Version: SchemaVersion, Groups: make([]GroupJSON, 0, len(groups))}
 		for _, group := range groups {
-			doc.Groups = append(doc.Groups, newGroupJSON(group, p.recipient))
+			doc.Groups = append(doc.Groups, NewGroupJSON(group, p.names))
 		}
 
 		return p.writeJSON(doc)
@@ -194,7 +188,7 @@ func (p *Printer) Groups(groups []signal.Group) error {
 // requesting members.
 func (p *Printer) Group(group signal.Group) error {
 	if p.format == JSON {
-		return p.writeJSON(groupDoc{Version: SchemaVersion, Group: newGroupJSON(group, p.recipient)})
+		return p.writeJSON(groupDoc{Version: SchemaVersion, Group: NewGroupJSON(group, p.names)})
 	}
 
 	table := tabwriter.NewWriter(p.w, 0, 0, 1, ' ', 0)
@@ -241,7 +235,7 @@ func (p *Printer) Group(group signal.Group) error {
 // LeftGroup confirms `groups leave`.
 func (p *Printer) LeftGroup(res signal.LeaveResult) error {
 	if p.format == JSON {
-		return p.writeJSON(leftDoc{Version: SchemaVersion, Left: newLeftGroupJSON(res, p.recipient)})
+		return p.writeJSON(leftDoc{Version: SchemaVersion, Left: NewLeftGroupJSON(res, p.names)})
 	}
 
 	group := res.Group

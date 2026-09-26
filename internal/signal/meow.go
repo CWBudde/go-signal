@@ -33,7 +33,6 @@ const (
 var (
 	errUnexpectedState = errors.New("unexpected provisioning state")
 	errProvisioning    = errors.New("provisioning ended without device data")
-	errAlreadyStarted  = errors.New("client is already connected")
 )
 
 // Open opens the data dir opts.DataDir and returns a signalmeow-backed Client. The account
@@ -174,7 +173,7 @@ func (c *meowClient) Account(ctx context.Context) (Account, error) {
 
 func (c *meowClient) Connect(ctx context.Context, opts ...ConnectOption) error {
 	if c.cancelLoops != nil {
-		return errAlreadyStarted
+		return ErrAlreadyConnected
 	}
 
 	ctx = c.zlog.WithContext(ctx)

@@ -81,7 +81,7 @@ func (c *meowClient) Devices(ctx context.Context) ([]Device, error) {
 
 func (c *meowClient) Unlink(ctx context.Context, opts UnlinkOptions) (Account, error) {
 	if c.cli != nil {
-		return Account{}, errAlreadyStarted
+		return Account{}, ErrAlreadyConnected
 	}
 
 	ctx = c.zlog.WithContext(ctx)

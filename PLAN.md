@@ -868,14 +868,25 @@ list; its structured output is the `docs/json.md` account object (`output.Accoun
 
 #### 5.3 Read-only tools
 
-- [ ] `account_show`, `contacts_list` (with `query`), `contacts_show`, `groups_list`,
-      `groups_show`, `identities_list` (`account_show` landed with 5.2)
-- [ ] Input/output JSON schemas derived from Go structs; outputs reuse the `docs/json.md` types
+- [x] `account_show`, `contacts_list` (with `query`), `contacts_show`, `groups_list`,
+      `groups_show`, `identities_list` (`account_show` landed with 5.2; `contacts_list` also
+      takes `blocked`, `identities_list` an optional `recipient`)
+- [x] Input/output JSON schemas derived from Go structs; outputs reuse the `docs/json.md` types
       as structured content, with a short text summary for clients that ignore structured output
-- [ ] Tool annotations: `readOnlyHint: true`
+      (the SDK infers both schemas and validates the output against its schema; lists are wrapped
+      in an object like `{"contacts": [...]}`, without the CLI's `version`. The text content is
+      the CLI's plain output (times in local time, like the CLI). Group members carry
+      their `name`, so `output.NewGroupJSON` takes `app.Names`)
+- [x] Tool annotations: `readOnlyHint: true` (plus `openWorldHint: false`)
 
 **Done when:** an agent can answer "who is in group X?" and "what is Alice's number?" through the
-tools.
+tools. (Done with the fake: `TestGroups` and `TestContactsList` in `internal/mcp`.)
+
+Notes: the server's client is connected once at startup, while the group (and later the send)
+use cases connect on their own for the CLI. A second `Connect` now fails with
+`signal.ErrAlreadyConnected` (the fake mimics it), and `internal/app` uses a client that is
+connected already as it is. `identities_show` is left out: its QR payload is binary and the
+safety number is only useful next to the phone; add it if an agent needs it.
 
 #### 5.4 Inbox: receiving through MCP
 

@@ -28,6 +28,9 @@ var ErrAccountInUse = store.ErrAccountInUse
 // ErrNotConnected is returned by operations that need Connect first.
 var ErrNotConnected = errors.New("client is not connected")
 
+// ErrAlreadyConnected is returned by Connect (and Unlink) on a client that is connected already.
+var ErrAlreadyConnected = errors.New("client is already connected")
+
 // ErrClosed is returned by operations started after Close.
 var ErrClosed = errors.New("client is closed")
 

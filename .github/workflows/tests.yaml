@@ -16,6 +16,10 @@ concurrency:
 jobs:
   test-cgo:
     uses: ./.github/workflows/test-cgo.yaml
+    # For the coverage PR comment.
+    permissions:
+      contents: read
+      pull-requests: write
 
   test-unit:
     uses: ./.github/workflows/test-unit.yaml

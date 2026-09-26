@@ -73,14 +73,14 @@ type recipientJSON struct {
 	Name     string `json:"name,omitempty"`
 }
 
-// bareRecipient converts r without a name, for the exported converters.
-func bareRecipient(r signal.Recipient) recipientJSON {
-	return recipientJSON{ACI: r.ACI, PNI: r.PNI, Number: r.Number, Username: r.Username}
+// newRecipientJSON converts r, with its name if names knows it.
+func newRecipientJSON(r signal.Recipient, names app.Names) recipientJSON {
+	return recipientJSON{ACI: r.ACI, PNI: r.PNI, Number: r.Number, Username: r.Username, Name: names.Name(r)}
 }
 
 // recipient converts r, with its name if the printer knows it (see SetNames).
 func (p *Printer) recipient(r signal.Recipient) recipientJSON {
-	return recipientJSON{ACI: r.ACI, PNI: r.PNI, Number: r.Number, Username: r.Username, Name: p.names.Name(r)}
+	return newRecipientJSON(r, p.names)
 }
 
 type chatJSON struct {
