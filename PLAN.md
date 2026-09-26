@@ -1402,7 +1402,17 @@ the fork's main, no tag. The shim wiring is 9.3.)
 
 #### 9.2 SGX DCAP attestation
 
-- [ ] Quote v3 parsing, PCK certificate chain up to the pinned Intel SGX root CA, CRL checks
+- [x] Quote v3 parsing, PCK certificate chain up to the pinned Intel SGX root CA, CRL checks
+      (2026-09-26 — New `attest/dcap` package in the libsignal-go fork, branch `feat/dcap`, commit
+      `277f1e917`, based on `f1669cb0b`, unpublished. It covers the v3 ECDSA quote, Open Enclave
+      custom claims, the SGX PCK extension, and the ISV/QE signature and QE report checks. Chain
+      validation is BoringSSL's `X509_verify_cert` with `CRL_CHECK|CRL_CHECK_ALL` at a fixed time,
+      rebuilt on `crypto/x509` because `x509.Verify` has no CRLs. The root and root CRL are pinned
+      to Intel's key (`RootTrustStore`). All 34 upstream tests of `sgx_quote.rs`, `evidence.rs`,
+      `sgx_x509.rs`, `cert_chain.rs` and `util.rs` are ported under their names and pass.
+      `TestIntelPCKChain` validates the recorded Intel PCK chain against the recorded CRLs, as
+      `verify_certificates` does. The fixture uses a test-only endorsements field reader; the real
+      parser is the next item.)
 - [ ] TCB info and QE identity verification, TCB status policy identical to `attest/src/dcap`
 - [ ] MRENCLAVE/config checks against the enclave constants of the pinned version, and evidence
       expiry
