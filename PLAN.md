@@ -1456,14 +1456,18 @@ tampered or truncated messages and a wrong static key. The shim wiring is 9.3.
 
 - [ ] `SGXClientState`/`CDS2ClientState`: initial request, `CompleteHandshake`,
       `EstablishedSend`/`EstablishedRecv`, wired into the shim
-      (2026-09-27 — partial: the fork side is done, the shim is not. New `attest/enclave`
-      package in the libsignal-go fork, commit `ae07c98cb`, released in `v0.7.1-cw.4`. It ports
-      `enclave.rs`, `sgx_session.rs`, `cds2.rs` and the bridge's `SgxClientState`: the attested
-      handshake with the one-day skew, NK/NKhfs, prost-style `ClientHandshakeStart` decoding,
-      `extract_metrics`, and `NewCDS2ClientState` → `InitialRequest` → `CompleteHandshake` →
-      `EstablishedSend`/`EstablishedRecv` with `ErrInvalidState` for wrong-state calls. Remaining:
-      implement mautrix-signal's `pkg/libsignalgo/sgxclient_purego.go` on it, tag the fork and
-      bump go.mod.)
+      (2026-09-27 — partial: wired, but the handshake is not verified through the shim. The fork
+      side is `attest/enclave` in libsignal-go `v0.7.1-cw.4`. mautrix-signal `4313c0e` implements
+      `sgxclient_purego.go` on it, with the error codes of upstream's `IntoFfiError` for
+      `enclave::Error`; it is released in `v0.2609.0-purego.5`, which go.mod pins. The shared
+      `TestCDS2ClientState*` tests pass in both builds with the same codes. They cover
+      construction on the recorded CDSI staging attestation, a wrong MRENCLAVE, time, malformed
+      and tampered evidence, failed handshakes and wrong-state calls. Neither build can complete a
+      handshake offline: `cds2_test`, the only recording with a known enclave key, needs
+      upstream's test-only TCB evaluation number 12 exception, which neither build enables, and
+      the staging enclave's key is unknown. The completed handshake is covered only by the fork's
+      `attest/enclave` tests. Remaining: the live CDSI lookup in the Done when below, or an
+      exported test hook in the fork.)
 - [x] Port the handshake-level attestation tests on the recorded blobs: `sgx_session.rs`
       `test_clock_skew` with `SKEW_ADJUSTMENT` in the session, `test_happy_path`,
       `test_mismatched_keys` and `test_invalid_private_key` on `cds2_test`, and `cds2.rs`
@@ -1490,23 +1494,23 @@ tampered or truncated messages and a wrong static key. The shim wiring is 9.3.
       replaces `hpke.go` in purego builds. (Done early, in 7.2: `hpke_std.go` on `crypto/hpke`
       with libsignal's framing (type byte, enc, AEAD output). Checked against libsignal in both
       directions (`TestDiffHPKE`) and against a committed libsignal ciphertext.)
-- [ ] Sweep: any `libsignalgo` symbol still returning `ErrNotImplemented` gets implemented or
+- [x] Sweep: any `libsignalgo` symbol still returning `ErrNotImplemented` gets implemented or
       listed as a known gap in the fork's scope matrix
-      (2026-09-27 — partial: the fork side is done, the shim is not. Three purego stubs are left:
-      `sgxclient` (9.3), `hsmenclave` and `devicetransfer`; signalmeow calls only the first. The
-      other two are ported in the libsignal-go fork and released in `v0.7.1-cw.4`, with scope
-      matrix rows. `attest/hsmenclave` (`981059a87`) ports `hsm_enclave.rs` and the bridge's
-      `HsmEnclaveClient`: an NK handshake carrying the trusted code hashes, and a reply that must
-      name one of them. It was checked live against a snow NK responder, and its reply errors
-      against upstream's `complete`. `devicetransfer` (`07f8c1ccd`) makes the 4096-bit PKCS#8 RSA
-      key and upstream's self-signed v1 certificate. RSA certificates are byte-identical to
-      upstream's for the same key and second, and BoringSSL reads Go's keys and certificates. Key
-      formats, name length, validity limit and time encodings follow upstream. Remaining: replace
-      the three `_purego.go` stubs in mautrix-signal `pkg/libsignalgo`, tag the fork and bump
-      go.mod.)
+      (2026-09-27 — The last three stubs are implemented in mautrix-signal and released in
+      `v0.2609.0-purego.5`, which go.mod pins: `sgxclient` (`4313c0e`, see 9.3), `hsmenclave`
+      (`3d7acf8`) and `devicetransfer` (`2d4d711`). They sit on libsignal-go `v0.7.1-cw.4`'s
+      `attest/hsmenclave` and `devicetransfer`, with upstream's error codes. The HSM and device
+      transfer tests now run in both builds. The HSM test completes a handshake against a Go
+      Noise responder, including under cgo. `TestDeviceTransferFixture` certifies a key the cgo
+      build made, and its to-be-signed fields match the cgo certificate except for the validity
+      times. Name and `days` handling (NUL cut, UTF-8, u32 wrap, overflow) match the cgo build.
+      `grep -l ErrNotImplemented pkg/libsignalgo/*_purego.go` finds nothing. `stubgen -check`
+      reports 516 matching declarations.)
 
-**Done when:** `grep ErrNotImplemented` in the shim finds nothing, and `devices list` shows
-creation times in a purego build.
+**Done when:** no `*_purego.go` file in the shim returns `ErrNotImplemented`, and `devices list`
+shows creation times in a purego build. (The definition in `notimplemented.go` stays, because
+`stubgen` emits it for new upstream API. The first half is met, as of 2026-09-27. The
+`devices list` half needs the live account and remains pending.)
 
 ### Phase 10 — Hardening and switch-over
 
