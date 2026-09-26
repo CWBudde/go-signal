@@ -144,6 +144,8 @@ check-libsignal:
     #!/usr/bin/env bash
     set -euo pipefail
     git submodule update --init --depth 1 third_party/libsignal
+    # .Dir is empty until the module is in the module cache (e.g. on a fresh CI runner).
+    go mod download go.mau.fi/mautrix-signal
     dir=$(go list -m -f '{{{{.Dir}}' go.mau.fi/mautrix-signal)
     want=$(grep -o 'v[0-9][0-9.]*' "$dir/pkg/libsignalgo/signalversion/version.go")
     lib="git -C third_party/libsignal"
