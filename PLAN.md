@@ -1181,25 +1181,51 @@ and `just check` is green.)
 
 - [ ] Keys and addresses: `PrivateKey`, `PublicKey`, `IdentityKey(Pair)`, `KyberKeyPair`,
       `ServiceID`/`Address`, `GenerateRandomness`
-- [ ] Prekeys and records: `PreKeyRecord`, `SignedPreKeyRecord`, `KyberPreKeyRecord`,
+      (Partial: ported in the mautrix fork's `3027201`, tag `v0.2609.0-purego.3`; `TestDiffKeys`,
+      `TestDiffServiceIDs` and `TestDiffPreKeyRecords` match the cgo build. `GenerateRandomness`
+      still panics with `ErrNotImplemented`, because it sits in `groupsecretparams_purego.go`
+      with zkgroup, see 8.3.)
+- [x] Prekeys and records: `PreKeyRecord`, `SignedPreKeyRecord`, `KyberPreKeyRecord`,
       `PreKeyBundle`, `SessionRecord`, `SenderKeyRecord`. The serialized forms must be
       **byte-identical** to the CGO backend, so that one DB works with either backend.
-- [ ] Store interfaces (`SessionStore`, `IdentityKeyStore`, `PreKeyStore`, `SignedPreKeyStore`,
+      (Fork `3027201`. `TestDiffPreKeyRecords` builds EC pre-key records from the same keys on
+      both backends and gets the same bytes; Kyber, session and sender key records written by
+      either backend load in the other and serialize back to the same bytes. The fork's
+      `TestCrossBackend` checks the same for committed fixtures.)
+- [x] Store interfaces (`SessionStore`, `IdentityKeyStore`, `PreKeyStore`, `SignedPreKeyStore`,
       `KyberPreKeyStore`, `SenderKeyStore`) mapped onto libsignal-go's store interfaces, with no
       callback trampolines
+      (Fork `3027201`, `storeadapters_purego.go`: direct method calls. The fork's session, group
+      and sealed-sender tests go through them in the purego build.)
 - [ ] Session cipher (`Encrypt`, `Decrypt`, `DecryptPreKey`, `ProcessPreKeyBundle`), group cipher
       and SKDM, sealed sender (`SealedSenderEncrypt`, `SealedSenderMultiRecipientEncrypt`,
       `SealedSenderDecryptToUSMC`, `SenderCertificate`), `DecryptionErrorMessage`,
       `PlaintextContent`
+      (Partial: ported in fork `3027201`. libsignal-go interoperates with the cgo build in both
+      directions for all of it (`TestDiffSessions`, `TestDiffGroupCipher`,
+      `TestDiffSealedSender` for v1 and v2, `TestDiffDecryptionErrorMessage`). The fork's
+      `DecryptionErrorMessage`/`PlaintextContent` wrappers have no purego test yet.)
 - [ ] Account entropy pool, `BackupKey`/`BackupID`/`MessageBackupKey`, `AccessKey`, AES-GCM-SIV,
       fingerprints
-- [ ] `InitLogger`/`Version` as thin stubs. `Version` reports the libsignal-go version and our pin.
-- [ ] Differential tests in go-signal (`cgo` build tag): run libsignal-go and the CGO libsignalgo
+      (Partial: ported in fork `3027201`. `TestDiffAccountEntropyPool`, `TestDiffAccessKey`,
+      `TestDiffAES256GCMSIV` and `TestDiffFingerprint` give equal outputs on both backends, and
+      the fork tests the AES-GCM-SIV and fingerprint wrappers in the purego build. The account
+      entropy pool, backup key and `AccessKey` wrappers have no purego test yet.)
+- [x] `InitLogger`/`Version` as thin stubs. `Version` reports the libsignal-go version and our pin.
+      (`InitLogger` does nothing in the fork. `libsignalgo.Version` stays the pin, and go-signal's
+      `version` adds a `libsignal-go:` line from the build info in purego builds:
+      `libsignal: v0.102.2` / `libsignal-go: v0.7.1-cw.3`.)
+- [x] Differential tests in go-signal (`cgo` build tag): run libsignal-go and the CGO libsignalgo
       on the same inputs, and require equal serialized records and mutual decryptability in both
       directions (`internal/signal/purego_diff_test.go`; username hash and HPKE so far)
+      (Keys, records, service IDs, 1:1 sessions, sender keys, sealed sender v1/v2, decryption
+      error messages and the key derivations. Each flow runs with cgo and with libsignal-go as
+      the sender (`purego_diff_parties_test.go`).)
 
 **Done when:** a purego build links a device and does 1:1 send/receive against the live server,
 and a DB created with the CGO build keeps working with the purego build (and the other way round).
+(Open: both need a live account. Record compatibility is covered by the tests above, not yet
+with a real `account.db`.)
 
 ### Phase 8 — zkgroup in pure Go (in the libsignal-go fork)
 
