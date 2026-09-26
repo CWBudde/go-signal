@@ -36,3 +36,6 @@ go.work.sum
 # Static (musl) build: libsignal_ffi.a per arch and the Rust/Go caches of `just build-static`
 /third_party/lib-musl/
 /third_party/.musl/
+
+# Local MCP test setup (points at ./data/)
+/.mcp.json
