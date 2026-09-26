@@ -18,12 +18,13 @@ The [releases](https://github.com/cwbudde/go-signal/releases) have a fully stati
 the man pages, shell completions and a systemd timer (see [Staying linked](#staying-linked)).
 
 ```sh
-version=0.1.0 arch=amd64   # or arm64; os darwin for macOS
-curl -LO https://github.com/cwbudde/go-signal/releases/download/v$version/go-signal_${version}_linux_$arch.tar.gz
+version=0.1.0 os=linux arch=amd64   # arch=arm64 for ARM; os=darwin arch=arm64 for macOS
+name=go-signal_${version}_${os}_${arch}
+curl -LO https://github.com/cwbudde/go-signal/releases/download/v$version/$name.tar.gz
 curl -LO https://github.com/cwbudde/go-signal/releases/download/v$version/SHA256SUMS
-sha256sum --ignore-missing -c SHA256SUMS
-tar xzf go-signal_${version}_linux_$arch.tar.gz
-install -Dm755 go-signal_${version}_linux_$arch/go-signal ~/.local/bin/go-signal
+sha256sum --ignore-missing -c SHA256SUMS   # macOS: shasum -a 256 --ignore-missing -c SHA256SUMS
+tar xzf $name.tar.gz
+mkdir -p ~/.local/bin && cp $name/go-signal ~/.local/bin/
 ```
 
 The archives carry a [build provenance attestation](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations):

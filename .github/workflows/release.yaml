@@ -277,6 +277,12 @@ jobs:
       - name: Update the formula
         if: env.TAP_TOKEN != ''
         run: |
+          # The macOS build may fail without failing the release (continue-on-error); keep the
+          # previous formula then rather than publishing one without macOS.
+          if ! grep -q "_darwin_arm64.tar.gz" dist/SHA256SUMS; then
+            echo "::warning::no macOS archive in this release; the Homebrew formula is not updated"
+            exit 0
+          fi
           mkdir -p tap/Formula
           scripts/render-packaging.sh packaging/homebrew/go-signal.rb.tmpl "$TAG" dist/SHA256SUMS > tap/Formula/go-signal.rb
           cd tap
