@@ -1239,15 +1239,27 @@ is needed for this standalone milestone.)
       and all three system-parameter sets. Live interop checks fresh inputs, mutual
       decryption, wrong UUID/group-key rejection and malformed ciphertexts. Degenerate
       profile keys that map to the identity retain upstream's decryption rejection.)
-- [ ] `credentials` (KVAC), `signature`, `proofs`, `profile_key_credential_request`
+- [x] `credentials` (KVAC), `signature`, `proofs`, `profile_key_credential_request`
+      (Implemented in the sibling fork's `zkgroup/zkcrypto`: all six historical
+      key layouts, profile and receipt blinded issuance/unblinding, signatures,
+      all active request/issuance/presentation proofs, and deserialize-only V1/V2
+      profile presentations. `compat/vectors/zkgroup-credentials.json` records
+      24 complete pinned Rust flows; live tests add 16 fresh random inputs,
+      mutual verification and altered metadata/key/ciphertext rejection.
+      Go retains exact-length parsing; a differential regression test records
+      the pinned Rust decoder's unexpected acceptance of trailing proof bytes.)
 - [ ] `zkcredential`: attributes, credentials, issuance, presentation, endorsements
 
 **Done when:** crypto-layer vectors match byte for byte.
 (Attribute/encryption milestone verified: vectors and two regenerations are byte-identical;
 full fork pure-Go tests/build, race tests, vet, lint and Rust interop pass. Lizard and
 encoding fuzzers completed 245,400 and 743,523 executions, respectively.
-`zkgroup/zkcrypto/CONSTANT_TIME.md` records the source-level review. Credential/proof and
-zkcredential work above remains open; no fork release or dependency bump is needed yet.)
+Legacy credential/proof milestone also verified: all serialized artifacts and final
+SHO states match Rust, two vector regenerations are byte-identical, and full fork
+pure-Go tests/build, race tests, vet, lint and live Rust interop pass. Credential
+encoding fuzzing completed 499,755 executions. `zkgroup/zkcrypto/CONSTANT_TIME.md`
+records the extended source-level review. Generic zkcredential work above remains
+open; no fork release or dependency bump is needed yet.)
 
 #### 8.3 zkgroup API: groups and profiles
 
