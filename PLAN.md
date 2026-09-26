@@ -1179,12 +1179,11 @@ and `just check` is green.)
 
 #### 7.3 Shim: protocol core onto libsignal-go
 
-- [ ] Keys and addresses: `PrivateKey`, `PublicKey`, `IdentityKey(Pair)`, `KyberKeyPair`,
+- [x] Keys and addresses: `PrivateKey`, `PublicKey`, `IdentityKey(Pair)`, `KyberKeyPair`,
       `ServiceID`/`Address`, `GenerateRandomness`
-      (Partial: ported in the mautrix fork's `3027201`, tag `v0.2609.0-purego.3`; `TestDiffKeys`,
+      (Keys and addresses ported in the mautrix fork's `3027201`, tag `v0.2609.0-purego.3`; `TestDiffKeys`,
       `TestDiffServiceIDs` and `TestDiffPreKeyRecords` match the cgo build. `GenerateRandomness`
-      still panics with `ErrNotImplemented`, because it sits in `groupsecretparams_purego.go`
-      with zkgroup, see 8.3.)
+      now uses `crypto/rand` in the local Phase 8.3 shim; that change is not released yet.)
 - [x] Prekeys and records: `PreKeyRecord`, `SignedPreKeyRecord`, `KyberPreKeyRecord`,
       `PreKeyBundle`, `SessionRecord`, `SenderKeyRecord`. The serialized forms must be
       **byte-identical** to the CGO backend, so that one DB works with either backend.
@@ -1305,15 +1304,39 @@ dependency bump is needed until the API/shim integration.)
 
 #### 8.3 zkgroup API: groups and profiles
 
-- [ ] `ServerPublicParams` (deserialize, `VerifySignature`, `NotarySignature`)
-- [ ] `GroupMasterKey` → `GroupSecretParams`/`GroupPublicParams`/`GroupIdentifier`,
+- [x] `ServerPublicParams` (deserialize, `VerifySignature`, `NotarySignature`)
+- [x] `GroupMasterKey` → `GroupSecretParams`/`GroupPublicParams`/`GroupIdentifier`,
       `UUIDCiphertext` and `ProfileKeyCiphertext` encrypt/decrypt
-- [ ] `ProfileKey` (commitment, version, access key), `ProfileKeyCredentialRequestContext`,
+- [x] `ProfileKey` (commitment, version, access key), `ProfileKeyCredentialRequestContext`,
       `ExpiringProfileKeyCredential(Response)`, `ProfileKeyCredentialPresentation`
-- [ ] `AuthCredentialWithPni` (receive response, create presentation)
+- [x] `AuthCredentialWithPni` (receive response, create presentation)
+
+Implemented locally in the sibling `libsignal-go` fork's `zkgroup` package and
+`mautrix-signal`'s `pkg/libsignalgo` purego shim. Includes padded group-attribute blobs,
+cryptographic randomness, exact serialized layouts, and credential time policies.
+Profile presentations V1–V4 parse; new profile/auth presentations are V4 (wire byte 3).
+Server issuance and verification live in `internal/zkgroupserver` for tests only.
+
+Offline evidence: `compat/vectors/zkgroup-api.json` contains 16 complete pinned Rust
+flows; live Rust interop adds 16 randomized flows, mutual verification, altered-input
+rejection, and two byte-identical regenerations. The shim consumes a Rust fixture in
+both builds, and `TestDiffZKGroup` compares fresh group/profile encryption against CGO.
+Full library tests/race tests, build, vet, lint and Rust interop pass; API encoding
+fuzzing completed 353,263 executions. `zkgroup/CONSTANT_TIME.md` records the source review.
+Go-signal's CGO race suite, purego checks/build, pin and formatting checks pass with
+local dependencies. Module tidiness is checked with a temporary modfile because
+`go mod tidy` ignores workspace replacements for unpublished packages.
+
+`scripts/test-zkgroup-integration.sh` uses a test-only overlay to exercise signalmeow's
+group-response decryption/profile-key storage and a mocked WebSocket profile fetch in
+both builds. Failed endorsement caching does not prevent returning group data. The
+WebSocket test exposes an existing shutdown race in signalmeow's `connectLoop` under
+`-race`; it is outside the libsignalgo-only fork boundary and remains unfixed.
 
 **Done when:** a purego build lists groups (Phase 4.2) and fetches profiles against the live
-server.
+server. **Live acceptance remains pending**: no account was accessed. Changes are local
+and unpublished, with no fork commits/tags or dependency pin changes; use the temporary
+workspace instructions in `docs/dev.md`. Endorsement implementation remains Phase 8.4.
 
 #### 8.4 Group send endorsements
 

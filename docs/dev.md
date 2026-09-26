@@ -66,6 +66,47 @@ go mod edit -replace go.mau.fi/mautrix-signal=../mautrix-signal
 
 When the change is done, commit and tag the fork, then set the replace to the new tag.
 
+For the unpublished Phase 8.3 changes, use a temporary workspace instead of editing
+tracked module files. Run from the go-signal directory:
+
+```sh
+repo_dir=$PWD
+work_dir=$(mktemp -d)
+(cd "$work_dir" && go work init "$repo_dir" "$repo_dir/../libsignal-go" "$repo_dir/../mautrix-signal")
+export GOWORK="$work_dir/go.work"
+just build-purego check-purego
+just fmt lint check-libsignal test fmt-check
+CGO_ENABLED=0 scripts/test-zkgroup-integration.sh -tags purego
+CGO_LDFLAGS="-L $repo_dir/third_party/lib" scripts/test-zkgroup-integration.sh
+```
+
+The integration script requires Python 3 to write Go's temporary overlay JSON. It
+injects tests into signalmeow only for that invocation, leaving the fork restricted
+to `pkg/libsignalgo`. It checks encrypted group attributes and member profile keys,
+returning a group despite unsupported endorsements, and profile URL/access-key
+construction and decryption over a localhost WebSocket. It never contacts Signal.
+The WebSocket test currently detects an upstream shutdown race under `-race` in
+`web/signalwebsocket.go` (`incomingRequestChan` is cleared while the handler goroutine
+reads it); the ordinary CGO/purego integration runs and go-signal's race suite pass.
+
+`go mod tidy` resolves a single module and cannot find the unpublished `zkgroup`
+package through this workspace. Check tidiness using temporary local replacements:
+
+```sh
+cp go.mod "$work_dir/local.mod"
+cp go.sum "$work_dir/local.sum"
+GOWORK=off go mod edit -modfile="$work_dir/local.mod" \
+  -replace="github.com/cwbudde/libsignal-go=$repo_dir/../libsignal-go" \
+  -replace="go.mau.fi/mautrix-signal=$repo_dir/../mautrix-signal"
+GOWORK=off go mod tidy -modfile="$work_dir/local.mod"
+GOWORK=off go mod tidy -diff -modfile="$work_dir/local.mod"
+```
+
+The temporary sum file drops the checksums for the two locally replaced modules;
+tracked `go.mod` and `go.sum` stay unchanged. Keep this setup local until the two
+forks are released and their pins can move together. Live group-list/profile-fetch
+acceptance remains pending; the offline tests do not substitute for that check.
+
 ### Upgrading signalmeow and libsignal
 
 The submodule must sit at exactly the tag that `libsignalgo` was generated against
