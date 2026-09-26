@@ -15,16 +15,18 @@ Legend: `[x]` done · `[ ]` open
 
 ## 1. Decisions
 
-| Date       | Decision                                                                                                                                                      |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-09-25 | Crypto and protocol come from `go.mau.fi/mautrix-signal/pkg/signalmeow` + `libsignalgo` (CGO → `libsignal_ffi.a`). See §1.1.                                  |
-| 2026-09-25 | License: **AGPL-3.0** (required by signalmeow).                                                                                                               |
-| 2026-09-25 | **No strict drop-in compatibility.** Idiomatic CLI (noun-verb subcommands, kebab-case), with our own documented JSON output.                                  |
-| 2026-09-25 | Priority: **plain CLI send/receive** first. The daemon/JSON-RPC is deferred.                                                                                  |
-| 2026-09-25 | **Linked device only.** Primary registration (`register`/`verify`) is deferred indefinitely.                                                                  |
-| 2026-09-25 | Pinned `go.mau.fi/mautrix-signal v0.2609.0`, which expects **libsignal `v0.102.2`**; `third_party/libsignal` is pinned to that tag.                           |
-| 2026-09-25 | **MCP server** (`go-signal mcp serve`) in the same binary, after contacts/groups and before release. See Phase 5.                                             |
-| 2026-09-25 | Later stage: **pure-Go backend** from a fork of `GoCodeAlone/libsignal-go` plus zkgroup/attestation/HPKE ports, behind a `purego` build tag. See Phases 7–10. |
+| Date       | Decision                                                                                                                                                                 |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 2026-09-25 | Crypto and protocol come from `go.mau.fi/mautrix-signal/pkg/signalmeow` + `libsignalgo` (CGO → `libsignal_ffi.a`). See §1.1.                                             |
+| 2026-09-25 | License: **AGPL-3.0** (required by signalmeow).                                                                                                                          |
+| 2026-09-25 | **No strict drop-in compatibility.** Idiomatic CLI (noun-verb subcommands, kebab-case), with our own documented JSON output.                                             |
+| 2026-09-25 | Priority: **plain CLI send/receive** first. The daemon/JSON-RPC is deferred.                                                                                             |
+| 2026-09-25 | **Linked device only.** Primary registration (`register`/`verify`) is deferred indefinitely.                                                                             |
+| 2026-09-25 | Pinned `go.mau.fi/mautrix-signal v0.2609.0`, which expects **libsignal `v0.102.2`**; `third_party/libsignal` is pinned to that tag.                                      |
+| 2026-09-25 | **MCP server** (`go-signal mcp serve`) in the same binary, after contacts/groups and before release. See Phase 5.                                                        |
+| 2026-09-25 | Later stage: **pure-Go backend** from a fork of `GoCodeAlone/libsignal-go` plus zkgroup/attestation/HPKE ports, behind a `purego` build tag. See Phases 7–10.            |
+| 2026-09-26 | **Blocking** goes out as a complete `SyncMessage.Blocked` to our own devices; the phone applies it and writes the storage service. No storage-service writes of our own. |
+| 2026-09-26 | **Identity trust is TOFU**: a changed key blocks sending to that user until `identities trust`; receiving keeps working.                                                 |
 
 ### 1.1 Why signalmeow
 
