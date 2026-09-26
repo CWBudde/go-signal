@@ -43,8 +43,8 @@ How it fits together:
   `vX.YYMM.Z-purego.N`). The fork changes only `pkg/libsignalgo`: every cgo file builds with
   `!purego`, and `x_purego.go` twins implement the same API on top of
   [`cwbudde/libsignal-go`](https://github.com/cwbudde/libsignal-go). The fork's `PUREGO.md` and
-  `internal/stubgen` (stub generator and API parity check) describe the details. The cgo build
-  compiles the same code as upstream, so it is unchanged by the replace.
+  `internal/stubgen` (stub generator and API parity check) describe the details. The cgo build uses upstream libsignal. The local 8.4 change also corrects
+  the CGO endorsement wrapper to use the combined result supplied by Rust.
 - `cwbudde/libsignal-go` is a fork of `GoCodeAlone/libsignal-go` whose Rust compat harness is
   pinned to the libsignal tag libsignalgo expects (its `decisions/0007-cwbudde-fork-policy.md`).
   Fork releases are tagged `vX.Y.Z-cw.N`.
@@ -66,7 +66,7 @@ go mod edit -replace go.mau.fi/mautrix-signal=../mautrix-signal
 
 When the change is done, commit and tag the fork, then set the replace to the new tag.
 
-For the unpublished Phase 8.3 changes, use a temporary workspace instead of editing
+For the unpublished Phase 8.3–8.4 changes, use a temporary workspace instead of editing
 tracked module files. Run from the go-signal directory:
 
 ```sh
@@ -83,8 +83,14 @@ CGO_LDFLAGS="-L $repo_dir/third_party/lib" scripts/test-zkgroup-integration.sh
 The integration script requires Python 3 to write Go's temporary overlay JSON. It
 injects tests into signalmeow only for that invocation, leaving the fork restricted
 to `pkg/libsignalgo`. It checks encrypted group attributes and member profile keys,
-returning a group despite unsupported endorsements, and profile URL/access-key
-construction and decryption over a localhost WebSocket. It never contacts Signal.
+returning a group despite invalid endorsements, and profile URL/access-key
+construction and decryption over a localhost WebSocket. It also verifies endorsement
+cache insertion and expiry, sends an encrypted group text through the actual
+multi-recipient sender, authenticates the exact recipient set in `Group-Send-Token`,
+and decrypts the message at both recipients. Unexpected per-recipient fallback
+requests fail the test; an empty local-device sync is allowed. Test stores provide
+pre-existing session metadata and an already-distributed sender key. The shim
+fixture supplies test server parameters; no account or Signal server is accessed.
 The WebSocket test currently detects an upstream shutdown race under `-race` in
 `web/signalwebsocket.go` (`incomingRequestChan` is cleared while the handler goroutine
 reads it); the ordinary CGO/purego integration runs and go-signal's race suite pass.
@@ -104,7 +110,7 @@ GOWORK=off go mod tidy -diff -modfile="$work_dir/local.mod"
 
 The temporary sum file drops the checksums for the two locally replaced modules;
 tracked `go.mod` and `go.sum` stay unchanged. Keep this setup local until the two
-forks are released and their pins can move together. Live group-list/profile-fetch
+forks are released and their pins can move together. Live group-list/profile-fetch/group-send
 acceptance remains pending; the offline tests do not substitute for that check.
 
 ### Upgrading signalmeow and libsignal

@@ -1336,16 +1336,40 @@ WebSocket test exposes an existing shutdown race in signalmeow's `connectLoop` u
 **Done when:** a purego build lists groups (Phase 4.2) and fetches profiles against the live
 server. **Live acceptance remains pending**: no account was accessed. Changes are local
 and unpublished, with no fork commits/tags or dependency pin changes; use the temporary
-workspace instructions in `docs/dev.md`. Endorsement implementation remains Phase 8.4.
+workspace instructions in `docs/dev.md`. Endorsements are implemented locally in Phase 8.4.
 
 #### 8.4 Group send endorsements
 
-- [ ] `GroupSendEndorsementsResponse` (receive/verify), `GroupSendEndorsement` (combine, remove),
+- [x] `GroupSendEndorsementsResponse` (receive/verify), `GroupSendEndorsement` (combine, remove),
       `GroupSendFullToken`, expiry handling
-- [ ] Shim wiring for multi-recipient sealed-sender group sends
+- [x] Shim wiring for multi-recipient sealed-sender group sends
+
+Implemented locally in the sibling forks, with canonical bounded codecs, batch-proof
+verification, protocol ordering by doubled ciphertext points, combine/remove and
+bearer-token conversion. Receipt requires a day-aligned expiry between two hours
+and seven days away, inclusive. The shim excludes the local user from the combined
+endorsement while retaining every individual member in its map. The CGO wrapper
+now uses Rust's appended combined result directly, fixing its previous duplication
+of endorsements.
+
+`compat/vectors/group-send.json` contains 16 pinned Rust flows, including mixed
+ACI/PNI identities and single-member groups. Interop adds 16 randomized flows,
+mutual verification, recipient/key/tampering rejection, exact expiry boundaries
+and two byte-identical regenerations. Parser fuzzing completed 2,258,150 executions.
+The shared shim tests run against both backends with fresh expiry timestamps.
+The timing/secret-handling review is in `zkgroup/CONSTANT_TIME.md`.
+
+`scripts/test-zkgroup-integration.sh` verifies cache insertion/expiry and exercises
+signalmeow's actual multi-recipient sender over localhost in both builds. It checks
+the exact `Group-Send-Token` recipients and expiry, decrypts the text at both
+recipients, and rejects per-recipient fallback requests. Session metadata and an
+already-distributed sender key are supplied by test stores. The known upstream
+WebSocket shutdown race documented in 8.3 remains outside the fork boundary.
 
 **Done when:** a purego build sends to a group using endorsements (no fallback to per-recipient
-sends).
+sends). **Offline acceptance passes; live-server acceptance remains pending.** No
+account was accessed and no fork release or dependency pin was changed; use the
+local workspace instructions in `docs/dev.md`.
 
 ### Phase 9 — Enclaves, HPKE and the version delta
 
