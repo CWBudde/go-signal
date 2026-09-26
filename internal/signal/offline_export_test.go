@@ -4,8 +4,10 @@ package signal
 
 import (
 	"context"
+	"time"
 
 	"go.mau.fi/mautrix-signal/pkg/signalmeow/events"
+	"go.mau.fi/mautrix-signal/pkg/signalmeow/protobuf/signalpb"
 )
 
 // ConnectOffline sets client (from Open) up as Connect does for the selected account, without
@@ -23,6 +25,29 @@ func ConnectOffline(ctx context.Context, client Client, opts ...ConnectOption) {
 	meow.ownACI = device.ACI.String()
 	meow.account = acc
 	meow.sendOnly = NewConnectOptions(opts...).SendOnly
+
+	// What Connect's supervisor leaves for Close; without a signalmeow client, Close skips the
+	// ack flush and the loop shutdown.
+	supervised := make(chan struct{})
+	close(supervised)
+
+	meow.cancelLoops = func() {}
+	meow.stopSupervisor = func() {}
+	meow.supervised = supervised
+}
+
+// LoseConnection records a logout of client (see ConnectOffline), as the handler does in
+// send-only mode.
+func LoseConnection(client Client) {
+	client.(*meowClient).noteConnection(&Connection{State: StateLoggedOut}) //nolint:forcetypeassert // test helper
+}
+
+// AddUpload registers an uploaded attachment on client (from Open) as Upload does, without the
+// CDN.
+func AddUpload(client Client, att OutgoingAttachment) UploadedAttachment {
+	meow := client.(*meowClient) //nolint:forcetypeassert // test helper
+
+	return meow.addUpload(pointerMetadata(&signalpb.AttachmentPointer{}, att, time.Now()))
 }
 
 // Handle runs signalmeow's event handler of client (from Open) on raw.
