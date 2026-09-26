@@ -20,14 +20,16 @@ import (
 	"github.com/spf13/viper"
 )
 
-func newMCPCmd(clients *clientOpener, loc *time.Location, appOpts []app.Option) *cobra.Command {
+func newMCPCmd(
+	clients *clientOpener, printers *printerFactory, loc *time.Location, appOpts []app.Option,
+) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mcp",
 		Short: "Model Context Protocol (MCP) server for AI agents",
 		Args:  cobra.NoArgs,
 	}
 
-	cmd.AddCommand(newMCPServeCmd(clients, loc, appOpts))
+	cmd.AddCommand(newMCPServeCmd(clients, loc, appOpts), newMCPDoctorCmd(clients, printers))
 
 	return cmd
 }
@@ -65,7 +67,10 @@ With --listen, the server serves MCP's streamable HTTP transport at http://<addr
 stdin/stdout, for clients that can't start a process; it runs until SIGINT/SIGTERM. The address
 must be on the loopback interface (plain HTTP), and every request must carry a bearer token
 ("Authorization: Bearer <token>") of at least 16 characters, read from --token-file or from
-GOSIGNAL_MCP_TOKEN (or mcp.token in the config file). See docs/mcp.md.`
+GOSIGNAL_MCP_TOKEN (or mcp.token in the config file). See docs/mcp.md.
+
+When the server doesn't start or the client can't use it, run the same command line with
+"mcp doctor" instead of "mcp serve".`
 
 // Defaults of the inbox's retention.
 const (
@@ -105,10 +110,14 @@ func newMCPServeCmd(clients *clientOpener, loc *time.Location, appOpts []app.Opt
 				return errInboxLimits
 			}
 
+			bindMCPFlags(clients.cfg, cmd)
+
 			policy, err := loadPolicy(clients.cfg)
 			if err != nil {
 				return err
 			}
+
+			logPolicy(policy)
 
 			listen, err := loadListen(clients.cfg)
 			if err != nil {
@@ -127,32 +136,32 @@ func newMCPServeCmd(clients *clientOpener, loc *time.Location, appOpts []app.Opt
 		"delete inbox entries received longer ago than this (0: keep)")
 	cmd.Flags().IntVar(&maxCount, "inbox-max-count", defaultInboxMaxCount,
 		"keep at most this many inbox entries (0: no limit)")
-	cmd.Flags().StringVar(&dlDir, "download-dir", "",
-		"directory for attachments that attachment_get downloads (default: attachments in the account's directory)")
-	addPolicyFlags(cmd, clients.cfg)
-
-	cmd.Flags().String("listen", "",
-		"serve streamable HTTP on this loopback address (e.g. 127.0.0.1:8765) instead of stdin/stdout")
-	cmd.Flags().String("token-file", "", "file with the bearer token that --listen requires")
-
-	for _, key := range []string{cfgListen, cfgTokenFile} {
-		cobra.CheckErr(clients.cfg.BindPFlag(key, cmd.Flags().Lookup(strings.TrimPrefix(key, "mcp."))))
-	}
+	addMCPFlags(cmd, &dlDir)
 
 	return cmd
 }
 
-// addPolicyFlags adds the flags of the safety settings and binds them to their config keys.
-func addPolicyFlags(cmd *cobra.Command, cfg *viper.Viper) {
+// addMCPFlags adds the flags that `mcp serve` and `mcp doctor` share: the safety settings,
+// --listen with its token, and --download-dir (into dlDir).
+func addMCPFlags(cmd *cobra.Command, dlDir *string) {
 	flags := cmd.Flags()
+	flags.StringVar(dlDir, "download-dir", "",
+		"directory for attachments that attachment_get downloads (default: attachments in the account's directory)")
 	flags.Bool("read-only", false, "leave out the tools that send (send_message, react, delete_message, mark_read)")
 	flags.StringSlice("allow-recipient", nil,
 		"user or group:<id> the tools may send to (repeatable; '*' allows everyone; default: nobody)")
 	flags.String("attach-dir", "", "the only directory send_message takes attachments from (default: none)")
 	flags.Bool("confirm", false, "have the user confirm every message through the client (MCP elicitation)")
+	flags.String("listen", "",
+		"serve streamable HTTP on this loopback address (e.g. 127.0.0.1:8765) instead of stdin/stdout")
+	flags.String("token-file", "", "file with the bearer token that --listen requires")
+}
 
-	for _, key := range []string{cfgReadOnly, cfgAllowRecipient, cfgAttachDir, cfgConfirm} {
-		cobra.CheckErr(cfg.BindPFlag(key, flags.Lookup(strings.TrimPrefix(key, "mcp."))))
+// bindMCPFlags binds the config keys of addMCPFlags to cmd's flags. Viper keeps one flag per
+// key, and `mcp serve` and `mcp doctor` have the same flags, so each binds its own when it runs.
+func bindMCPFlags(cfg *viper.Viper, cmd *cobra.Command) {
+	for _, key := range []string{cfgReadOnly, cfgAllowRecipient, cfgAttachDir, cfgConfirm, cfgListen, cfgTokenFile} {
+		cobra.CheckErr(cfg.BindPFlag(key, cmd.Flags().Lookup(strings.TrimPrefix(key, "mcp."))))
 	}
 }
 
@@ -202,15 +211,18 @@ func loadPolicy(cfg *viper.Viper) (policy, error) {
 		}
 	}
 
+	return out, nil
+}
+
+// logPolicy points out safety settings that may not be intended.
+func logPolicy(p policy) {
 	switch {
-	case out.readOnly:
-	case out.allow.All():
+	case p.readOnly:
+	case p.allow.All():
 		slog.Warn("--allow-recipient '*': the MCP client may send to anyone")
-	case out.allow.Empty():
+	case p.allow.Empty():
 		slog.Info("no --allow-recipient: send_message, react and delete_message reject every recipient")
 	}
-
-	return out, nil
 }
 
 // Errors of --listen.

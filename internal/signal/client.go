@@ -21,6 +21,11 @@ type Client interface { //nolint:interfacebloat // the one facade over signalmeo
 	// UnlinkedAt set).
 	Account(ctx context.Context) (Account, error)
 
+	// CheckLock reports whether the selected account could be connected as far as the account
+	// lock goes, without taking it: it fails with ErrAccountInUse while another process holds
+	// the lock (e.g. a running `mcp serve`). A client that holds the lock itself passes.
+	CheckLock(ctx context.Context) error
+
 	// Connect starts receiving for the selected account. Events are delivered on Events until
 	// Close. Connection changes arrive there as *Connection events; the client reconnects on its
 	// own and reports StateFailed once it gives up. The connection outlives ctx (it only bounds

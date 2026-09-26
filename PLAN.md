@@ -112,6 +112,7 @@ go-signal devices list
 go-signal identities list [<recipient>] | show <recipient> | trust <recipient> [--safety-number <n>]
 go-signal account show | sync [--timeout 60s] | unlink   # unlink = remove local data
 go-signal mcp serve [--read-only] [--allow-recipient <r>]...   # MCP server on stdio
+go-signal mcp doctor [<mcp serve flags>] [--offline]   # check the MCP setup; exit 0/1/3
 go-signal version
 ```
 
@@ -997,6 +998,24 @@ Notes: the HTTP transport is still one process holding the account, not the daem
 all sessions share one `mcp.Server`, so they share the inbox, the allowlist and pending
 confirmations. `TestServeHTTP*` (`internal/mcp`) and `TestMCPServeHTTP`/`TestMCPServeListenErrors`
 (`cmd`) cover it.
+
+#### 5.7 Health checks
+
+- [x] `go-signal mcp doctor`: takes the flags of `mcp serve` (shared via `addMCPFlags`, bound to
+      the config keys when the command runs, since viper keeps one flag per key) and checks the
+      settings, `--listen`, the account, the account lock (`Client.CheckLock`, a non-blocking
+      flock probe; held is only a warning), the device on Signal's server (`Devices`; skip with
+      `--offline`), the inbox and the download dir; exit 0/1/3 (`app.DoctorError`)
+- [x] MCP tool `doctor` (also in `--read-only`): the same account checks (`app.Doctor`, the server
+      only with `checkServer`), plus version, uptime, and the connection state that `app.Inbox`
+      now records from `*Connection` events (`Inbox.Connection`)
+- [x] `docs/mcp.md` (tool reference, troubleshooting starts with `mcp doctor`), `docs/json.md`
+      (`mcp doctor`)
+
+**Done when:** a user whose server doesn't start, or whose agent sees no messages, gets told why by
+`mcp doctor` or the `doctor` tool. (Done with the fake: `TestDoctor*` in `internal/app` and
+`internal/mcp`, `TestMCPDoctor*` in `cmd`, `TestProbe` in `internal/store`; not yet tried against a
+linked account.)
 
 ### Phase 6 — Packaging and release
 

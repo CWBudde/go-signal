@@ -204,6 +204,46 @@ func TestLockIsExclusive(t *testing.T) {
 	_ = lock.Unlock()
 }
 
+func TestProbe(t *testing.T) {
+	t.Parallel()
+
+	dir := openDir(t, io.Discard)
+
+	// No account dir and no lock file yet.
+	err := dir.Probe(testACI)
+	if err != nil {
+		t.Fatalf("probe without lock file: %v", err)
+	}
+
+	lock, err := dir.Lock(testACI)
+	if err != nil {
+		t.Fatalf("lock: %v", err)
+	}
+
+	err = dir.Probe(testACI)
+	if !errors.Is(err, store.ErrAccountInUse) || !strings.Contains(err.Error(), "pid ") {
+		t.Fatalf("probe while locked: got %v, want ErrAccountInUse naming the holder", err)
+	}
+
+	err = lock.Unlock()
+	if err != nil {
+		t.Fatalf("unlock: %v", err)
+	}
+
+	err = dir.Probe(testACI)
+	if err != nil {
+		t.Fatalf("probe after unlock: %v", err)
+	}
+
+	// The probe doesn't keep the lock.
+	lock, err = dir.Lock(testACI)
+	if err != nil {
+		t.Fatalf("lock after probe: %v", err)
+	}
+
+	_ = lock.Unlock()
+}
+
 func TestRemoveAccount(t *testing.T) {
 	t.Parallel()
 

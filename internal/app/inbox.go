@@ -54,6 +54,26 @@ type Inbox struct {
 
 	mu      sync.Mutex
 	changed chan struct{} // closed and replaced whenever Run stored an entry
+	conn    ConnectionStatus
+}
+
+// ConnectionStatus is what Run has seen of the connection.
+type ConnectionStatus struct {
+	// State is the state of the last *signal.Connection event, zero before the first one; Since
+	// is when it arrived, and Err its error.
+	State signal.ConnectionState
+	Since time.Time
+	Err   error
+	// LastEvent is when Run last took an event, of any type; zero if it took none.
+	LastEvent time.Time
+}
+
+// Connection returns what Run has seen of the connection so far.
+func (i *Inbox) Connection() ConnectionStatus {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+
+	return i.conn
 }
 
 // Inbox returns an inbox on the App's client.
@@ -79,6 +99,8 @@ func (i *Inbox) Run(ctx context.Context, events <-chan signal.Event) error {
 			if !ok {
 				return nil
 			}
+
+			i.observe(evt)
 
 			err := LostConnection(evt)
 			if err != nil {
@@ -569,5 +591,19 @@ func envelopeOf(evt signal.Event) (signal.Envelope, bool) {
 		return evt.Envelope, true
 	default:
 		return signal.Envelope{}, false
+	}
+}
+
+// observe records evt in the connection status.
+func (i *Inbox) observe(evt signal.Event) {
+	now := i.app.now()
+
+	i.mu.Lock()
+	defer i.mu.Unlock()
+
+	i.conn.LastEvent = now
+
+	if conn, ok := evt.(*signal.Connection); ok {
+		i.conn.State, i.conn.Since, i.conn.Err = conn.State, now, conn.Err
 	}
 }

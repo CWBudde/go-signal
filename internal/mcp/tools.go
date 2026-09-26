@@ -55,6 +55,10 @@ type tools struct {
 	// confirmer asks the user to confirm write tools' calls; nil doesn't ask.
 	confirmer *confirmer
 	logger    *slog.Logger
+	// version, started and readOnly are what the doctor tool reports.
+	version  string
+	started  time.Time
+	readOnly bool
 }
 
 // readOnly are the annotations of tools that only read our own account's data.

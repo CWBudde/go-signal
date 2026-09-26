@@ -548,6 +548,47 @@ The **identity** object as in `identities list`, plus:
 
 The **identity** object (as in `identities list`) after trusting it.
 
+## `mcp doctor`
+
+```json
+{
+  "version": 1,
+  "doctor": {
+    "healthy": false,
+    "checks": [
+      {
+        "name": "policy",
+        "status": "ok",
+        "detail": "read-only: no tool sends"
+      },
+      { "name": "transport", "status": "ok", "detail": "stdin/stdout" },
+      {
+        "name": "account",
+        "status": "fail",
+        "detail": "+15550100: this device was unlinked (noticed 2026-09-21 08:00:00 UTC)",
+        "hint": "link again with `go-signal link`; `go-signal account unlink` deletes the old data"
+      }
+    ]
+  }
+}
+```
+
+The MCP `doctor` tool returns the same object (without `version`).
+
+| Field     | Type    | Description                                     |
+| --------- | ------- | ----------------------------------------------- |
+| `healthy` | boolean | `false` if any check has the status `fail`      |
+| `checks`  | array   | The checks in the order they ran; each a check: |
+
+| Field    | Type   | Description                                                                          |
+| -------- | ------ | ------------------------------------------------------------------------------------ |
+| `name`   | string | What was checked, e.g. `account`, `lock`, `server`, `inbox`, `connection` (MCP only) |
+| `status` | string | `ok`, `warn` (may be intended, e.g. the account in use) or `fail`                    |
+| `detail` | string | What was found, for people; not meant to be parsed                                   |
+| `hint`   | string | What to do about it; _optional_                                                      |
+
+When there is no usable account, the checks that need one are left out.
+
 ## `receive`
 
 `receive` writes one document per event and line ([NDJSON](https://github.com/ndjson/ndjson-spec))

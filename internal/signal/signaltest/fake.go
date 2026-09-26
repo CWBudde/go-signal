@@ -322,6 +322,22 @@ func (c *client) Account(context.Context) (signal.Account, error) {
 	return c.fake.account(c.opts)
 }
 
+func (c *client) CheckLock(context.Context) error {
+	c.fake.mu.Lock()
+	defer c.fake.mu.Unlock()
+
+	if c.connected != "" && !c.closed {
+		return nil
+	}
+
+	acc, err := c.fake.account(c.opts)
+	if err != nil {
+		return err
+	}
+
+	return c.fake.checkInUse(acc.ACI)
+}
+
 func (c *client) Connect(_ context.Context, opts ...signal.ConnectOption) error {
 	c.fake.mu.Lock()
 	defer c.fake.mu.Unlock()

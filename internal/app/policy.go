@@ -70,6 +70,16 @@ func (l *Allowlist) Empty() bool {
 	return !l.all && len(l.entries) == 0
 }
 
+// Len returns the number of entries besides AllowAll.
+func (l *Allowlist) Len() int {
+	return len(l.entries)
+}
+
+// Allowlist returns the list set with WithAllowlist; nil means that sending isn't restricted.
+func (a *App) Allowlist() *Allowlist {
+	return a.allow
+}
+
 // WithAllowlist restricts Send, React and Delete to the chats that list allows; they fail with
 // ErrRecipientNotAllowed before anything is uploaded or sent. Without it, they aren't restricted.
 func WithAllowlist(list *Allowlist) Option {

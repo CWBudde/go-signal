@@ -171,6 +171,24 @@ func (c *meowClient) Account(ctx context.Context) (Account, error) {
 	return acc, nil
 }
 
+func (c *meowClient) CheckLock(context.Context) error {
+	if c.lock != nil {
+		return nil
+	}
+
+	acc, err := c.selectAccount()
+	if err != nil {
+		return err
+	}
+
+	err = c.dir.Probe(acc.ACI)
+	if err != nil {
+		return fmt.Errorf("%w: %s", err, acc.Number)
+	}
+
+	return nil
+}
+
 func (c *meowClient) Connect(ctx context.Context, opts ...ConnectOption) error {
 	if c.cancelLoops != nil {
 		return ErrAlreadyConnected

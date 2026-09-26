@@ -181,6 +181,12 @@ title).
 | `groups_list`     | —                     | `{"groups": [...]}` with members ([`groups list`](json.md#groups-list))   |
 | `groups_show`     | `group` (ID or title) | One group ([`groups show`](json.md#groups-show))                          |
 | `identities_list` | `recipient`           | `{"identities": [...]}` ([`identities list`](json.md#identities-list))    |
+| `doctor`          | `checkServer`         | The server's health ([`mcp doctor`](json.md#mcp-doctor))                  |
+
+`doctor` is there in `--read-only` mode, too. Besides the checks of `mcp doctor` (below), it
+reports the server's version and uptime and the connection: `ok` while connected, `warn` while it
+reconnects after a drop, with the time of the last event received. It asks Signal's server whether
+this device is still linked only with `checkServer: true`.
 
 ### Inbox
 
@@ -370,6 +376,30 @@ This is not a general daemon: it still holds the account, so the CLI can't use i
 server runs.
 
 ## Troubleshooting
+
+Start with `go-signal mcp doctor`, followed by the flags of your `mcp serve` command line (it
+takes the same flags and reads the same config):
+
+```sh
+go-signal mcp doctor --allow-recipient +4915112345678 --attach-dir ~/signal-out
+```
+
+```text
+ok    policy        sends to 1 allowed recipient; attachments from /home/me/signal-out
+ok    transport     stdin/stdout
+ok    account       +4915112345678 (ACI 11111111-1111-1111-1111-111111111111, device 2)
+warn  lock          account in use by another go-signal process (pid 4242): +4915112345678
+                    hint: fine if this is your running MCP server; a second `mcp serve` (or `receive`) for this account fails until it stops
+ok    server        reachable; device 2 is linked (3 devices)
+ok    inbox         120 entries in 7 chats, 3 unread
+ok    download dir  /home/me/.local/share/go-signal/11111111-1111-1111-1111-111111111111/attachments
+```
+
+It checks the settings, that the account is linked, whether another process holds it, that
+Signal's server still lists this device (skip with `--offline`), the inbox and the download
+directory. It exits with 0 when no check failed (warnings are fine), 3 when this device was
+unlinked, and 1 otherwise; `-o json` prints the [report](json.md#mcp-doctor). While the server
+runs, the agent can call the `doctor` tool instead.
 
 - **"account in use"**: another go-signal process holds the account, e.g. a second client with
   the same server, or `receive --follow`. Stop it or use another linked device.

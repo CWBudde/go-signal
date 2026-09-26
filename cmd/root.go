@@ -198,7 +198,7 @@ messages, manage contacts and groups, and serve your account to AI assistants ov
 		newGroupsCmd(clients, printers),
 		newIdentitiesCmd(clients, printers),
 		newLinkCmd(clients),
-		newMCPCmd(clients, rootOpts.loc, rootOpts.appOpts),
+		newMCPCmd(clients, printers, rootOpts.loc, rootOpts.appOpts),
 		newReactCmd(clients, printers, rootOpts.appOpts),
 		newReceiveCmd(clients, printers),
 		newSendCmd(clients, printers, rootOpts.appOpts),

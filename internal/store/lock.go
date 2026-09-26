@@ -53,6 +53,35 @@ func (d *Dir) Lock(aci string) (*Lock, error) {
 	return &Lock{file: file}, nil
 }
 
+// Probe reports whether the lock of the account with the given ACI is free, without keeping it:
+// it fails with ErrAccountInUse if another process (or a Lock in this process) holds it. An
+// account without a lock file is free.
+func (d *Dir) Probe(aci string) error {
+	path := filepath.Join(d.AccountDir(aci), lockFile)
+
+	file, err := os.OpenFile(path, os.O_RDWR, 0)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+
+	if err != nil {
+		return fmt.Errorf("open lock file: %w", err)
+	}
+	// Closing releases the lock, if we got it.
+	defer func() { _ = file.Close() }()
+
+	err = tryLock(file)
+	if errors.Is(err, errWouldBlock) {
+		return fmt.Errorf("%w%s", ErrAccountInUse, holder(path))
+	}
+
+	if err != nil {
+		return fmt.Errorf("lock %s: %w", path, err)
+	}
+
+	return nil
+}
+
 // Unlock releases the lock. The lock file stays so that the next Lock doesn't race a removal.
 func (l *Lock) Unlock() error {
 	err := l.file.Close()

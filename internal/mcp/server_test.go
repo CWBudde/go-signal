@@ -146,7 +146,7 @@ func TestListTools(t *testing.T) {
 	t.Parallel()
 
 	readTools := []string{
-		accountShowTool, "attachment_get", "contacts_list", "contacts_show", "groups_list", "groups_show",
+		accountShowTool, "attachment_get", "contacts_list", "contacts_show", "doctor", "groups_list", "groups_show",
 		"identities_list", "messages_list", "messages_wait",
 	}
 	allTools := slices.Sorted(slices.Values(append(slices.Clone(readTools),
