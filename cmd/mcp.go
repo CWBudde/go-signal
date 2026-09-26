@@ -132,10 +132,6 @@ func newMCPServeCmd(clients *clientOpener, loc *time.Location, appOpts []app.Opt
 
 			logPolicy(policy)
 
-			for _, key := range []string{cfgOnMessage, cfgHookFrom, cfgHookTimeout} {
-				cobra.CheckErr(clients.cfg.BindPFlag(key, cmd.Flags().Lookup(strings.TrimPrefix(key, "mcp."))))
-			}
-
 			hook, err := loadHook(clients.cfg, policy)
 			if err != nil {
 				return err
@@ -160,13 +156,15 @@ func newMCPServeCmd(clients *clientOpener, loc *time.Location, appOpts []app.Opt
 	cmd.Flags().IntVar(&maxCount, "inbox-max-count", defaultInboxMaxCount,
 		"keep at most this many inbox entries (0: no limit)")
 	addMCPFlags(cmd, &dlDir)
-	addHookFlags(cmd)
 
 	return cmd
 }
 
-// addHookFlags adds the flags of --on-message to `mcp serve`.
-func addHookFlags(cmd *cobra.Command) {
+// addMCPFlags adds the flags that `mcp serve` and `mcp doctor` share: the safety settings,
+// --listen with its token, the hook, and --download-dir (into dlDir).
+func addMCPFlags(cmd *cobra.Command, dlDir *string) {
+	addServerFlags(cmd, dlDir)
+
 	flags := cmd.Flags()
 	flags.String("on-message", "", "program to run for every incoming message of the --hook-from chats (absolute path)")
 	flags.StringSlice("hook-from", nil,
@@ -174,9 +172,9 @@ func addHookFlags(cmd *cobra.Command) {
 	flags.Duration("on-message-timeout", defaultHookTimeout, "kill an --on-message run after this long (0: no limit)")
 }
 
-// addMCPFlags adds the flags that `mcp serve` and `mcp doctor` share: the safety settings,
-// --listen with its token, and --download-dir (into dlDir).
-func addMCPFlags(cmd *cobra.Command, dlDir *string) {
+// addServerFlags adds the safety settings, --listen with its token, and --download-dir (into
+// dlDir).
+func addServerFlags(cmd *cobra.Command, dlDir *string) {
 	flags := cmd.Flags()
 	flags.StringVar(dlDir, "download-dir", "",
 		"directory for attachments that attachment_get downloads (default: attachments in the account's directory)")
@@ -193,7 +191,10 @@ func addMCPFlags(cmd *cobra.Command, dlDir *string) {
 // bindMCPFlags binds the config keys of addMCPFlags to cmd's flags. Viper keeps one flag per
 // key, and `mcp serve` and `mcp doctor` have the same flags, so each binds its own when it runs.
 func bindMCPFlags(cfg *viper.Viper, cmd *cobra.Command) {
-	for _, key := range []string{cfgReadOnly, cfgAllowRecipient, cfgAttachDir, cfgConfirm, cfgListen, cfgTokenFile} {
+	for _, key := range []string{
+		cfgReadOnly, cfgAllowRecipient, cfgAttachDir, cfgConfirm, cfgListen, cfgTokenFile,
+		cfgOnMessage, cfgHookFrom, cfgHookTimeout,
+	} {
 		cobra.CheckErr(cfg.BindPFlag(key, cmd.Flags().Lookup(strings.TrimPrefix(key, "mcp."))))
 	}
 }
@@ -316,7 +317,11 @@ func loadHook(cfg *viper.Viper, p policy) (hookConfig, error) {
 		slog.Warn("--hook-from '*': a message from anyone runs --on-message")
 	}
 
-	if missing := p.allow.Missing(from); len(missing) > 0 && !p.readOnly {
+	if p.allow == nil || p.readOnly {
+		return hookConfig{program: program, from: from, timeout: timeout}, nil
+	}
+
+	if missing := p.allow.Missing(from); len(missing) > 0 {
 		slog.Warn("--hook-from has chats that --allow-recipient doesn't list: the hook can't reply there "+
 			"(unless they name the same user differently)", "chats", strings.Join(missing, ", "))
 	}

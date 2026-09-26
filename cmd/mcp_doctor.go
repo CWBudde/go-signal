@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/cwbudde/go-signal/internal/app"
 	"github.com/cwbudde/go-signal/internal/mcp"
@@ -70,6 +71,8 @@ func doctorConfig(clients *clientOpener) []app.Check {
 		checks = append(checks, app.PolicyCheck(pol.readOnly, pol.allow, pol.attachDir, pol.confirm))
 	}
 
+	checks = append(checks, hookCheck(clients, pol))
+
 	listen, err := loadListen(clients.cfg)
 
 	switch {
@@ -85,6 +88,36 @@ func doctorConfig(clients *clientOpener) []app.Check {
 	}
 
 	return checks
+}
+
+// hookCheckName names the check of --on-message.
+const hookCheckName = "hook"
+
+// hookCheck checks --on-message and its settings.
+func hookCheck(clients *clientOpener, pol policy) app.Check {
+	hook, err := loadHook(clients.cfg, pol)
+
+	switch {
+	case err != nil:
+		return app.Check{Name: hookCheckName, Status: app.CheckFail, Detail: err.Error(), Err: err}
+	case hook.program == "":
+		return app.Check{Name: hookCheckName, Status: app.CheckOK, Detail: "off"}
+	}
+
+	from := fmt.Sprintf("%d --hook-from entries", hook.from.Len())
+	if hook.from.All() {
+		from = "everyone"
+	}
+
+	timeout := "no timeout"
+	if hook.timeout > 0 {
+		timeout = "timeout " + hook.timeout.String()
+	}
+
+	return app.Check{
+		Name: hookCheckName, Status: app.CheckOK,
+		Detail: fmt.Sprintf("%s for messages of %s, %s", hook.program, from, timeout),
+	}
 }
 
 // doctorAccount checks the account (see app.Doctor) and the download dir.
