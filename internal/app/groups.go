@@ -118,8 +118,8 @@ func (a *App) resolveMembers(ctx context.Context, args []string) ([]signal.Recip
 // takes: group:<id>, a bare base64 group ID or master key (32 bytes, standard or URL-safe
 // alphabet; the result is standard base64), or else a group title. A title must match exactly
 // one group fetched before (ignoring case and surrounding white space; see
-// signal.Client.GroupTitles): several matches fail with ErrAmbiguousGroup, none with
-// signal.ErrUnknownGroup. It doesn't connect.
+// signal.Client.GroupTitles), preferring groups we haven't left: several matches fail with
+// ErrAmbiguousGroup, none with signal.ErrUnknownGroup. It doesn't connect.
 func (a *App) ResolveGroup(ctx context.Context, arg string) (string, error) {
 	arg = strings.TrimSpace(arg)
 
@@ -144,19 +144,32 @@ func (a *App) ResolveGroup(ctx context.Context, arg string) (string, error) {
 	return a.groupByTitle(ctx, arg)
 }
 
-// groupByTitle returns the ID of the only group titled title (see ResolveGroup).
+// groupByTitle returns the ID of the only group titled title (see ResolveGroup). Groups we left
+// only count when no current group has the title, so that a title reused after leaving a group
+// stays usable.
 func (a *App) groupByTitle(ctx context.Context, title string) (string, error) {
-	titles, err := a.client.GroupTitles(ctx)
+	cached, err := a.client.GroupTitles(ctx)
 	if err != nil {
 		return "", fmt.Errorf("group titles: %w", err)
 	}
 
-	var matches []string
+	var current, left []string
 
-	for groupID, known := range titles {
-		if strings.EqualFold(strings.TrimSpace(known), title) {
-			matches = append(matches, groupID)
+	for groupID, group := range cached {
+		if !strings.EqualFold(strings.TrimSpace(group.Title), title) {
+			continue
 		}
+
+		if group.LeftAt.IsZero() {
+			current = append(current, groupID)
+		} else {
+			left = append(left, groupID)
+		}
+	}
+
+	matches := current
+	if len(matches) == 0 {
+		matches = left
 	}
 
 	switch len(matches) {

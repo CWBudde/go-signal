@@ -131,7 +131,9 @@ func GroupSafetyNumber(number string) []string {
 // from them keeps working.
 type IdentityChanged struct {
 	Recipient Recipient
-	// OldFingerprint is the key trusted before (hex, see Identity); empty if unknown.
+	// OldFingerprint is the key trusted before (hex, see Identity); empty if unknown. It equals
+	// NewFingerprint when the key changed back to the one trusted before without the change being
+	// trusted in between: that key has to be trusted again too.
 	OldFingerprint string
 	// NewFingerprint is the new, untrusted key.
 	NewFingerprint string

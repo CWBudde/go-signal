@@ -11,7 +11,10 @@ import (
 	"github.com/cwbudde/go-signal/internal/store"
 )
 
-const clubID = "id-club"
+const (
+	clubID    = "id-club"
+	clubTitle = "Club"
+)
 
 func TestGroupRecords(t *testing.T) {
 	t.Parallel()
@@ -21,7 +24,9 @@ func TestGroupRecords(t *testing.T) {
 
 	updated := time.Date(2026, 9, 25, 8, 0, 0, 0, time.UTC)
 	family := store.GroupRecord{ID: "id-family", Title: "Family", Revision: 3, UpdatedAt: updated}
-	club := store.GroupRecord{ID: clubID, Title: "Club", Revision: 12, LeftAt: updated.Add(time.Hour), UpdatedAt: updated}
+	club := store.GroupRecord{
+		ID: clubID, Title: clubTitle, Revision: 12, LeftAt: updated.Add(time.Hour), UpdatedAt: updated,
+	}
 
 	for _, rec := range []store.GroupRecord{family, club} {
 		err := data.PutGroup(ctx, rec)
@@ -55,7 +60,7 @@ func TestGroupRecordReplaced(t *testing.T) {
 
 	left := time.Date(2026, 9, 25, 8, 0, 0, 0, time.UTC)
 
-	err := data.PutGroup(ctx, store.GroupRecord{ID: clubID, Title: "Club", LeftAt: left, UpdatedAt: left})
+	err := data.PutGroup(ctx, store.GroupRecord{ID: clubID, Title: clubTitle, LeftAt: left, UpdatedAt: left})
 	if err != nil {
 		t.Fatalf("PutGroup: %v", err)
 	}
@@ -77,5 +82,35 @@ func TestGroupRecordReplaced(t *testing.T) {
 	all, err := openAccount(t, dir).Groups(ctx)
 	if err != nil || !slices.Equal(all, []store.GroupRecord{rejoined}) {
 		t.Errorf("Groups = %+v, %v; want %+v", all, err, rejoined)
+	}
+}
+
+func TestGroupRecordKeepsTitle(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	data := openAccount(t, openDir(t, io.Discard))
+
+	updated := time.Date(2026, 9, 25, 8, 0, 0, 0, time.UTC)
+
+	err := data.PutGroup(ctx, store.GroupRecord{ID: clubID, Title: clubTitle, Revision: 3, UpdatedAt: updated})
+	if err != nil {
+		t.Fatalf("PutGroup: %v", err)
+	}
+
+	// A fetch without the title (e.g. only invited) keeps the one known before.
+	untitled := store.GroupRecord{ID: clubID, Revision: 4, UpdatedAt: updated.Add(time.Hour)}
+
+	err = data.PutGroup(ctx, untitled)
+	if err != nil {
+		t.Fatalf("PutGroup: %v", err)
+	}
+
+	want := untitled
+	want.Title = clubTitle
+
+	rec, ok, err := data.Group(ctx, clubID)
+	if err != nil || !ok || rec != want {
+		t.Errorf("Group = %+v, %v, %v; want %+v", rec, ok, err, want)
 	}
 }

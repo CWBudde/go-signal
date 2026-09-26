@@ -131,6 +131,31 @@ func TestAppNames(t *testing.T) {
 	}
 }
 
+// TestAppNamesGroupTitles checks that the group titles come from the title cache and that
+// names load without them when it can't be read.
+func TestAppNamesGroupTitles(t *testing.T) {
+	t.Parallel()
+
+	fake := contactsFake()
+	fake.GroupTitleCache = map[string]signal.CachedGroup{groupID: {Title: familyTitle}, "untitled": {}}
+
+	names, err := open(t, fake).Names(t.Context())
+	if err != nil || names.GroupTitle(groupID) != familyTitle {
+		t.Fatalf("Names = %v; group title %q", err, names.GroupTitle(groupID))
+	}
+
+	fake.GroupTitlesErr = errBoom
+
+	names, err = open(t, fake).Names(t.Context())
+	if err != nil {
+		t.Fatalf("Names without group titles: %v", err)
+	}
+
+	if names.GroupTitle(groupID) != "" || names.Name(signal.Recipient{ACI: carolACI}) == "" {
+		t.Error("want the contact names without group titles")
+	}
+}
+
 func TestNameBookRefresh(t *testing.T) {
 	t.Parallel()
 

@@ -49,8 +49,8 @@ func (c *client) Groups(context.Context) ([]signal.Group, error) {
 		group, err := c.fetch(groupID)
 		if errors.Is(err, signal.ErrNotAMember) || errors.Is(err, signal.ErrUnknownGroup) {
 			// Like the real client: what the title cache knows.
-			title := c.fake.GroupInfo[groupID].Title
-			out = append(out, signal.Group{ID: groupID, Title: title, LeftAt: c.fake.left[groupID], Err: err})
+			cached := c.fake.GroupTitleCache[groupID]
+			out = append(out, signal.Group{ID: groupID, Title: cached.Title, LeftAt: cached.LeftAt, Err: err})
 
 			continue
 		}
@@ -103,6 +103,7 @@ func (c *client) LeaveGroup(_ context.Context, ref string, opts signal.LeaveOpti
 	}
 
 	c.fake.left[group.ID] = group.LeftAt
+	c.fake.cacheGroup(group)
 	c.fake.leaves = append(c.fake.leaves, LeaveCall{
 		ACI: c.connected, GroupID: group.ID, Promote: slices.Clone(opts.Promote),
 	})
@@ -112,7 +113,7 @@ func (c *client) LeaveGroup(_ context.Context, ref string, opts signal.LeaveOpti
 	}, nil
 }
 
-func (c *client) GroupTitles(context.Context) (map[string]string, error) {
+func (c *client) GroupTitles(context.Context) (map[string]signal.CachedGroup, error) {
 	c.fake.mu.Lock()
 	defer c.fake.mu.Unlock()
 
@@ -125,15 +126,26 @@ func (c *client) GroupTitles(context.Context) (map[string]string, error) {
 		return nil, err
 	}
 
-	titles := make(map[string]string, len(c.fake.GroupInfo))
-
-	for groupID, group := range c.fake.GroupInfo {
-		if group.Title != "" {
-			titles[groupID] = group.Title
-		}
+	if c.fake.GroupTitlesErr != nil {
+		return nil, c.fake.GroupTitlesErr
 	}
 
-	return titles, nil
+	return maps.Clone(c.fake.GroupTitleCache), nil
+}
+
+// cacheGroup records a fetched group in the title cache like the real client: an empty title
+// keeps the cached one, and LeftAt is replaced. The caller holds f.mu.
+func (f *Fake) cacheGroup(group signal.Group) {
+	if f.GroupTitleCache == nil {
+		f.GroupTitleCache = make(map[string]signal.CachedGroup)
+	}
+
+	cached := signal.CachedGroup{Title: group.Title, LeftAt: group.LeftAt}
+	if cached.Title == "" {
+		cached.Title = f.GroupTitleCache[group.ID].Title
+	}
+
+	f.GroupTitleCache[group.ID] = cached
 }
 
 // leavable returns the group ref if the connected account can leave it with opts, like the
@@ -227,10 +239,12 @@ func (c *client) fetch(groupID string) (signal.Group, error) {
 		return signal.Group{}, fmt.Errorf("%w %s (fake)", signal.ErrUnknownGroup, groupID)
 	}
 
+	group.ID = groupID
 	group.Membership, group.Role = group.MembershipOf(c.connected)
 	group.Members = slices.Clone(group.Members)
 	group.Pending = slices.Clone(group.Pending)
 	group.Requesting = slices.Clone(group.Requesting)
+	c.fake.cacheGroup(group)
 
 	return group, nil
 }
@@ -257,4 +271,16 @@ func (f *Fake) groupMembers(groupID string) ([]signal.Recipient, bool) {
 	}
 
 	return members, true
+}
+
+// CachedTitles returns the title cache the real client would have after listing groups, for
+// Fake.GroupTitleCache.
+func CachedTitles(groups map[string]signal.Group) map[string]signal.CachedGroup {
+	out := make(map[string]signal.CachedGroup, len(groups))
+
+	for groupID, group := range groups {
+		out[groupID] = signal.CachedGroup{Title: group.Title, LeftAt: group.LeftAt}
+	}
+
+	return out
 }

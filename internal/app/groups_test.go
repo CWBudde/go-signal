@@ -35,8 +35,69 @@ func groupsFake() *signaltest.Fake {
 		}},
 	}
 	fake.GroupKeys = map[string]string{masterKey: groupID}
+	// Listed before, so titles resolve.
+	fake.GroupTitleCache = signaltest.CachedTitles(fake.GroupInfo)
 
 	return fake
+}
+
+// TestResolveGroupLeft checks that groups we left only match a title that no current group
+// has.
+func TestResolveGroupLeft(t *testing.T) {
+	t.Parallel()
+
+	const (
+		leftID      = "bGVmdC1pZC1sZWZ0LWlkLWxlZnQtaWQtbGVmdC1pZC0="
+		otherLeftID = "b3RoZXItbGVmdC1vdGhlci1sZWZ0LW90aGVyLWxlZnQ="
+	)
+
+	left := time.Date(2026, 9, 25, 8, 0, 0, 0, time.UTC)
+	fake := groupsFake()
+	fake.GroupTitleCache[leftID] = signal.CachedGroup{Title: familyTitle, LeftAt: left}
+	fake.GroupTitleCache[otherLeftID] = signal.CachedGroup{Title: "Old club", LeftAt: left}
+
+	a := open(t, fake)
+
+	got, err := a.ResolveGroup(t.Context(), familyTitle)
+	if err != nil || got != groupID {
+		t.Errorf("title of a current and a left group = %q, %v; want the current one", got, err)
+	}
+
+	got, err = a.ResolveGroup(t.Context(), "old club")
+	if err != nil || got != otherLeftID {
+		t.Errorf("title of a left group only = %q, %v", got, err)
+	}
+
+	fake.GroupTitleCache[leftID] = signal.CachedGroup{Title: "Old club", LeftAt: left}
+
+	_, err = a.ResolveGroup(t.Context(), "old club")
+	if !errors.Is(err, app.ErrAmbiguousGroup) {
+		t.Errorf("title of two left groups: %v, want ErrAmbiguousGroup", err)
+	}
+}
+
+// TestResolveGroupAfterListing checks that titles resolve only once the groups were fetched.
+func TestResolveGroupAfterListing(t *testing.T) {
+	t.Parallel()
+
+	fake := groupsFake()
+	fake.GroupTitleCache = nil
+	a := open(t, fake)
+
+	_, err := a.ResolveGroup(t.Context(), clubTitle)
+	if !errors.Is(err, signal.ErrUnknownGroup) {
+		t.Fatalf("before listing: %v, want ErrUnknownGroup", err)
+	}
+
+	_, err = a.GroupsList(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := a.ResolveGroup(t.Context(), clubTitle)
+	if err != nil || got != clubID {
+		t.Errorf("after listing = %q, %v", got, err)
+	}
 }
 
 func TestGroupsList(t *testing.T) {
@@ -104,6 +165,7 @@ func TestResolveGroup(t *testing.T) {
 	info := fake.GroupInfo[clubID]
 	info.Title = "  family "
 	fake.GroupInfo["ZHVwLWR1cC1kdXAtZHVwLWR1cC1kdXAtZHVwLWR1cC0="] = info
+	fake.GroupTitleCache = signaltest.CachedTitles(fake.GroupInfo)
 
 	a := open(t, fake)
 

@@ -36,7 +36,7 @@ func (w slogWriter) Write(line []byte) (int, error) {
 	level := slogLevel(fields[zerolog.LevelFieldName])
 	msg, _ := fields[zerolog.MessageFieldName].(string)
 
-	if isWebsocketStatus(msg) || isDeferredEnvelope(msg, fields) || isGroupCacheMiss(msg) {
+	if isWebsocketStatus(msg) || isDeferredEnvelope(msg, fields) || isGroupCacheMiss(msg, fields) {
 		level = slog.LevelDebug
 	}
 
@@ -91,9 +91,18 @@ func isWebsocketStatus(msg string) bool {
 	return strings.HasPrefix(msg, "Authed websocket ") || strings.HasPrefix(msg, "Unauthed websocket ")
 }
 
-// isGroupCacheMiss reports whether msg is signalmeow's complaint that it couldn't cache a fetched
-// group's send endorsements. That is expected for a group we are only invited to (the server
-// sends none for it); the group itself was fetched fine.
-func isGroupCacheMiss(msg string) bool {
-	return msg == "Failed to cache group response" || msg == "Group not found in cache after fetching"
+// noEndorsements is how signalmeow's GroupCache.Put fails when the group response carries no
+// (valid) send endorsements: GetExpiration is the first thing that parses them.
+const noEndorsements = "failed to get endorsement expiration: "
+
+// isGroupCacheMiss reports whether an entry is signalmeow's complaint that it couldn't cache a
+// fetched group because the server sent no send endorsements with it. That is expected for a
+// group we are only invited to; the group itself was fetched fine. Other failures to cache a
+// group keep their level. The follow-up "Group not found in cache after fetching" (a warning
+// without an error) is always demoted: the entry before it tells what went wrong.
+func isGroupCacheMiss(msg string, fields map[string]any) bool {
+	errText, _ := fields[zerolog.ErrorFieldName].(string)
+
+	return (msg == "Failed to cache group response" && strings.HasPrefix(errText, noEndorsements)) ||
+		msg == "Group not found in cache after fetching"
 }

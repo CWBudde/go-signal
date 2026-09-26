@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 	"go.mau.fi/mautrix-signal/pkg/libsignalgo"
 	mstore "go.mau.fi/mautrix-signal/pkg/signalmeow/store"
+	"google.golang.org/protobuf/encoding/protowire"
 )
 
 // fingerprintIterations and fingerprintVersion are what the Signal apps use for safety numbers
@@ -37,19 +38,28 @@ const (
 // the change is marked for an IdentityChanged event. libsignal then refuses to encrypt for the
 // new key (ErrorCodeUntrustedIdentity) until TrustIdentity; decrypting is never refused.
 //
-// The last trusted key before a change stays acceptable in both directions and is not taken for
-// another change: sessions of the user's other (old) devices still use it until the server
-// reports them as stale, and messages sent before the change can still arrive.
+// Only the current key can be trusted. All devices of an account share its identity key, so a
+// key that differs from the current one is always a change, the one trusted before the last
+// change included: accepting that one would let a prekey bundle signed with an old key (a lost
+// phone, a malicious server) through after the user trusted or verified the new one. So a
+// change also removes the user's sessions with any other key (see removeStaleSessions), which
+// libsignal would otherwise keep encrypting to; the next send fetches new prekey bundles. A
+// message that still arrives on a removed session can't be decrypted (a DecryptionFailure
+// event); where its content hint allows, signalmeow asks the sender to resend it (a retry
+// receipt), which sets up a new session.
 //
-// Not covered, because signalmeow uses its store directly there: the PNI identity key that a sync
-// message reports (saveSyncPNIIdentityKey), the PNI signature checks and provisioning. And
-// libsignal's multi-recipient (sender key) encryption only looks the key up without asking
-// whether it is trusted, so a group member who already has our sender key still gets group
-// messages after an identity change.
+// Only ACIs are checked: PNI identity keys can't be listed or trusted, so they are left to
+// signalmeow, which trusts every key. Not covered either, because signalmeow uses its store
+// directly there: the PNI identity key that a sync message reports (saveSyncPNIIdentityKey), the
+// PNI signature checks and provisioning. And libsignal's multi-recipient (sender key) encryption
+// only looks the key up without asking whether it is trusted, so a group member who already has
+// our sender key still gets group messages after an identity change.
 type identityTrust struct {
 	data *store.Store
 	log  *slog.Logger
 	now  func() time.Time
+	// sessions are the device's ACI and PNI session stores, for removeStaleSessions.
+	sessions []mstore.SessionStore
 
 	// pending is set when the store may hold changes not reported as events yet.
 	pending atomic.Bool
@@ -70,7 +80,10 @@ var _ libsignalgo.IdentityKeyStore = (*trustStore)(nil)
 // before signalmeow.NewClient(device, …). Changes left unreported by an earlier run are reported
 // with the next event.
 func installTrust(device *mstore.Device, data *store.Store, log *slog.Logger, now func() time.Time) *identityTrust {
-	trust := &identityTrust{data: data, log: log, now: now}
+	trust := &identityTrust{
+		data: data, log: log, now: now,
+		sessions: []mstore.SessionStore{device.ACISessionStore, device.PNISessionStore},
+	}
 	trust.pending.Store(true)
 
 	if _, done := device.ACIIdentityStore.(*trustStore); !done {
@@ -95,11 +108,15 @@ func (s *trustStore) GetIdentityKey(
 	return s.inner.GetIdentityKey(ctx, theirServiceID) //nolint:wrapcheck // a transparent wrapper
 }
 
-// SaveIdentityKey stores the key in signalmeow's store as before, and records a change.
-// libsignal calls it after decrypting a message and after encrypting one.
+// SaveIdentityKey stores the key in signalmeow's store as before, and records a change of an
+// ACI's key. libsignal calls it after decrypting a message and after encrypting one.
 func (s *trustStore) SaveIdentityKey(
 	ctx context.Context, theirServiceID libsignalgo.ServiceID, identityKey *libsignalgo.IdentityKey,
 ) (bool, error) {
+	if theirServiceID.Type != libsignalgo.ServiceIDTypeACI {
+		return s.inner.SaveIdentityKey(ctx, theirServiceID, identityKey) //nolint:wrapcheck // a transparent wrapper
+	}
+
 	key, err := identityKey.Serialize()
 	if err != nil {
 		return false, fmt.Errorf("serialize identity key: %w", err)
@@ -120,13 +137,18 @@ func (s *trustStore) SaveIdentityKey(
 	return replaced, err
 }
 
-// IsTrustedIdentity trusts every key for receiving. For sending it trusts the current key if
-// the user trusted it (or it was the first one), and the last trusted key before a change. Any
-// other key is recorded as a change and refused.
+// IsTrustedIdentity trusts every key for receiving. For sending to an ACI it trusts only the
+// current key, and only if the user trusted it (or it was the first one); any other key is
+// recorded as a change and refused. PNIs are left to signalmeow.
 func (s *trustStore) IsTrustedIdentity(
 	ctx context.Context, theirServiceID libsignalgo.ServiceID, identityKey *libsignalgo.IdentityKey,
 	direction libsignalgo.SignalDirection,
 ) (bool, error) {
+	if theirServiceID.Type != libsignalgo.ServiceIDTypeACI {
+		//nolint:wrapcheck // a transparent wrapper
+		return s.inner.IsTrustedIdentity(ctx, theirServiceID, identityKey, direction)
+	}
+
 	if direction == libsignalgo.SignalDirectionReceiving {
 		return true, nil
 	}
@@ -181,14 +203,11 @@ func (t *identityTrust) observe(ctx context.Context, serviceID libsignalgo.Servi
 		}
 	}
 
-	switch {
-	case bytes.Equal(rec.Key, key):
+	if bytes.Equal(rec.Key, key) {
 		return ParseTrustLevel(rec.Trust).Trusted(), nil
-	case rec.PreviousKey != nil && bytes.Equal(rec.PreviousKey, key):
-		// Old sessions and delayed messages; not a change.
-		return true, nil
 	}
 
+	// A change, even back to the key trusted before (see identityTrust).
 	if ParseTrustLevel(rec.Trust).Trusted() {
 		rec.PreviousKey = rec.Key
 	}
@@ -200,12 +219,109 @@ func (t *identityTrust) observe(ctx context.Context, serviceID libsignalgo.Servi
 		return false, err //nolint:wrapcheck // the store names the operation
 	}
 
+	t.removeStaleSessions(ctx, serviceID, key)
+
 	t.pending.Store(true)
 	t.log.Warn("the safety number with a contact changed; sending to them is blocked until you trust the new key",
 		"recipient", serviceID.UUID.String(), "fingerprint", fingerprint(key),
 		"hint", "go-signal identities trust "+serviceID.UUID.String())
 
 	return false, nil
+}
+
+// removeStaleSessions removes the sessions with serviceID whose identity key isn't key (see
+// identityTrust). libsignal stores the session it is working on after this, so the one that
+// brought key stays. A failure is only logged: sending over a remaining session is refused
+// anyway, since its key isn't the current one.
+func (t *identityTrust) removeStaleSessions(ctx context.Context, serviceID libsignalgo.ServiceID, key []byte) {
+	removed, err := removeStaleSessions(ctx, t.sessions, serviceID, key)
+	if err != nil {
+		t.log.Warn("remove sessions with an old identity key", "recipient", serviceID.UUID.String(), "error", err)
+	}
+
+	if removed > 0 {
+		t.log.Debug("removed sessions with an old identity key", "recipient", serviceID.UUID.String(),
+			"sessions", removed)
+	}
+}
+
+// removeStaleSessions removes the sessions in stores with serviceID whose remote identity key
+// isn't key (serialized), and those whose key can't be read. It returns how many it removed.
+func removeStaleSessions(
+	ctx context.Context, stores []mstore.SessionStore, serviceID libsignalgo.ServiceID, key []byte,
+) (int, error) {
+	removed := 0
+
+	for _, sessions := range stores {
+		if sessions == nil {
+			continue
+		}
+
+		tuples, err := sessions.AllSessionsForServiceID(ctx, serviceID)
+		if err != nil {
+			return removed, fmt.Errorf("list sessions: %w", err)
+		}
+
+		for _, tuple := range tuples {
+			record, err := tuple.Record.Serialize()
+			if err == nil && bytes.Equal(sessionRemoteIdentity(record), key) {
+				continue
+			}
+
+			err = sessions.RemoveSession(ctx, tuple.Address)
+			if err != nil {
+				return removed, fmt.Errorf("remove session: %w", err)
+			}
+
+			removed++
+		}
+	}
+
+	return removed, nil
+}
+
+// Field numbers of libsignal's session record (rust/protocol/src/proto/storage.proto).
+const (
+	recordCurrentSession     protowire.Number = 1 // RecordStructure.current_session
+	sessionRemoteIdentityKey protowire.Number = 3 // SessionStructure.remote_identity_public
+)
+
+// sessionRemoteIdentity returns the serialized identity key of the other side of the current
+// session in a serialized session record; nil if there is none or the record can't be parsed.
+// libsignalgo has no accessor for it.
+func sessionRemoteIdentity(record []byte) []byte {
+	return protoBytesField(protoBytesField(record, recordCurrentSession), sessionRemoteIdentityKey)
+}
+
+// protoBytesField returns the first length-delimited field num of the protobuf message msg;
+// nil if there is none or msg is malformed.
+func protoBytesField(msg []byte, num protowire.Number) []byte {
+	for len(msg) > 0 {
+		field, typ, n := protowire.ConsumeTag(msg)
+		if n < 0 {
+			return nil
+		}
+
+		msg = msg[n:]
+
+		if field == num && typ == protowire.BytesType {
+			value, m := protowire.ConsumeBytes(msg)
+			if m < 0 {
+				return nil
+			}
+
+			return value
+		}
+
+		m := protowire.ConsumeFieldValue(field, typ, msg)
+		if m < 0 {
+			return nil
+		}
+
+		msg = msg[m:]
+	}
+
+	return nil
 }
 
 // report emits an IdentityChanged event for every change not reported yet, and marks it as
@@ -277,7 +393,7 @@ func (c *meowClient) Identities(ctx context.Context, rcpt *Recipient) ([]Identit
 
 	ctx = c.zlog.WithContext(ctx)
 
-	device, err := c.identityDevice(ctx)
+	device, err := c.storeDevice(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -318,7 +434,7 @@ func (c *meowClient) SafetyNumber(ctx context.Context, rcpt Recipient) (SafetyNu
 
 	ctx = c.zlog.WithContext(ctx)
 
-	device, err := c.identityDevice(ctx)
+	device, err := c.storeDevice(ctx)
 	if err != nil {
 		return SafetyNumber{}, err
 	}
@@ -344,7 +460,7 @@ func (c *meowClient) TrustIdentity(ctx context.Context, rcpt Recipient, number s
 
 	ctx = c.zlog.WithContext(ctx)
 
-	device, err := c.identityDevice(ctx)
+	device, err := c.storeDevice(ctx)
 	if err != nil {
 		return Identity{}, err
 	}
@@ -354,25 +470,22 @@ func (c *meowClient) TrustIdentity(ctx context.Context, rcpt Recipient, number s
 		return Identity{}, err
 	}
 
-	level := max(TrustUnverified, identity.Trust)
+	level, err := trustLevelFor(device, identity, number)
+	if err != nil {
+		return Identity{}, err
+	}
 
-	if number != "" {
-		want, err := NormalizeSafetyNumber(number)
-		if err != nil {
-			return Identity{}, err
-		}
+	// Sessions set up with another key (e.g. by an older go-signal, which kept them on a change)
+	// must not get the trust given to this one.
+	theirID, err := aciServiceID(identity.Recipient)
+	if err != nil {
+		return Identity{}, err
+	}
 
-		got, _, err := safetyNumber(device, identity.Recipient.ACI, identity.key)
-		if err != nil {
-			return Identity{}, err
-		}
-
-		if got != want {
-			return Identity{}, fmt.Errorf("%w with %s: check that you compare it for this account (%s)",
-				ErrSafetyNumberMismatch, identity.Recipient, device.Number)
-		}
-
-		level = TrustVerified
+	_, err = removeStaleSessions(ctx, []mstore.SessionStore{device.ACISessionStore, device.PNISessionStore},
+		theirID, identity.key)
+	if err != nil {
+		return Identity{}, fmt.Errorf("trust identity: %w", err)
 	}
 
 	rec := identity.record
@@ -388,8 +501,34 @@ func (c *meowClient) TrustIdentity(ctx context.Context, rcpt Recipient, number s
 	return identity.Identity, nil
 }
 
-// identityDevice returns the device of the selected account, without connecting.
-func (c *meowClient) identityDevice(ctx context.Context) (*mstore.Device, error) {
+// trustLevelFor returns the level identity gets from TrustIdentity: verified if number is its
+// safety number (ErrSafetyNumberMismatch if it isn't), else at least unverified.
+func trustLevelFor(device *mstore.Device, identity storedIdentity, number string) (TrustLevel, error) {
+	if number == "" {
+		return max(TrustUnverified, identity.Trust), nil
+	}
+
+	want, err := NormalizeSafetyNumber(number)
+	if err != nil {
+		return 0, err
+	}
+
+	got, _, err := safetyNumber(device, identity.Recipient.ACI, identity.key)
+	if err != nil {
+		return 0, err
+	}
+
+	if got != want {
+		return 0, fmt.Errorf("%w with %s: check that you compare it for this account (%s)",
+			ErrSafetyNumberMismatch, identity.Recipient, device.Number)
+	}
+
+	return TrustVerified, nil
+}
+
+// storeDevice returns the device of the selected account for a method that only uses the store:
+// the connected one, else it is loaded (opening the database if needed), without connecting.
+func (c *meowClient) storeDevice(ctx context.Context) (*mstore.Device, error) {
 	if c.connDevice != nil {
 		return c.connDevice, nil
 	}

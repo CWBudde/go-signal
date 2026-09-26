@@ -102,9 +102,10 @@ type Client interface { //nolint:interfacebloat // the one facade over signalmeo
 	// accounts.json.
 	Unlink(ctx context.Context, opts UnlinkOptions) (Account, error)
 
-	// Close shuts down gracefully: it waits for in-flight sends (later ones fail with
-	// ErrClosed), makes sure the acks of events read from Events reach the server, disconnects
-	// and releases the store.
+	// Close shuts down gracefully: it waits for in-flight sends (later ones and every other
+	// method that fails with ErrClosed are refused), makes sure the acks of events read from
+	// Events reach the server, disconnects and releases the store. Sends get a few seconds before
+	// it disconnects; the store is only released once every running method has returned.
 	Close() error
 
 	// Contacts returns the users the store knows with a name or number, and those we blocked,
@@ -177,13 +178,14 @@ type Client interface { //nolint:interfacebloat // the one facade over signalmeo
 	// invitation or cancels a join request, and tells the other members. See Group.CheckLeave
 	// for when that is refused (ErrNotAMember, ErrLastAdmin, ErrInvalidPromotion); opts.Promote
 	// makes members admins in the same change. The group's master key stays in the store, and
-	// the title cache remembers that we left (Group.LeftAt). It needs Connect like Group.
+	// the title cache remembers that we left (Group.LeftAt). A change that conflicts with one made
+	// meanwhile fails with ErrGroupChanged. It needs Connect like Group.
 	LeaveGroup(ctx context.Context, ref string, opts LeaveOptions) (LeaveResult, error)
 
-	// GroupTitles returns the titles of the groups fetched before (by Groups, Group or
-	// LeaveGroup), by group ID, from the store: it needs no Connect. Groups never fetched are
-	// missing. It fails with ErrClosed after Close.
-	GroupTitles(ctx context.Context) (map[string]string, error)
+	// GroupTitles returns what the title cache knows about the groups fetched before (by Groups,
+	// Group or LeaveGroup), by group ID, from the store: it needs no Connect. Groups never fetched
+	// are missing. It fails with ErrClosed after Close.
+	GroupTitles(ctx context.Context) (map[string]CachedGroup, error)
 }
 
 // Options configures a Client.

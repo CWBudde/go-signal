@@ -153,7 +153,7 @@ func TestReceiveEventsNames(t *testing.T) {
 
 			fake := &signaltest.Fake{
 				Linked: []signal.Account{*testAccount()}, Contacts: namedContacts(),
-				GroupInfo: map[string]signal.Group{groupID: {ID: groupID, Title: "Family"}},
+				GroupTitleCache: map[string]signal.CachedGroup{groupID: {Title: "Family"}},
 			}
 			golden(t, name, receiveAllFrom(t, fake, allEvents(), "-o", format))
 		})

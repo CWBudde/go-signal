@@ -181,3 +181,27 @@ func BlockOverrides(ctx context.Context, client Client) ([]store.BlockOverride, 
 
 	return meow.data.BlockOverrides(ctx) //nolint:wrapcheck // test helper
 }
+
+// SetDrainTimeout replaces how long Close of client (from Open) lets sends run before it
+// disconnects.
+func SetDrainTimeout(client Client, timeout time.Duration) {
+	client.(*meowClient).drainTimeout = timeout //nolint:forcetypeassert // test helper
+}
+
+// BeginOperation registers a running operation on client (from Open) as the facade methods do.
+// It returns a function that reads the store as such an operation would, and the one that ends
+// the operation; ok is false once Close has started.
+func BeginOperation(client Client) (func(context.Context) error, func(), bool) {
+	meow := client.(*meowClient) //nolint:forcetypeassert // test helper
+	if !meow.begin(&meow.sending) {
+		return nil, nil, false
+	}
+
+	read := func(ctx context.Context) error {
+		_, err := meow.data.Groups(ctx)
+
+		return err //nolint:wrapcheck // test helper
+	}
+
+	return read, meow.sending.Done, true
+}

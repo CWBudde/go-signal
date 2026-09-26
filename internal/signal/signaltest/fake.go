@@ -89,11 +89,16 @@ type Fake struct {
 	SetBlockedErr error
 
 	// GroupInfo are the groups on the server with their full state, by ID: Groups lists them,
-	// Group and LeaveGroup find them by ID (or master key, see GroupKeys), and GroupTitles
-	// returns their titles (as if cached). Membership and Role are filled in for the connected
-	// account like the real client does. Send knows their members too, unless Groups has an
-	// entry for the same ID.
+	// and Group and LeaveGroup find them by ID (or master key, see GroupKeys). Membership and
+	// Role are filled in for the connected account like the real client does. Send knows their
+	// members too, unless Groups has an entry for the same ID.
 	GroupInfo map[string]signal.Group
+	// GroupTitleCache is the title cache that GroupTitles returns, by group ID. Like the real
+	// client, Groups, Group and LeaveGroup record the groups they fetch in it (a fetch without a
+	// title keeps the cached one); seed it for groups fetched in an earlier run.
+	GroupTitleCache map[string]signal.CachedGroup
+	// GroupTitlesErr makes GroupTitles fail.
+	GroupTitlesErr error
 	// GroupKeys maps base64 master keys to group IDs, as deriving the ID from a master key does.
 	GroupKeys map[string]string
 	// GroupErrs makes fetching these groups (by ID) fail. Groups lists a group failing with

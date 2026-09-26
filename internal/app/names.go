@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/cwbudde/go-signal/internal/signal"
@@ -71,11 +72,24 @@ func distinguish(contact signal.Contact) string {
 	}
 }
 
-// WithGroups returns n with the group titles by group ID (see Client.GroupTitles).
+// WithGroups returns n with the group titles by group ID.
 func (n Names) WithGroups(titles map[string]string) Names {
 	n.groups = titles
 
 	return n
+}
+
+// cachedTitles returns the titles in the title cache by group ID (see Client.GroupTitles).
+func cachedTitles(cached map[string]signal.CachedGroup) map[string]string {
+	titles := make(map[string]string, len(cached))
+
+	for groupID, group := range cached {
+		if group.Title != "" {
+			titles[groupID] = group.Title
+		}
+	}
+
+	return titles
 }
 
 // GroupTitle returns the title of the group with the ID, or "" if it is unknown.
@@ -84,7 +98,8 @@ func (n Names) GroupTitle(groupID string) string {
 }
 
 // Names returns the names of the contacts and the titles of the groups in the store. It needs
-// no connection.
+// no connection. The group titles are a bonus: if they can't be read, the names come without
+// them (logged at debug level).
 func (a *App) Names(ctx context.Context) (Names, error) {
 	acc, err := a.client.Account(ctx)
 	if err != nil {
@@ -96,12 +111,16 @@ func (a *App) Names(ctx context.Context) (Names, error) {
 		return Names{}, fmt.Errorf("load names: %w", err)
 	}
 
-	titles, err := a.client.GroupTitles(ctx)
+	names := NewNames(acc.ACI, contacts)
+
+	cached, err := a.client.GroupTitles(ctx)
 	if err != nil {
-		return Names{}, fmt.Errorf("load names: %w", err)
+		slog.DebugContext(ctx, "load names: no group titles", "error", err)
+
+		return names, nil
 	}
 
-	return NewNames(acc.ACI, contacts).WithGroups(titles), nil
+	return names.WithGroups(cachedTitles(cached)), nil
 }
 
 // Name returns the name of rcpt: nickname, name in the phone's contacts or profile name; "" if

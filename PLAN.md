@@ -325,7 +325,9 @@ against the fake); `cmd/` only parses flags, calls `app` and renders via `intern
       (`Close` refuses new sends (`ErrClosed`) and waits up to 5 s for running ones, stops handing
       out events, flushes the acks with a `GET /v1/keepalive` round trip, then closes the
       websockets and only then the database. The loops run on a context detached from the
-      command's, so Ctrl-C no longer cuts them mid-ack)
+      command's, so Ctrl-C no longer cuts them mid-ack. Since the Phase 4 review, the database is
+      only closed once every running method that uses it has returned, also past the 5 s: sends
+      still running then fail fast on the closed websockets)
 - [x] `-v` logs connection state transitions via slog (`connection state` / `reconnecting` at
       debug level)
 
@@ -567,7 +569,7 @@ stories, admin deletes, and the MCP tools for react/delete (5.x).
 - [x] `link` waits for the initial sync (with progress on stderr and a timeout) (on the same
       client right after `Link`, which keeps the database and lock; `SyncOptions.Progress` reports
       the stages, printed as `Sync: <stage>...` lines on stderr, then `Synced N contacts and M
-  groups.` on stdout. `--sync-timeout` defaults to 60 s, 0 skips the sync. The timeout is the
+groups.` on stdout. `--sync-timeout` defaults to 60 s, 0 skips the sync. The timeout is the
       context deadline: `Sync` then returns what it has with an error wrapping
       `signal.ErrSyncIncomplete` and the cause, which `app.Sync` turns into
       `SyncResult.Incomplete`; `link` and `account sync` print a warning on stderr and exit 0.
@@ -587,6 +589,11 @@ sync` is the manual way. signalmeow only skips a second contact request within a
 first one on the same client. The counts include users that only messaged us, and the contact
 list and storage records don't say which groups we left. Contact avatars, the storage service's
 blocked groups and story distribution lists aren't handled. `last_sync` isn't shown anywhere yet.
+`SyncResult.ContactList` is also true when signalmeow failed to download or parse the contacts
+blob: it logs the error and still reports an (empty) `ContactList`, which we can't tell apart from
+a phone without contacts. signalmeow's `SyncStorage` reads `Store.MasterKey` without
+synchronising with the receive loop, which may update it from a `Keys` sync message meanwhile;
+that is benign (either key is the account's current one).
 
 ### Phase 4 — Contacts, groups, identities
 
@@ -669,8 +676,9 @@ ACI as a quote author now shows as `me` (one line of the `receive_events` golden
       Plain key/value lines plus Members/Invited/Requesting to join sections; JSON `group`
       document; `output.GroupJSON`/`NewGroupJSON` are exported for MCP)
 - [x] `groups leave <id>` (`Client.LeaveGroup` builds a signalmeow `GroupChange` and calls
-      `UpdateGroup`, which patches the group (retrying on conflicts) and sends the change to the
-      members: a member deletes itself (`DeleteMembers`, as the mautrix bridge does), an invited
+      `UpdateGroup`, which patches the group and sends the change to the members (a conflict
+      with a change made meanwhile, 409, is not retried: signalmeow takes the reply for a
+      `ContactManifestMismatchError`, which we map to `signal.ErrGroupChanged`, "try again"): a member deletes itself (`DeleteMembers`, as the mautrix bridge does), an invited
       user its invitation (`DeletePendingMembers` with its ACI), a requesting user its request
       (`DeleteRequestingMembers`). `Group.CheckLeave` refuses, like signal-cli's quitGroup, when we
       are the only admin while other members remain (`signal.ErrLastAdmin`; the CLI error names
@@ -684,11 +692,13 @@ ACI as a quote author now shows as `me` (one line of the `receive_events` golden
       groups whose key is stored are known. Anything else is a title, matched case-insensitively
       against the title cache (whole title, surrounding white space ignored) without connecting:
       several matches fail with `app.ErrAmbiguousGroup` listing the `group:<id>`s, none with
-      `signal.ErrUnknownGroup`)
+      `signal.ErrUnknownGroup`. Groups we left only count when no current group has the title)
 - [x] Title cache for offline lookup (not in the original plan; our own `gosignal_groups` table,
       migration `04-groups.sql`: title, revision, `left_at`, `updated_at` per group ID, written
-      after every successful fetch (which clears `left_at`) and by `LeaveGroup`. New
-      `Client.GroupTitles` reads it without `Connect`; `app.Names` includes the titles, so
+      after every successful fetch (which clears `left_at`; an empty title keeps the cached one)
+      and by `LeaveGroup` (with the revision after leaving). New `Client.GroupTitles` returns
+      title and `leftAt` per group without `Connect`; `app.Names` includes the titles (best
+      effort: names load without them if the cache can't be read), so
       `receive` shows `group "<title>"` in plain lines and `groupTitle` in the JSON chat, and
       `send`/`react`/`delete` label groups the same way)
 
@@ -702,7 +712,8 @@ were invited to by number: signalmeow skips PNI pending members when decrypting.
 user probably can't fetch the group at all (403), and `UpdateGroup` fetches it first, so
 cancelling a join request likely fails with `ErrNotAMember` despite the code path for it. For a
 group we are only invited to, the server sends no send endorsements; signalmeow's resulting cache
-errors are demoted to debug in the log bridge. After leaving, signalmeow's endorsement update for
+errors are demoted to debug in the log bridge (only that case, recognised by the error text; libsignal
+also prints its caught panic about the empty endorsements to stderr, which we can't catch). After leaving, signalmeow's endorsement update for
 the new revision probably fails (only logged), its `signalmeow_groups` row stays (the group keeps
 being listed, as `left`), and a failure to tell the members is only logged by signalmeow. Groups
 can't be told apart as "left on another device" versus "removed" (both a 403). Avatars, access
@@ -742,15 +753,26 @@ control, banned members, invite links and group changes (`groups update`, join) 
 libsignal's session setup refusing a changed prekey bundle until it is trusted; not yet verified
 against the live server.)
 
-Notes: the last trusted key before a change stays acceptable and isn't taken for another change,
-because the sessions of the user's other (old) devices still use it until the server reports them
-as stale (410), and delayed messages can still carry it. A change is reported until a `receive`
+Notes: only the current key can be trusted. The first version also accepted the last trusted key
+before a change, for the sessions of the user's "other devices"; but all devices of an account
+share one identity key, and after the user trusted or verified the new key, a prekey bundle signed
+with the old one (lost phone, malicious server) was accepted silently. Since the Phase 4 review
+every key other than the current one is a change, the previous key included (a delayed message
+with it flips the key back and must be trusted again; the event's `oldFingerprint` then equals
+`newFingerprint` if the change in between wasn't trusted). A change, and `identities trust`,
+remove the user's sessions whose identity key (read from the serialized session record, which
+libsignalgo has no accessor for) isn't the current key; the next send fetches new prekey bundles.
+A message that still arrives on a removed session can't be decrypted (a `decryptionFailure`
+event); where its content hint allows, signalmeow sends a retry receipt and the sender resends it
+on a new session. Before, such messages were decrypted; only messages sent before the key
+change and still queued are affected (the sender's old sessions ended with its old key). A change is reported until a `receive`
 has handed its event out (`pending_event`), so it isn't lost when receive stops before reading
 it; a change in a rolled-back decryption is neither stored nor reported. Gaps: libsignal's
 multi-recipient (sender key) encryption doesn't ask whether a key is trusted, so group members
 who already have our sender key still get group messages after their key changed (a member
 whose devices changed gets a new sender key distribution message, which is blocked); PNI
-identities aren't listed or checked beyond what libsignal does; signalmeow bypasses the wrapper
+identities can't be listed or trusted, so the wrapper leaves them to signalmeow, which trusts
+every key (trust on first use without change detection); signalmeow bypasses the wrapper
 for the PNI identity key of sync messages, PNI signatures and provisioning; the storage
 service's `ContactRecord` identity state/verified flag isn't read or written, and
 `SyncMessage.Verified` is neither sent nor handled, so verification doesn't sync with the phone;

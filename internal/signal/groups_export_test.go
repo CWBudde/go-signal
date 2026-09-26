@@ -26,6 +26,11 @@ func GroupFetchError(gid string, err error) error {
 	return groupFetchError(types.GroupIdentifier(gid), err)
 }
 
+// UpdateGroupError exposes updateGroupError to the signal_test package.
+func UpdateGroupError(err error) error {
+	return updateGroupError(err)
+}
+
 // LeaveChange exposes leaveChange to the signal_test package.
 func LeaveChange(group Group, self string, promote []Recipient) (*signalmeow.GroupChange, []Recipient, error) {
 	return leaveChange(group, self, promote)

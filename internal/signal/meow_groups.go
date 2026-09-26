@@ -103,27 +103,41 @@ func (c *meowClient) LeaveGroup(ctx context.Context, ref string, opts LeaveOptio
 		return LeaveResult{}, fmt.Errorf("leave group %s: %w", group.ID, err)
 	}
 
-	// UpdateGroup patches the group (retrying on conflicts) and sends the change to the
-	// members. A failure to send it to them is only logged by signalmeow.
+	// UpdateGroup patches the group and sends the change to the members; a failure to send it to
+	// them is only logged by signalmeow. It doesn't retry a conflict (409): the server's reply
+	// has a body, which signalmeow takes for ContactManifestMismatchError (its conflict
+	// resolution for a ConflictError would dereference this change's nil ModifyTitle anyway).
 	revision, err := cli.UpdateGroup(ctx, change, gid)
 	if err != nil {
-		return LeaveResult{}, c.lostOr(fmt.Errorf("leave group %s: %w", group.ID, err))
+		return LeaveResult{}, c.lostOr(fmt.Errorf("leave group %s: %w", group.ID, updateGroupError(err)))
 	}
 
 	group.LeftAt = time.Now().UTC().Truncate(time.Second)
-	c.cacheGroup(ctx, group)
+
+	cached := group
+	cached.Revision = revision
+	c.cacheGroup(ctx, cached)
 
 	return LeaveResult{Group: group, Revision: revision, Promoted: promoted}, nil
 }
 
-func (c *meowClient) GroupTitles(ctx context.Context) (map[string]string, error) {
+// updateGroupError maps a failure of UpdateGroup: a conflict becomes ErrGroupChanged.
+func updateGroupError(err error) error {
+	if errors.Is(err, signalmeow.ContactManifestMismatchError) || errors.Is(err, signalmeow.ConflictError) {
+		return fmt.Errorf("%w (%w)", ErrGroupChanged, err)
+	}
+
+	return err
+}
+
+func (c *meowClient) GroupTitles(ctx context.Context) (map[string]CachedGroup, error) {
 	// Close waits for it like for a send, so that the store stays open.
 	if !c.begin(&c.sending) {
 		return nil, ErrClosed
 	}
 	defer c.sending.Done()
 
-	_, err := c.device(ctx)
+	_, err := c.storeDevice(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -133,12 +147,10 @@ func (c *meowClient) GroupTitles(ctx context.Context) (map[string]string, error)
 		return nil, err //nolint:wrapcheck // store wraps it
 	}
 
-	titles := make(map[string]string, len(recs))
+	titles := make(map[string]CachedGroup, len(recs))
 
 	for _, rec := range recs {
-		if rec.Title != "" {
-			titles[rec.ID] = rec.Title
-		}
+		titles[rec.ID] = CachedGroup{Title: rec.Title, LeftAt: rec.LeftAt}
 	}
 
 	return titles, nil
@@ -261,8 +273,9 @@ func groupFetchError(gid types.GroupIdentifier, err error) error {
 	}
 }
 
-// cacheGroup records group's title for GroupTitles and whether we left it. A failure is only
-// logged: the cache is a convenience.
+// cacheGroup records group's title for GroupTitles and whether we left it; an empty title keeps
+// the one known before (see store.PutGroup). A failure is only logged: the cache is a
+// convenience.
 func (c *meowClient) cacheGroup(ctx context.Context, group Group) {
 	err := c.data.PutGroup(ctx, store.GroupRecord{
 		ID:        group.ID,

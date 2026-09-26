@@ -266,10 +266,11 @@ func TestLeaveChangeInvitedOrRequesting(t *testing.T) {
 func TestGroupTitles(t *testing.T) {
 	t.Parallel()
 
+	leftAt := time.Date(2026, 9, 25, 8, 0, 0, 0, time.UTC)
 	dataDir := seedAccount(t)
 	putGroupRecords(t, dataDir,
 		store.GroupRecord{ID: familyID, Title: familyTitle, Revision: 3},
-		store.GroupRecord{ID: "id-left", Title: "Old club", LeftAt: time.Now()},
+		store.GroupRecord{ID: "id-left", Title: "Old club", LeftAt: leftAt},
 		store.GroupRecord{ID: "id-untitled"},
 	)
 
@@ -280,7 +281,9 @@ func TestGroupTitles(t *testing.T) {
 
 	// No connection needed.
 	titles, err := client.GroupTitles(t.Context())
-	want := map[string]string{familyID: familyTitle, "id-left": "Old club"}
+	want := map[string]signal.CachedGroup{
+		familyID: {Title: familyTitle}, "id-left": {Title: "Old club", LeftAt: leftAt}, "id-untitled": {},
+	}
 
 	if err != nil || !maps.Equal(titles, want) {
 		t.Errorf("GroupTitles = %v, %v; want %v", titles, err, want)
@@ -294,6 +297,25 @@ func TestGroupTitles(t *testing.T) {
 	_, err = client.GroupTitles(t.Context())
 	if !errors.Is(err, signal.ErrClosed) {
 		t.Errorf("GroupTitles after Close: %v, want ErrClosed", err)
+	}
+}
+
+func TestUpdateGroupError(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		err     error
+		changed bool
+	}{
+		{fmt.Errorf("unknown error encrypting and signing group change: %w", signalmeow.ContactManifestMismatchError), true},
+		{fmt.Errorf("wrapped: %w", signalmeow.ConflictError), true},
+		{fmt.Errorf("failed to update group: %w", signalmeow.GroupPatchNotAcceptedError), false},
+		{errBoom, false},
+	} {
+		got := signal.UpdateGroupError(test.err)
+		if errors.Is(got, signal.ErrGroupChanged) != test.changed || !errors.Is(got, test.err) {
+			t.Errorf("UpdateGroupError(%v) = %v", test.err, got)
+		}
 	}
 }
 

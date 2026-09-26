@@ -20,7 +20,19 @@ var (
 	// ErrInvalidPromotion means that LeaveOptions.Promote names someone who can't be promoted: not
 	// another member of the group, or we are no admin ourselves.
 	ErrInvalidPromotion = errors.New("invalid promotion")
+	// ErrGroupChanged means that the server refused a group change because the group changed
+	// meanwhile (a conflict); trying again works on the new state.
+	ErrGroupChanged = errors.New("the group changed meanwhile; try again")
 )
+
+// CachedGroup is what the title cache knows about a group (see Client.GroupTitles).
+type CachedGroup struct {
+	// Title is the group's title when it was last fetched; empty if it is unknown.
+	Title string
+	// LeftAt is when we left the group with LeaveGroup; zero if we didn't, or the group was
+	// fetched since (we are back in it).
+	LeftAt time.Time
+}
 
 // unknownRole is the name of GroupRoleUnknown.
 const unknownRole = "unknown"

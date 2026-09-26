@@ -27,12 +27,14 @@ type GroupRecord struct {
 
 const groupColumns = "group_id, title, revision, left_at, updated_at"
 
-// PutGroup stores rec, replacing the record of the same group.
+// PutGroup stores rec, replacing the record of the same group, except that an empty title keeps
+// the one stored before (a group fetched without its title, e.g. one we are only invited to).
 func (s *Store) PutGroup(ctx context.Context, rec GroupRecord) error {
 	_, err := s.own.Exec(ctx, `
 		INSERT INTO gosignal_groups (`+groupColumns+`) VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (group_id) DO UPDATE SET
-			title=excluded.title, revision=excluded.revision, left_at=excluded.left_at,
+			title=CASE WHEN excluded.title='' THEN gosignal_groups.title ELSE excluded.title END,
+			revision=excluded.revision, left_at=excluded.left_at,
 			updated_at=excluded.updated_at`,
 		rec.ID, rec.Title, rec.Revision, nullableMilli(rec.LeftAt), rec.UpdatedAt.UnixMilli())
 	if err != nil {

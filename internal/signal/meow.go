@@ -24,7 +24,7 @@ import (
 const (
 	// ackFlushTimeout bounds the keepalive round trip that flushes pending acks on Close.
 	ackFlushTimeout = 2 * time.Second
-	// sendDrainTimeout bounds how long Close waits for in-flight sends.
+	// sendDrainTimeout bounds how long Close waits for in-flight sends before it disconnects.
 	sendDrainTimeout = 5 * time.Second
 	// keepalivePath is the Signal server's no-op websocket request.
 	keepalivePath = "/v1/keepalive"
@@ -52,8 +52,9 @@ func Open(_ context.Context, opts Options) (Client, error) {
 		zlog: NewZerologBridge(log),
 		dir:  dir,
 		// Unbuffered: an event is only acked once the consumer has taken it.
-		events: make(chan Event),
-		done:   make(chan struct{}),
+		events:       make(chan Event),
+		done:         make(chan struct{}),
+		drainTimeout: sendDrainTimeout,
 	}, nil
 }
 
@@ -112,7 +113,9 @@ type meowClient struct {
 	handling  sync.WaitGroup
 	sending   sync.WaitGroup
 	closeOnce sync.Once
-	acked     atomic.Bool
+	// drainTimeout is sendDrainTimeout (tests shorten it).
+	drainTimeout time.Duration
+	acked        atomic.Bool
 }
 
 func (c *meowClient) Link(ctx context.Context, deviceName string, onURI func(string)) (Account, error) {
@@ -231,6 +234,8 @@ func (c *meowClient) Events() <-chan Event {
 // Close shuts down gracefully: it lets in-flight sends finish, stops handing out events (an
 // event the consumer hasn't taken is not acked, so the server delivers it again next time),
 // flushes the acks of delivered events, and only then closes the websockets and the database.
+// Sends get drainTimeout before the websockets close under them; the database stays open
+// until every operation that uses it (see begin) has returned.
 func (c *meowClient) Close() error {
 	var err error
 
@@ -239,8 +244,8 @@ func (c *meowClient) Close() error {
 		c.closing = true
 		c.mu.Unlock()
 
-		if !waitTimeout(&c.sending, sendDrainTimeout) {
-			c.log.Warn("closing with sends still in flight", "timeout", sendDrainTimeout)
+		if !waitTimeout(&c.sending, c.drainTimeout) {
+			c.log.Warn("closing with operations still in flight", "timeout", c.drainTimeout)
 		}
 
 		close(c.done)
@@ -262,6 +267,9 @@ func (c *meowClient) Close() error {
 		}
 
 		close(c.events)
+
+		// Operations still running use the store; with the websockets closed, sends fail fast.
+		c.sending.Wait()
 
 		err = c.release()
 	})

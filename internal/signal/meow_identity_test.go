@@ -32,6 +32,7 @@ var errRollback = errors.New("rollback")
 // the same data dir for the facade methods.
 type trustEnv struct {
 	device *mstore.Device
+	data   *store.Store
 	trust  *signal.IdentityTrust
 	client signal.Client
 	now    time.Time
@@ -59,7 +60,7 @@ func newTrustEnv(t *testing.T) *trustEnv {
 		t.Fatalf("load device: %v", err)
 	}
 
-	env := &trustEnv{device: device, now: time.Date(2026, 9, 20, 12, 30, 0, 0, time.UTC)}
+	env := &trustEnv{device: device, data: data, now: time.Date(2026, 9, 20, 12, 30, 0, 0, time.UTC)}
 	env.trust = signal.InstallTrust(device, data, slog.New(slog.DiscardHandler), func() time.Time { return env.now })
 
 	env.client, err = signal.Open(t.Context(), signal.Options{DataDir: dataDir})
@@ -197,8 +198,7 @@ func TestIdentityChangeOnReceive(t *testing.T) {
 	env.now = env.now.Add(time.Hour)
 	env.saveAlice(t, newKey)
 
-	// Receiving keeps working, sending to the new key is refused; the old key's sessions (the
-	// user's other devices) stay usable until the server reports them stale.
+	// Receiving keeps working, sending to the new key is refused.
 	if !env.trusted(t, aliceACI, newKey, receiving) {
 		t.Error("new key refused for receiving")
 	}
@@ -206,13 +206,6 @@ func TestIdentityChangeOnReceive(t *testing.T) {
 	if env.trusted(t, aliceACI, newKey, sending) {
 		t.Error("new key trusted for sending")
 	}
-
-	if !env.trusted(t, aliceACI, oldKey, sending) {
-		t.Error("previous key refused for sending")
-	}
-
-	// A delayed message with the old key is not another change.
-	env.saveAlice(t, oldKey)
 
 	id := env.alice(t)
 	if id.Trust != signal.TrustUntrusted || id.Fingerprint != fingerprintOf(t, newKey) || !id.ChangedAt.Equal(env.now) {
@@ -238,6 +231,166 @@ func TestIdentityChangeOnReceive(t *testing.T) {
 
 	if !env.trusted(t, aliceACI, newKey, sending) {
 		t.Error("trusted key refused for sending")
+	}
+
+	// The old key is no exception: a (delayed) message with it is another change.
+	env.saveAlice(t, oldKey)
+
+	if id := env.alice(t); id.Trust != signal.TrustUntrusted || id.Fingerprint != fingerprintOf(t, oldKey) {
+		t.Errorf("identity after the old key came back = %+v", id)
+	}
+
+	events = env.report(t)
+	if len(events) != 1 || events[0].OldFingerprint != fingerprintOf(t, newKey) ||
+		events[0].NewFingerprint != fingerprintOf(t, oldKey) {
+		t.Errorf("events = %+v", events)
+	}
+}
+
+// TestIdentityOldKeyAfterVerify is the attack the previous key must not get through: after
+// the user verified the new key, a prekey bundle signed with the old one (a lost phone, a
+// malicious server) is refused and reported, and the sessions with the new key are dropped.
+//
+//nolint:cyclop // one scenario, checked step by step
+func TestIdentityOldKeyAfterVerify(t *testing.T) {
+	t.Parallel()
+
+	env := newTrustEnv(t)
+	oldKey, newKey := newKeyPair(t), newKeyPair(t)
+	alice := signal.Recipient{ACI: aliceACI}
+
+	err := env.process(t, oldKey, 1)
+	if err != nil {
+		t.Fatalf("first bundle: %v", err)
+	}
+
+	// The change removes the session with the old key.
+	err = env.process(t, newKey, 1)
+	if !errors.Is(err, libsignalgo.ErrorCodeUntrustedIdentity) {
+		t.Fatalf("changed bundle: got %v, want UntrustedIdentity", err)
+	}
+
+	if n := env.aliceSessions(t); n != 0 {
+		t.Errorf("%d sessions with the old key left after the change", n)
+	}
+
+	env.report(t)
+
+	number, err := env.client.SafetyNumber(t.Context(), alice)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	verified, err := env.client.TrustIdentity(t.Context(), alice, number.Number)
+	if err != nil || verified.Trust != signal.TrustVerified {
+		t.Fatalf("verify = %+v, %v", verified, err)
+	}
+
+	err = env.process(t, newKey, 1)
+	if err != nil {
+		t.Fatalf("verified bundle: %v", err)
+	}
+
+	env.now = env.now.Add(time.Hour)
+
+	err = env.process(t, oldKey, 2)
+	if !errors.Is(err, libsignalgo.ErrorCodeUntrustedIdentity) {
+		t.Fatalf("bundle with the old key: got %v, want UntrustedIdentity", err)
+	}
+
+	id := env.alice(t)
+	if id.Trust != signal.TrustUntrusted || id.Fingerprint != fingerprintOf(t, oldKey.GetIdentityKey()) ||
+		!id.ChangedAt.Equal(env.now) {
+		t.Errorf("identity = %+v, want the old key, untrusted", id)
+	}
+
+	events := env.report(t)
+	if len(events) != 1 || events[0].OldFingerprint != fingerprintOf(t, newKey.GetIdentityKey()) ||
+		events[0].NewFingerprint != fingerprintOf(t, oldKey.GetIdentityKey()) {
+		t.Errorf("events = %+v", events)
+	}
+
+	if n := env.aliceSessions(t); n != 0 {
+		t.Errorf("%d sessions with the verified key left after the change", n)
+	}
+}
+
+// TestTrustIdentityRemovesStaleSessions checks that trusting a key drops the sessions set up
+// with another one (as an older go-signal left them after a change) and keeps the others.
+func TestTrustIdentityRemovesStaleSessions(t *testing.T) {
+	t.Parallel()
+
+	env := newTrustEnv(t)
+	oldKey, newKey := newKeyPair(t), newKeyPair(t)
+	alice := signal.Recipient{ACI: aliceACI}
+
+	err := env.process(t, oldKey, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// A change recorded without removing the session.
+	err = env.data.PutIdentity(t.Context(), store.IdentityRecord{
+		ServiceID: serviceID(aliceACI).String(), Key: serialize(t, newKey), Trust: signal.TrustUntrusted.String(),
+		PreviousKey: serialize(t, oldKey),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = env.client.TrustIdentity(t.Context(), alice, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if n := env.aliceSessions(t); n != 0 {
+		t.Errorf("%d stale sessions left", n)
+	}
+
+	err = env.process(t, newKey, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = env.client.TrustIdentity(t.Context(), alice, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if n := env.aliceSessions(t); n != 1 {
+		t.Errorf("%d sessions, want the one with the trusted key", n)
+	}
+}
+
+// TestPNIIdentityLeftToSignalmeow checks that PNI keys, which can't be listed or trusted, are
+// neither enforced nor reported.
+func TestPNIIdentityLeftToSignalmeow(t *testing.T) {
+	t.Parallel()
+
+	env := newTrustEnv(t)
+	pni := libsignalgo.NewPNIServiceID(uuid.MustParse(aliceACI))
+
+	for range 2 {
+		key := newIdentityKey(t)
+
+		_, err := env.device.ACIIdentityStore.SaveIdentityKey(t.Context(), pni, key)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		ok, err := env.device.ACIIdentityStore.IsTrustedIdentity(t.Context(), pni, key, sending)
+		if err != nil || !ok {
+			t.Errorf("PNI key refused: %v", err)
+		}
+	}
+
+	ok, err := env.device.ACIIdentityStore.IsTrustedIdentity(t.Context(), pni, newIdentityKey(t), sending)
+	if err != nil || !ok {
+		t.Errorf("new PNI key refused: %v", err)
+	}
+
+	if events := env.report(t); len(events) != 0 {
+		t.Errorf("PNI change reported: %+v", events)
 	}
 }
 
@@ -357,6 +510,38 @@ func TestIdentitySaveInTransaction(t *testing.T) {
 
 	if events := env.report(t); len(events) != 0 {
 		t.Errorf("rolled back change reported: %+v", events)
+	}
+}
+
+// TestIdentityChangeRemovesSessionsInTransaction checks that a change seen while decrypting
+// removes the old sessions through signalmeow's decryption transaction.
+func TestIdentityChangeRemovesSessionsInTransaction(t *testing.T) {
+	t.Parallel()
+
+	env := newTrustEnv(t)
+
+	err := env.process(t, newKeyPair(t), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+
+	err = env.device.DoDecryptionTxn(ctx, func(ctx context.Context) error {
+		_, err := env.device.ACIIdentityStore.SaveIdentityKey(ctx, serviceID(aliceACI), newIdentityKey(t))
+		if err != nil {
+			return fmt.Errorf("save: %w", err)
+		}
+
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("save in transaction: %v", err)
+	}
+
+	if n := env.aliceSessions(t); n != 0 {
+		t.Errorf("%d sessions with the old key left", n)
 	}
 }
 
@@ -506,29 +691,12 @@ func TestIdentityChangeBlocksSession(t *testing.T) {
 	env := newTrustEnv(t)
 	first, second := newKeyPair(t), newKeyPair(t)
 
-	process := func(identity *libsignalgo.IdentityKeyPair) error {
-		t.Helper()
-
-		remote, err := serviceID(aliceACI).Address(1)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		local, err := env.device.ACIServiceID().Address(uint(env.device.DeviceID))
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		return libsignalgo.ProcessPreKeyBundle(t.Context(), preKeyBundle(t, identity), remote, local,
-			env.device.ACISessionStore, env.device.ACIIdentityStore)
-	}
-
-	err := process(first)
+	err := env.process(t, first, 1)
 	if err != nil {
 		t.Fatalf("first bundle: %v", err)
 	}
 
-	err = process(second)
+	err = env.process(t, second, 1)
 	if !errors.Is(err, libsignalgo.ErrorCodeUntrustedIdentity) {
 		t.Fatalf("changed bundle: got %v, want UntrustedIdentity", err)
 	}
@@ -542,14 +710,47 @@ func TestIdentityChangeBlocksSession(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = process(second)
+	err = env.process(t, second, 1)
 	if err != nil {
 		t.Errorf("trusted bundle: %v", err)
 	}
 }
 
-// preKeyBundle returns a valid prekey bundle of device 1 with the identity key pair identity.
-func preKeyBundle(t *testing.T, identity *libsignalgo.IdentityKeyPair) *libsignalgo.PreKeyBundle {
+// process runs libsignal's session setup with a prekey bundle of alice's device deviceID with
+// the identity key pair identity, against the wrapped stores.
+func (e *trustEnv) process(t *testing.T, identity *libsignalgo.IdentityKeyPair, deviceID uint) error {
+	t.Helper()
+
+	remote, err := serviceID(aliceACI).Address(deviceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	local, err := e.device.ACIServiceID().Address(uint(e.device.DeviceID))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	//nolint:wrapcheck // tests check libsignal's error
+	return libsignalgo.ProcessPreKeyBundle(t.Context(), preKeyBundle(t, identity, uint32(deviceID)), remote, local,
+		e.device.ACISessionStore, e.device.ACIIdentityStore)
+}
+
+// aliceSessions returns how many sessions the account has with alice.
+func (e *trustEnv) aliceSessions(t *testing.T) int {
+	t.Helper()
+
+	tuples, err := e.device.ACISessionStore.AllSessionsForServiceID(t.Context(), serviceID(aliceACI))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return len(tuples)
+}
+
+// preKeyBundle returns a valid prekey bundle of the device deviceID with the identity key pair
+// identity.
+func preKeyBundle(t *testing.T, identity *libsignalgo.IdentityKeyPair, deviceID uint32) *libsignalgo.PreKeyBundle {
 	t.Helper()
 
 	must := func(err error) {
@@ -583,7 +784,7 @@ func preKeyBundle(t *testing.T, identity *libsignalgo.IdentityKeyPair) *libsigna
 	kyberSig, err := identity.GetPrivateKey().Sign(kyberRaw)
 	must(err)
 
-	bundle, err := libsignalgo.NewPreKeyBundle(4242, 1, 1, prePublic, 2, signedPublic, signedSig, 3, kyberPublic,
+	bundle, err := libsignalgo.NewPreKeyBundle(4242, deviceID, 1, prePublic, 2, signedPublic, signedSig, 3, kyberPublic,
 		kyberSig, identity.GetIdentityKey())
 	must(err)
 

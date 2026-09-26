@@ -18,6 +18,9 @@ const (
 var (
 	errBoom          = errors.New("boom")
 	errHandlerFailed = errors.New("event handler returned non-success status")
+	// errNoEndorsements is how signalmeow fails to cache a group we are only invited to.
+	errNoEndorsements = errors.New("failed to get endorsement expiration: 3: unexpected panic: should have been " +
+		"parsed previously: ZkGroupDeserializationFailure(...)")
 )
 
 func TestZerologBridge(t *testing.T) {
@@ -33,6 +36,7 @@ func TestZerologBridge(t *testing.T) {
 	zlog.Error().Err(errBoom).Msg("Authed websocket logged out")
 	zlog.Error().Err(errHandlerFailed).Msg("Error handling request")
 	zlog.Warn().Msg("Not clearing buffered event plaintext due to handler failure")
+	zlog.Error().Err(errNoEndorsements).Msg("Failed to cache group response")
 	zlog.Error().Err(errBoom).Msg("Failed to cache group response")
 	zlog.Warn().Msg("Group not found in cache after fetching")
 
@@ -44,7 +48,8 @@ func TestZerologBridge(t *testing.T) {
 		{levelDebug, "Authed websocket logged out", keyError, "boom"},
 		{levelDebug, "Error handling request", keyError, "event handler returned non-success status"},
 		{levelDebug, "Not clearing buffered event plaintext due to handler failure", "", ""},
-		{levelDebug, "Failed to cache group response", keyError, errBoom.Error()},
+		{levelDebug, "Failed to cache group response", keyError, errNoEndorsements.Error()},
+		{"ERROR", "Failed to cache group response", keyError, errBoom.Error()},
 		{levelDebug, "Group not found in cache after fetching", "", ""},
 	}
 	for _, line := range want {

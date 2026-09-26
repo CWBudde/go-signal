@@ -26,7 +26,7 @@ func groupsFake() *signaltest.Fake {
 	own := testAccount().ACI
 	invitedAt := time.Date(2026, 9, 20, 12, 30, 0, 0, time.UTC)
 
-	return &signaltest.Fake{
+	fake := &signaltest.Fake{
 		Linked:    []signal.Account{*testAccount()},
 		Directory: []signal.Recipient{{ACI: aliceACI, Number: aliceNumber}},
 		GroupInfo: map[string]signal.Group{
@@ -58,6 +58,10 @@ func groupsFake() *signaltest.Fake {
 		GroupErrs: map[string]error{goneID: signal.ErrNotAMember},
 		LeaveTime: time.Date(2026, 9, 26, 10, 0, 0, 0, time.UTC),
 	}
+	// Listed before, so titles resolve.
+	fake.GroupTitleCache = signaltest.CachedTitles(fake.GroupInfo)
+
+	return fake
 }
 
 func TestGroupsGolden(t *testing.T) {
