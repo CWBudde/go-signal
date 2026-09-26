@@ -20,7 +20,9 @@ const (
 	accountsFile = "accounts.json"
 	dbFile       = "account.db"
 	lockFile     = "lock"
-	appDir       = "go-signal"
+	// attachmentsDir is where `mcp serve` saves attachments by default.
+	attachmentsDir = "attachments"
+	appDir         = "go-signal"
 )
 
 // DefaultDir returns $XDG_DATA_HOME/go-signal, falling back to ~/.local/share/go-signal.
@@ -69,6 +71,18 @@ func (d *Dir) Path() string {
 // AccountDir returns the directory holding the account with the given ACI.
 func (d *Dir) AccountDir(aci string) string {
 	return filepath.Join(d.path, aci)
+}
+
+// AttachmentsDir returns the default directory for the attachments that `mcp serve` downloads:
+// "attachments" in the account's directory, with dataDir resolved as OpenDir does. It creates
+// nothing; the attachments go when the account is unlinked.
+func AttachmentsDir(dataDir, aci string) (string, error) {
+	path, err := resolve(dataDir)
+	if err != nil {
+		return "", err
+	}
+
+	return filepath.Join(path, aci, attachmentsDir), nil
 }
 
 func resolve(path string) (string, error) {

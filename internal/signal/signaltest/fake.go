@@ -110,6 +110,9 @@ type Fake struct {
 	// LeaveTime is what LeaveGroup records as Group.LeftAt; zero means now.
 	LeaveTime time.Time
 
+	// InboxErr makes the inbox methods fail. The inbox itself is kept in memory (see Inbox).
+	InboxErr error
+
 	mu        sync.Mutex
 	opened    []signal.Options
 	sent      []signal.SendRequest
@@ -124,6 +127,8 @@ type Fake struct {
 	blocks    []BlockCall
 	leaves    []LeaveCall
 	left      map[string]time.Time // groups left with LeaveGroup, by ID
+	inbox     []signal.InboxEntry
+	inboxID   int64
 }
 
 // Factory is a signal.Factory that opens clients on f.
@@ -137,7 +142,9 @@ func (f *Fake) Factory(_ context.Context, opts signal.Options) (signal.Client, e
 		return nil, f.OpenErr
 	}
 
-	cli := &client{fake: f, opts: opts, events: make(chan signal.Event), done: make(chan struct{})}
+	cli := &client{
+		fake: f, opts: opts, events: make(chan signal.Event), live: make(chan signal.Event), done: make(chan struct{}),
+	}
 	f.clients = append(f.clients, cli)
 
 	return cli, nil
@@ -280,11 +287,12 @@ type client struct {
 	fake      *Fake
 	opts      signal.Options
 	events    chan signal.Event
-	done      chan struct{} // closed by Close; stops the feeder
-	fed       chan struct{} // closed when the feeder started by Connect exits
-	connected string        // ACI of the connected account
-	lost      error         // connection lost for good, in send-only mode
-	uploads   []string      // IDs of the attachments Upload returned
+	live      chan signal.Event // Push hands events to the feeder
+	done      chan struct{}     // closed by Close; stops the feeder
+	fed       chan struct{}     // closed when the feeder started by Connect exits
+	connected string            // ACI of the connected account
+	lost      error             // connection lost for good, in send-only mode
+	uploads   []string          // IDs of the attachments Upload returned
 	closed    bool
 }
 
@@ -706,19 +714,39 @@ func (c *client) checkContent(req signal.SendRequest) error {
 	return nil
 }
 
-// feed delivers incoming on Events until Close.
+// feed delivers incoming and then the events passed to Push on Events until Close.
 func (c *client) feed(incoming []signal.Event) {
 	defer close(c.fed)
 
 	for _, evt := range incoming {
+		if !c.deliver(evt) {
+			return
+		}
+	}
+
+	for {
 		select {
-		case c.events <- evt:
-			c.fake.mu.Lock()
-			c.fake.delivered++
-			c.fake.mu.Unlock()
+		case evt := <-c.live:
+			if !c.deliver(evt) {
+				return
+			}
 		case <-c.done:
 			return
 		}
+	}
+}
+
+// deliver hands evt to the consumer of Events; false means that Close came first.
+func (c *client) deliver(evt signal.Event) bool {
+	select {
+	case c.events <- evt:
+		c.fake.mu.Lock()
+		c.fake.delivered++
+		c.fake.mu.Unlock()
+
+		return true
+	case <-c.done:
+		return false
 	}
 }
 

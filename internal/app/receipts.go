@@ -32,8 +32,8 @@ func (a *App) ReadReceipts() *ReadReceipts {
 // is not a sync transcript of our own. It reports whether it queued one. Other events (edits,
 // reactions, deletes, typing, …) get no read receipt, as in the official clients.
 func (r *ReadReceipts) Add(evt signal.Event) bool {
-	msg, ok := evt.(*signal.Message)
-	if !ok || msg.Sync || msg.Sender.ACI == "" || msg.Timestamp == 0 {
+	msg, ok := incomingMessage(evt)
+	if !ok {
 		return false
 	}
 
@@ -71,4 +71,15 @@ func (r *ReadReceipts) Flush(ctx context.Context) error {
 	}
 
 	return errors.Join(errs...)
+}
+
+// incomingMessage returns evt if it is a message from another user that gets a read receipt: a
+// *signal.Message that is not a sync transcript of our own, with its sender's ACI and timestamp.
+func incomingMessage(evt signal.Event) (*signal.Message, bool) {
+	msg, ok := evt.(*signal.Message)
+	if !ok || msg.Sync || msg.Sender.ACI == "" || msg.Timestamp == 0 {
+		return nil, false
+	}
+
+	return msg, true
 }

@@ -861,9 +861,9 @@ tests against the fake facade.
 tools. (Done with the fake: initialize and `tools/list` over stdio; not yet verified with Claude
 Code against a linked account.)
 
-Notes: until the inbox (5.4) consumes events, the server connects with `signal.SendOnly()`, so
-incoming messages stay on the server for the next `receive`, and a remote unlink while it runs
-only surfaces on the next send. `account_show` (from 5.3) landed here so that there is a tool to
+Notes: until the inbox (5.4) consumed events, the server connected with `signal.SendOnly()`, so
+incoming messages stayed on the server for the next `receive`, and a remote unlink while it ran
+only surfaced on the next send; since 5.4 it receives. `account_show` (from 5.3) landed here so that there is a tool to
 list; its structured output is the `docs/json.md` account object (`output.AccountJSON`).
 
 #### 5.3 Read-only tools
@@ -892,19 +892,50 @@ safety number is only useful next to the phone; add it if an agent needs it.
 
 MCP is request/response, so incoming messages are buffered by the server and pulled by the client.
 
-- [ ] Background receive loop writes events into our own `inbox` table (bounded retention:
-      `--inbox-max-age`, `--inbox-max-count`)
-- [ ] `messages_list`: filters `chat` (recipient or group), `since` (timestamp/cursor), `limit`;
-      returns a cursor for the next call
-- [ ] `messages_wait`: long-poll for new events with a timeout (capped, e.g. 60 s)
-- [ ] Resources: `signal://chats` and `signal://chat/{id}` (recent messages); support
-      `resources/subscribe` and send `notifications/resources/updated` on new messages
-- [ ] Attachments: metadata only by default; `attachment_get` downloads on demand into a
+- [x] Background receive loop writes events into our own `inbox` table (bounded retention:
+      `--inbox-max-age`, `--inbox-max-count`) (`app.Inbox.Run` next to the server in
+      `mcp.Serve`; table `gosignal_inbox` behind the facade's `Inbox*` methods, defaults 30 days
+      and 10000 entries, pruned after every stored event)
+- [x] `messages_list`: filters `chat` (recipient or group), `since` (timestamp/cursor), `limit`;
+      returns a cursor for the next call (`chat` takes a user as `send` does or a group ID or
+      title; `cursor` and `since` (RFC 3339) are separate; without either it returns the newest
+      entries, else the oldest after them; `limit` 50 by default, at most 200; `more` says that
+      more follow)
+- [x] `messages_wait`: long-poll for new events with a timeout (capped, e.g. 60 s) (default
+      30 s, at most 60 s; without a cursor it waits for entries after the newest; on timeout it
+      returns no entries and the cursor to wait on)
+- [x] Resources: `signal://chats` and `signal://chat/{id}` (recent messages); support
+      `resources/subscribe` and send `notifications/resources/updated` on new messages (the chat
+      ID is `signal.Chat.Key()`, percent-encoded: `group:<id>` or the ACI; both are JSON; a new
+      entry updates `signal://chats` and its chat)
+- [x] Attachments: metadata only by default; `attachment_get` downloads on demand into a
       configured dir (reuses 3.7) and returns the path, or small images as image content
-- [ ] `mark_read` tool; read receipts are only sent through it, never automatically
+      (`--download-dir`, by default `attachments` in the account's directory; the file is always
+      saved, and JPEG/PNG/GIF/WebP images up to 1 MiB are returned as image content as well)
+- [x] `mark_read` tool; read receipts are only sent through it, never automatically (all unread
+      messages, or those of one `chat` up to a `cursor`; one receipt per sender)
 
 **Done when:** an agent can wait for a message, read it, and fetch its attachment, with no other
-`receive` process running.
+`receive` process running. (Done with the fake: `TestInboxFlow` in `internal/mcp` and
+`TestMCPServeInbox` over stdio; the table and the real client's inbox methods have cgo tests; not
+yet verified against the live server.)
+
+Notes: `mcp serve` now connects for receiving (no longer `SendOnly`), so it acks what it
+receives; an event counts as received once the inbox loop read it, and a store error ends the
+server (the events not read stay on Signal's server). Stored: messages, edits, deletes,
+reactions, unsupported content, decryption failures and identity changes (the last two in the
+1:1 chat with the user). Not stored: typing, receipts (5.5 may add a delivery status for our own
+sends), connection changes; a read sync from another device marks the messages read in the
+inbox. Only incoming messages count as unread. Events are stored as JSON with Go field names (see
+`signal.marshalEvent`); renaming a field of an event type loses it in older entries, and an entry
+that can't be decoded any more shows as `unsupported` `unreadableInboxEntry`. The entry objects
+(`output.InboxEntryJSON`: `id`, `receivedAt`, `unread`, `event` as in docs/json.md) and the
+resources' JSON are MCP-only and get documented in `docs/mcp.md` (5.6). A connection lost for
+good ends the server with its error (exit code 3 when unlinked). The tools that return message
+content say in their description that it is untrusted data (part of 5.5's last item).
+`attachment_get` and `mark_read` are the first tools that aren't read-only; 5.5 decides whether
+`--read-only` drops them. With the SDK's newer protocol (2026-07-28) a subscription is a
+background `subscriptions/listen`, so its errors don't reach the client.
 
 #### 5.5 Write tools and safety policy
 

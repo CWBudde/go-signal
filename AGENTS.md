@@ -33,7 +33,8 @@ Layering, top to bottom:
 - `internal/store/`: data-dir layout (`accounts.json` registry, `<aci>/account.db` SQLite with
   signalmeow's tables plus ours, `<aci>/lock` flock). Only opening the DB needs cgo.
 - `internal/mcp/`: MCP server (`mcp serve`, official go-sdk) whose tools call `internal/app`.
-  Stdout carries only JSON-RPC; the SDK's logs are demoted to debug.
+  Stdout carries only JSON-RPC; the SDK's logs are demoted to debug. While it runs, `app.Inbox`
+  receives events into the account's inbox table, which the message tools and resources read.
 - `internal/output/`: plain/JSON renderers. The JSON schema is documented in `docs/json.md` and
   versioned by `output.SchemaVersion`; bump it only when a field is removed or changes meaning.
 

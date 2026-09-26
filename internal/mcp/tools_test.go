@@ -33,7 +33,8 @@ func toolsFake() *signaltest.Fake {
 	}
 
 	return &signaltest.Fake{
-		Linked: []signal.Account{testAccount()},
+		Linked:    []signal.Account{testAccount()},
+		Directory: []signal.Recipient{{ACI: aliceACI, Number: aliceNumber}},
 		Contacts: []signal.Contact{
 			{Recipient: signal.Recipient{ACI: aliceACI, Number: aliceNumber}, ContactName: alice},
 			{Recipient: signal.Recipient{ACI: bobACI}, ProfileName: "Bob", Blocked: true},
@@ -54,9 +55,15 @@ func toolsFake() *signaltest.Fake {
 func call(t *testing.T, session *sdk.ClientSession, name string, args map[string]any, out any) string {
 	t.Helper()
 
-	res := callRaw(t, session, name, args)
+	return decode(t, callRaw(t, session, name, args), out)
+}
+
+// decode decodes the structured content of res into out and returns its text, like call.
+func decode(t *testing.T, res *sdk.CallToolResult, out any) string {
+	t.Helper()
+
 	if res.IsError {
-		t.Fatalf("%s: tool error: %s", name, text(res))
+		t.Fatalf("tool error: %s", text(res))
 	}
 
 	raw, err := json.Marshal(res.StructuredContent)
@@ -66,12 +73,12 @@ func call(t *testing.T, session *sdk.ClientSession, name string, args map[string
 
 	err = json.Unmarshal(raw, out)
 	if err != nil {
-		t.Fatalf("%s: structured content %s: %v", name, raw, err)
+		t.Fatalf("structured content %s: %v", raw, err)
 	}
 
 	txt := text(res)
 	if txt == "" {
-		t.Errorf("%s: no text content for clients that ignore structured output", name)
+		t.Error("no text content for clients that ignore structured output")
 	}
 
 	return txt

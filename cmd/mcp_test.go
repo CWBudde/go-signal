@@ -135,9 +135,11 @@ func (s *mcpSession) exchange() []string {
 	return names
 }
 
-// startMCP runs `mcp serve` in process with piped stdin/stdout. wait returns the command's error
-// once it ends.
-func startMCP(t *testing.T, ctx context.Context, fake *signaltest.Fake) (*mcpSession, func() error) {
+// startMCP runs `mcp serve` with args in process with piped stdin/stdout. wait returns the
+// command's error once it ends.
+func startMCP(
+	t *testing.T, ctx context.Context, fake *signaltest.Fake, args ...string,
+) (*mcpSession, func() error) {
 	t.Helper()
 
 	cfgFile := filepath.Join(t.TempDir(), "config.yaml")
@@ -154,7 +156,7 @@ func startMCP(t *testing.T, ctx context.Context, fake *signaltest.Fake) (*mcpSes
 	root := cmd.NewRootCmd(cmd.WithClientFactory(fake.Factory))
 	root.SetIn(stdinR)
 	root.SetOut(stdoutW)
-	root.SetArgs([]string{"--config=" + cfgFile, dataDirFlag, t.TempDir(), mcpCmd, serveCmd})
+	root.SetArgs(append([]string{"--config=" + cfgFile, dataDirFlag, t.TempDir(), mcpCmd, serveCmd}, args...))
 
 	done := make(chan error, 1)
 
@@ -262,6 +264,74 @@ func TestMCPServeStartupErrors(t *testing.T) {
 		_, wait := startMCP(t, t.Context(), &signaltest.Fake{Linked: []signal.Account{unlinkedAccount()}})
 		wantUnlinked(t, wait())
 	})
+}
+
+// TestMCPServeInbox reads a message that was waiting on the server through messages_list.
+func TestMCPServeInbox(t *testing.T) {
+	t.Parallel()
+
+	alice := signal.Recipient{ACI: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"}
+	fake := &signaltest.Fake{
+		Linked: []signal.Account{*testAccount()},
+		Incoming: []signal.Event{&signal.Message{
+			Envelope: signal.Envelope{Sender: alice, Chat: signal.Chat{Recipient: alice}, Timestamp: 1000},
+			Body:     "hello agent",
+		}},
+	}
+	session, wait := startMCP(t, t.Context(), fake)
+
+	session.call(1, "initialize",
+		`{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"0"}}`)
+	session.send(`{"jsonrpc":"2.0","method":"notifications/initialized"}`)
+
+	// The receive loop runs next to the server: wait until the message is in the inbox.
+	result := session.call(2, "tools/call", `{"name":"messages_wait","arguments":{"cursor":"0","timeout":5}}`)
+	if !strings.Contains(string(result), "hello agent") {
+		t.Errorf("messages_wait: %s", result)
+	}
+
+	err := session.stdin.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = wait()
+	if err != nil {
+		t.Fatalf("mcp serve: %v", err)
+	}
+
+	if fake.Delivered() != 1 {
+		t.Errorf("delivered %d events, want the message", fake.Delivered())
+	}
+}
+
+// TestMCPServeUnlinkedWhileRunning checks that the server ends with exit code 3 when the device
+// is unlinked while it runs, although the client keeps stdin open.
+func TestMCPServeUnlinkedWhileRunning(t *testing.T) {
+	t.Parallel()
+
+	fake := &signaltest.Fake{
+		Linked:   []signal.Account{*testAccount()},
+		Incoming: []signal.Event{&signal.Connection{State: signal.StateLoggedOut}},
+	}
+	session, wait := startMCP(t, t.Context(), fake)
+
+	defer session.stdin.Close()
+
+	wantUnlinked(t, wait())
+}
+
+func TestMCPServeInboxLimits(t *testing.T) {
+	t.Parallel()
+
+	for _, arg := range []string{"--inbox-max-age=-1h", "--inbox-max-count=-1"} {
+		_, wait := startMCP(t, t.Context(), &signaltest.Fake{Linked: []signal.Account{*testAccount()}}, arg)
+
+		err := wait()
+		if err == nil || !strings.Contains(err.Error(), "must not be negative") {
+			t.Errorf("%s: %v, want an error", arg, err)
+		}
+	}
 }
 
 // TestMCPServeStdout runs `mcp serve` in a child process (TestMCPServeChild) with debug logging

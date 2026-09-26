@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -89,6 +90,22 @@ func TestOpenDirResolvesRelativePath(t *testing.T) {
 
 	if !filepath.IsAbs(dir.Path()) || strings.Contains(dir.Path(), "..") {
 		t.Errorf("path not cleaned: %s", dir.Path())
+	}
+}
+
+func TestAttachmentsDir(t *testing.T) {
+	t.Parallel()
+
+	base := t.TempDir()
+
+	got, err := store.AttachmentsDir(base+"/./x/..", testACI)
+	if err != nil || got != filepath.Join(base, testACI, "attachments") {
+		t.Errorf("AttachmentsDir = %q, %v", got, err)
+	}
+
+	_, err = os.Stat(filepath.Join(base, testACI))
+	if !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("AttachmentsDir created something: %v", err)
 	}
 }
 
