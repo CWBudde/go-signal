@@ -67,6 +67,16 @@ docs-gen:
 package os arch: docs-gen
     ./scripts/package.sh "{{ version }}" {{ os }} {{ arch }}
 
+# Pure-Go binary (no cgo, no libsignal_ffi.a; libsignalgo from the purego fork, PLAN.md Phase 7)
+build-purego:
+    CGO_ENABLED=0 go build -tags purego -ldflags "{{ version_ldflags }}" -o bin/go-signal-purego .
+
+# Vet, lint and test the purego build (cgo-only tests are excluded by their build tags)
+check-purego:
+    CGO_ENABLED=0 go vet -tags purego ./...
+    CGO_ENABLED=0 golangci-lint run --timeout 5m --build-tags purego
+    CGO_ENABLED=0 go test -tags purego -count=1 ./...
+
 # Build the binary without version info (faster for development)
 build-dev:
     go build -o bin/go-signal .

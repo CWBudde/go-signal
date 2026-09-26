@@ -25,14 +25,59 @@ submodule SHA it built next to the library and skips the cargo build while it st
 
 `CGO_ENABLED=0 go test ./...` works without the library for the pure-Go packages.
 
+## Pure-Go backend (purego)
+
+The `purego` build tag builds go-signal without cgo, Rust or `libsignal_ffi.a` (PLAN.md Phases
+7–10). It is a work in progress: most of the protocol still returns `ErrNotImplemented`, so it can't
+link or send yet. The cgo build stays the default.
+
+```sh
+just build-purego    # CGO_ENABLED=0 go build -tags purego -> bin/go-signal-purego
+just check-purego    # vet, golangci-lint and tests of the purego build
+```
+
+How it fits together:
+
+- go.mod replaces `go.mau.fi/mautrix-signal` with the fork
+  [`cwbudde/mautrix-signal`](https://github.com/cwbudde/mautrix-signal) (branch `purego`, tags
+  `vX.YYMM.Z-purego.N`). The fork changes only `pkg/libsignalgo`: every cgo file builds with
+  `!purego`, and `x_purego.go` twins implement the same API on top of
+  [`cwbudde/libsignal-go`](https://github.com/cwbudde/libsignal-go). The fork's `PUREGO.md` and
+  `internal/stubgen` (stub generator and API parity check) describe the details. The cgo build
+  compiles the same code as upstream, so it is unchanged by the replace.
+- `cwbudde/libsignal-go` is a fork of `GoCodeAlone/libsignal-go` whose Rust compat harness is
+  pinned to the libsignal tag libsignalgo expects (its `decisions/0007-cwbudde-fork-policy.md`).
+  Fork releases are tagged `vX.Y.Z-cw.N`.
+- In go-signal, files that need libsignal through cgo are `cgo && !purego` (`libsignal.go`,
+  `hpke.go`, `username_cgo.go`, `internal/store/sqlite_cgo.go`), and their purego counterparts
+  are `purego`. The real client and the store build with `cgo || purego`; `meow_nocgo.go` is
+  `!cgo && !purego`. Purego builds use `modernc.org/sqlite` instead of `mattn/go-sqlite3`, with
+  the same connection options (`TestConnectionPragmas` checks both).
+- Tests that need real libsignal are `cgo && !purego`. `purego_diff_test.go` (cgo) runs the
+  cgo code and the pure-Go code on the same inputs and requires identical results.
+
+To work on the forks locally, point go.mod at the checkouts temporarily and don't commit it:
+
+```sh
+go mod edit -replace go.mau.fi/mautrix-signal=../mautrix-signal
+# in ../mautrix-signal/go.mod, for libsignal-go changes:
+#   go mod edit -replace github.com/cwbudde/libsignal-go=../libsignal-go
+```
+
+When the change is done, commit and tag the fork, then set the replace to the new tag.
+
 ### Upgrading signalmeow and libsignal
 
 The submodule must sit at exactly the tag that `libsignalgo` was generated against
 (`pkg/libsignalgo/signalversion/version.go` in mautrix-signal). `just check-libsignal` and the
 `internal/signal` tests fail when the two differ.
 
-1. Bump mautrix-signal to a release tag, not a pseudo-version of `main`:
-   `go get go.mau.fi/mautrix-signal@vX.YYMM.Z && go mod tidy`
+1. Bump mautrix-signal to a release tag, not a pseudo-version of `main`. go.mod requires
+   `go.mau.fi/mautrix-signal@vX.YYMM.Z` and replaces it with the purego fork, so the fork moves
+   first: rebase its `purego` branch onto the new upstream tag, run
+   `go run ./pkg/libsignalgo/internal/stubgen -gen` and `-check`, port whatever changed, and tag
+   `vX.YYMM.Z-purego.1`. Then:
+   `go mod edit -require go.mau.fi/mautrix-signal@vX.YYMM.Z -replace go.mau.fi/mautrix-signal=github.com/cwbudde/mautrix-signal@vX.YYMM.Z-purego.1 && go mod tidy`
 2. Read the libsignal version it expects: `go run . version` prints it as `libsignal:`.
 3. Move the submodule to that tag:
    ```sh
@@ -43,13 +88,16 @@ The submodule must sit at exactly the tag that `libsignalgo` was generated again
    Stage the submodule before running any `just` recipe. `check-libsignal` runs
    `git submodule update`, which resets an unstaged checkout to the recorded commit.
 4. `just check-libsignal && just libsignal && just test`
+5. If the libsignal tag moved, re-pin `cwbudde/libsignal-go`'s compat harness to it
+   (`scripts/update-upstream-pin.sh vA.B.C` plus the manual steps in its ADR 0007), port the
+   drift, tag a new `-cw.N` release and bump it in the mautrix fork.
 
 ## CI
 
 `.github/workflows/tests.yaml` runs these jobs:
 
-- `test-unit`: `CGO_ENABLED=0` build and tests. No Rust and no libsignal, so it is fast. It runs
-  without `-race`, because the race detector needs cgo.
+- `test-unit`: `CGO_ENABLED=0` build and tests, then the same with `-tags purego`. No Rust and
+  no libsignal, so it is fast. It runs without `-race`, because the race detector needs cgo.
 - `test-cgo`: restores `third_party/lib` from the Actions cache, keyed on the libsignal submodule
   commit and the runner OS/arch. On a miss it installs `protoc`, `clang`, `cmake` and the pinned
   Rust toolchain, then builds the library. Either way it then runs `just check-libsignal`,

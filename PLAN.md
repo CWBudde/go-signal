@@ -29,6 +29,9 @@ Legend: `[x]` done · `[ ]` open
 | 2026-09-26 | **Identity trust is TOFU**: a changed key blocks sending to that user until `identities trust`; receiving keeps working.                                                 |
 | 2026-09-26 | **MCP write tools send to nobody by default**: only `--allow-recipient` entries are allowed; `--allow-recipient '*'` opts in to everyone.                                |
 | 2026-09-26 | **`mcp serve --read-only`** drops every tool that sends (`send_message`, `react`, `delete_message`, `mark_read`); `attachment_get` stays (it only writes locally).       |
+| 2026-09-26 | **go.mod always replaces `go.mau.fi/mautrix-signal`** with `github.com/cwbudde/mautrix-signal` (tag `vX.YYMM.Z-purego.N`). The cgo build compiles upstream's code.       |
+| 2026-09-26 | **Purego builds use `modernc.org/sqlite`** (mattn/go-sqlite3 needs cgo); same connection options as the cgo driver.                                                      |
+| 2026-09-26 | `cwbudde/libsignal-go` pins its compat harness to **the libsignal tag libsignalgo expects**, not upstream's latest; fork tags are `vX.Y.Z-cw.N`.                         |
 
 ### 1.1 Why signalmeow
 
@@ -1128,32 +1131,51 @@ and the shim can be offered upstream later.
 
 #### 7.1 Fork and re-pin libsignal-go
 
-- [ ] Fork to `github.com/cwbudde/libsignal-go` and rename the module path (a `replace` directive
+- [x] Fork to `github.com/cwbudde/libsignal-go` and rename the module path (a `replace` directive
       would break `go install` for users). Keep `GoCodeAlone` as the `upstream` remote and merge
-      from it regularly.
-- [ ] Re-pin its Rust compat harness (`compat/rust-harness`) from v0.96.4 to the libsignal tag in
+      from it regularly. (Protos regenerated with the pinned buf, since `go_package` sits in the
+      raw descriptors. First release `v0.7.1-cw.1`.)
+- [x] Re-pin its Rust compat harness (`compat/rust-harness`) from v0.96.4 to the libsignal tag in
       `third_party/libsignal` (v0.102.2). Regenerate the vectors, then port whatever the drift
-      breaks.
-- [ ] Point the fork's `upstream-pin` workflow at _our_ pin (the version libsignalgo expects), not
-      at upstream's latest
-- [ ] Record the fork policy (what we change, how we merge from upstream) in the fork's
-      `decisions/`
+      breaks. (No drift: the harness follows v0.102.2 to SPQR v1.5.3, libcrux-ml-kem 0.0.10 and
+      Rust 1.98.1, and every vector and fixture regenerates byte-identical. Upstream's changes in
+      `protocol`/`usernames`/`account-keys` between the tags are refactors, the removal of
+      `should_use_nonpq_session`, and new account-keys APIs not ported yet.)
+- [x] Point the fork's `upstream-pin` workflow at _our_ pin (the version libsignalgo expects), not
+      at upstream's latest (read from the mautrix fork's `signalversion`; needs the
+      `GH_MANAGEMENT_TOKEN` secret before its scheduled runs do anything)
+- [x] Record the fork policy (what we change, how we merge from upstream) in the fork's
+      `decisions/` (`0007-cwbudde-fork-policy.md`, including the manual re-pin steps the script
+      can't do: toolchain, direct `spqr`/`libcrux-ml-kem` pins)
 
 **Done when:** the fork's CI, including live Rust↔Go interop, is green against v0.102.2.
+(Green on 2026-09-26: build/test on linux and macOS, lint, `compat-interop`.)
 
 #### 7.2 mautrix-signal fork and build tag
 
-- [ ] Fork to `github.com/cwbudde/mautrix-signal`, with a `purego` branch rebased on the tag we pin
-- [ ] Add `//go:build !purego` to every CGO file in `pkg/libsignalgo`, then add a
+- [x] Fork to `github.com/cwbudde/mautrix-signal`, with a `purego` branch rebased on the tag we pin
+      (v0.2609.0)
+- [x] Add `//go:build !purego` to every CGO file in `pkg/libsignalgo`, then add a
       `libsignalgo_purego.go` skeleton that declares the full exported API (the ~124 symbols
       signalmeow uses) returning `ErrNotImplemented`. With that, `go build -tags purego` compiles.
-- [ ] go-signal: a `just build-purego` recipe (`CGO_ENABLED=0 go build -tags purego`). Our own CGO
+      (One generated `x_purego.go` twin per cgo file, 48 in all, covering all 516 exported
+      declarations. `internal/stubgen` generates them and checks API parity, and the fork's
+      `purego.yml` CI runs it. `DeserializeServerPublicParams` is hand-written, because
+      signalmeow calls it at init.)
+- [x] go-signal: a `just build-purego` recipe (`CGO_ENABLED=0 go build -tags purego`). Our own CGO
       files (`internal/signal/libsignal.go`, `hpke.go`) get pure counterparts behind the same tag.
-- [ ] Decide how go-signal consumes the fork: always require the fork (simple; the CGO build uses
-      it too), or use a `replace` only in a purego build. Record the choice in §1.
+      (Also `username.go`'s username hash, now `username_cgo.go` plus `username_purego.go` on
+      libsignal-go's `usernames`. HPKE is real already, see 9.4. `just check-purego` and the
+      `test-unit` CI job vet, lint and test the purego build.)
+- [x] Decide how go-signal consumes the fork: always require the fork (simple; the CGO build uses
+      it too), or use a `replace` only in a purego build. Record the choice in §1. (Always replace.)
+- [x] SQLite without cgo: `modernc.org/sqlite` in purego builds (`internal/store/sqlite_*.go`), with
+      the same pragmas (`TestConnectionPragmas` runs in both builds). The store tests that don't
+      need libsignal keys run in both builds.
 
 **Done when:** `CGO_ENABLED=0 go build -tags purego ./...` produces a binary, and the CGO build
-is unchanged.
+is unchanged. (The purego binary is fully static and starts; `version` and `account show` work,
+and `just check` is green.)
 
 #### 7.3 Shim: protocol core onto libsignal-go
 
@@ -1174,7 +1196,7 @@ is unchanged.
 - [ ] `InitLogger`/`Version` as thin stubs. `Version` reports the libsignal-go version and our pin.
 - [ ] Differential tests in go-signal (`cgo` build tag): run libsignal-go and the CGO libsignalgo
       on the same inputs, and require equal serialized records and mutual decryptability in both
-      directions
+      directions (`internal/signal/purego_diff_test.go`; username hash and HPKE so far)
 
 **Done when:** a purego build links a device and does 1:1 send/receive against the live server,
 and a DB created with the CGO build keeps working with the purego build (and the other way round).
@@ -1257,9 +1279,11 @@ sends).
 
 #### 9.4 HPKE and leftovers
 
-- [ ] HPKE seal/open with libsignal's suite (DHKEM-X25519, HKDF-SHA256, AES-256-GCM). Use the
+- [x] HPKE seal/open with libsignal's suite (DHKEM-X25519, HKDF-SHA256, AES-256-GCM). Use the
       standard library's `crypto/hpke` (Go 1.26) if it covers the suite; otherwise port it. This
-      replaces `hpke.go` in purego builds.
+      replaces `hpke.go` in purego builds. (Done early, in 7.2: `hpke_std.go` on `crypto/hpke`
+      with libsignal's framing (type byte, enc, AEAD output). Checked against libsignal in both
+      directions (`TestDiffHPKE`) and against a committed libsignal ciphertext.)
 - [ ] Sweep: any `libsignalgo` symbol still returning `ErrNotImplemented` gets implemented or
       listed as a known gap in the fork's scope matrix
 

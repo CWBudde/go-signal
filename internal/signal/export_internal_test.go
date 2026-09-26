@@ -38,3 +38,13 @@ func MarshalEvent(evt Event, chat Chat) ([]byte, error) {
 func UnmarshalEvent(data []byte) (Event, Chat) {
 	return unmarshalEvent(data)
 }
+
+// StdHPKESeal exposes stdHPKESeal (crypto/hpke) to the signal_test package.
+func StdHPKESeal(publicKey, plaintext, info, associatedData []byte) ([]byte, error) {
+	return stdHPKESeal(publicKey, plaintext, info, associatedData)
+}
+
+// StdHPKEOpen exposes stdHPKEOpen (crypto/hpke) to the signal_test package.
+func StdHPKEOpen(privateKey, ciphertext, info, associatedData []byte) ([]byte, error) {
+	return stdHPKEOpen(privateKey, ciphertext, info, associatedData)
+}

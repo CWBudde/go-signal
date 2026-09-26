@@ -33,7 +33,10 @@ includes = ["*.go"]
 command = "gci"
 options = ["-w"]
 includes = ["*.go"]
-priority = 1        # run after gofumpt
+# gci v0.14.0's standard-library list predates Go 1.26's crypto/hpke and would move it into the
+# third-party group, which gofumpt (golangci-lint) then rejects.
+excludes = ["internal/signal/hpke_std.go"]
+priority = 1                               # run after gofumpt
 
 ### Just
 

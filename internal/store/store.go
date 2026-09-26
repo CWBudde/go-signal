@@ -1,4 +1,4 @@
-//go:build cgo
+//go:build cgo || purego
 
 package store
 
@@ -8,11 +8,8 @@ import (
 	"embed"
 	"errors"
 	"fmt"
-	"net/url"
 	"path/filepath"
 
-	// Registers the "sqlite3" database/sql driver.
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
 	"go.mau.fi/mautrix-signal/pkg/signalmeow/store"
 	"go.mau.fi/util/dbutil"
@@ -54,13 +51,7 @@ func (d *Dir) OpenAccount(ctx context.Context, aci string, log zerolog.Logger) (
 }
 
 func openDB(ctx context.Context, path string, log zerolog.Logger) (*Store, error) {
-	dsn := (&url.URL{
-		Scheme:   "file",
-		Opaque:   path,
-		RawQuery: "_foreign_keys=on&_journal_mode=WAL&_busy_timeout=5000&_txlock=immediate",
-	}).String()
-
-	sqlDB, err := dbutil.NewWithDialect(dsn, "sqlite3")
+	sqlDB, err := dbutil.NewWithDialect(sqliteDSN(path), sqliteDriver)
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
