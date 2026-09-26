@@ -7,3 +7,8 @@ package signal
 func hpkeOpen(privateKey, ciphertext, info, associatedData []byte) ([]byte, error) {
 	return stdHPKEOpen(privateKey, ciphertext, info, associatedData)
 }
+
+// hpkeSeal encrypts plaintext to the serialized public key (libsignal's PublicKey.seal).
+func hpkeSeal(publicKey, plaintext, info, associatedData []byte) ([]byte, error) {
+	return stdHPKESeal(publicKey, plaintext, info, associatedData)
+}

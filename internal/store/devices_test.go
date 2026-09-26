@@ -1,4 +1,4 @@
-//go:build cgo && !purego
+//go:build cgo || purego
 
 package store_test
 

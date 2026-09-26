@@ -3,7 +3,7 @@ module github.com/cwbudde/go-signal
 go 1.26.0
 
 require (
-	github.com/cwbudde/libsignal-go v0.7.1-cw.1
+	github.com/cwbudde/libsignal-go v0.7.1-cw.3
 	github.com/google/uuid v1.6.0
 	github.com/mattn/go-sqlite3 v1.14.52
 	github.com/mdp/qrterminal/v3 v3.2.1
@@ -19,6 +19,7 @@ require (
 
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect
+	github.com/cloudflare/circl v1.6.4 // indirect
 	github.com/coder/websocket v1.8.15 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.6 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
@@ -65,4 +66,4 @@ require (
 	rsc.io/qr v0.2.0 // indirect
 )
 
-replace go.mau.fi/mautrix-signal => github.com/cwbudde/mautrix-signal v0.2609.0-purego.2
+replace go.mau.fi/mautrix-signal => github.com/cwbudde/mautrix-signal v0.2609.0-purego.3
