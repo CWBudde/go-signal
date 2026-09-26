@@ -59,7 +59,7 @@ func TestInboxFlow(t *testing.T) {
 	fake := toolsFake()
 	fake.Attachments = map[string][]byte{"cdn-photo": []byte("png")}
 	dir := t.TempDir()
-	session := connectWith(t, fake, mcp.Options{DownloadDir: dir}, nil)
+	session := connectWith(t, fake, mcp.Options{DownloadDir: dir}, testClient{})
 
 	got := waitForPush(t, session, fake, photoMessage(1000))
 	if len(got.Messages) != 1 || got.Cursor != "1" {
@@ -116,7 +116,7 @@ func waitForPush(t *testing.T, session *sdk.ClientSession, fake *signaltest.Fake
 func checkAttachment(t *testing.T, session *sdk.ClientSession, id, path string) {
 	t.Helper()
 
-	res := callRaw(t, session, attachmentGet, map[string]any{"message": id})
+	res := callRaw(t, session, attachmentGet, map[string]any{messageArg: id})
 	if res.IsError {
 		t.Fatalf("attachment_get: %s", text(res))
 	}
@@ -223,11 +223,11 @@ func TestChatResources(t *testing.T) {
 
 	fake := toolsFake()
 	updated := make(chan string, 10)
-	session := connectWith(t, fake, mcp.Options{}, &sdk.ClientOptions{
+	session := connectWith(t, fake, mcp.Options{}, testClient{options: &sdk.ClientOptions{
 		ResourceUpdatedHandler: func(_ context.Context, req *sdk.ResourceUpdatedNotificationRequest) {
 			updated <- req.Params.URI
 		},
-	})
+	}})
 
 	own := signal.Recipient{ACI: testAccount().ACI}
 	fake.Push(&signal.Message{

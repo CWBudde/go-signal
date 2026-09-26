@@ -9,6 +9,8 @@ import (
 	_ "image/gif"  // decoder for the dimensions of attached images
 	_ "image/jpeg" // decoder for the dimensions of attached images
 	_ "image/png"  // decoder for the dimensions of attached images
+	"io"
+	"io/fs"
 	"mime"
 	"net/http"
 	"os"
@@ -32,6 +34,8 @@ var (
 	ErrNotAFile = errors.New("not a regular file")
 	// ErrInvalidQuote means that a quote argument is not <author>:<timestamp>.
 	ErrInvalidQuote = errors.New("invalid quote")
+	// ErrOutsideAttachDir means that an attachment is not in SendRequest.AttachDir.
+	ErrOutsideAttachDir = errors.New("outside the attachment directory")
 )
 
 // mentionPattern matches a @{<recipient>} placeholder in a message body.
@@ -44,14 +48,27 @@ const (
 	mentionLength = 1
 )
 
-// loadAttachments reads the files at paths (see loadAttachment).
-func loadAttachments(paths []string) ([]signal.OutgoingAttachment, error) {
+// loadAttachments reads the files at paths (see loadAttachment). With a dir, the paths are
+// relative to it, and files outside it (also through symlinks) fail with ErrOutsideAttachDir.
+func loadAttachments(dir string, paths []string) ([]signal.OutgoingAttachment, error) {
+	var files fileOpener = osFiles{}
+
+	if dir != "" && len(paths) > 0 {
+		root, err := openAttachDir(dir)
+		if err != nil {
+			return nil, err
+		}
+		defer root.Close()
+
+		files = root
+	}
+
 	out := make([]signal.OutgoingAttachment, 0, len(paths))
 
 	var errs []error
 
 	for _, path := range paths {
-		att, err := loadAttachment(path)
+		att, err := loadAttachment(files, path)
 		if err != nil {
 			errs = append(errs, err)
 
@@ -69,10 +86,94 @@ func loadAttachments(paths []string) ([]signal.OutgoingAttachment, error) {
 	return out, nil
 }
 
+// fileOpener opens attachment files: from the file system, or confined to a directory.
+type fileOpener interface {
+	Stat(name string) (fs.FileInfo, error)
+	Open(name string) (*os.File, error)
+}
+
+// osFiles opens files by their path.
+type osFiles struct{}
+
+func (osFiles) Stat(name string) (fs.FileInfo, error) { return os.Stat(name) } //nolint:wrapcheck // as os
+
+func (osFiles) Open(name string) (*os.File, error) {
+	return os.Open(name) //nolint:gosec,wrapcheck // the user names the file to send; as os
+}
+
+// attachDir opens files by their path relative to a directory, and never outside it.
+type attachDir struct {
+	*os.Root
+
+	dir string
+}
+
+func openAttachDir(dir string) (*attachDir, error) {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return nil, fmt.Errorf("attachment directory: %w", err)
+	}
+
+	root, err := os.OpenRoot(abs)
+	if err != nil {
+		return nil, fmt.Errorf("attachment directory: %w", err)
+	}
+
+	return &attachDir{Root: root, dir: abs}, nil
+}
+
+func (d *attachDir) Stat(name string) (fs.FileInfo, error) {
+	rel, err := d.local(name)
+	if err != nil {
+		return nil, err
+	}
+
+	info, err := d.Root.Stat(rel)
+	if err != nil {
+		// os.Root has no sentinel error for a symlink that leads outside.
+		_, outErr := os.Stat(filepath.Join(d.dir, rel))
+		if outErr == nil {
+			return nil, fmt.Errorf("attachment %s: %w %s", name, ErrOutsideAttachDir, d.dir)
+		}
+
+		return nil, err //nolint:wrapcheck // as os
+	}
+
+	return info, nil
+}
+
+func (d *attachDir) Open(name string) (*os.File, error) {
+	rel, err := d.local(name)
+	if err != nil {
+		return nil, err
+	}
+
+	return d.Root.Open(rel) //nolint:wrapcheck // as os
+}
+
+// local returns name relative to the directory, if it lies within it.
+func (d *attachDir) local(name string) (string, error) {
+	rel := name
+	if filepath.IsAbs(name) {
+		var err error
+
+		rel, err = filepath.Rel(d.dir, name)
+		if err != nil {
+			return "", fmt.Errorf("attachment %s: %w %s", name, ErrOutsideAttachDir, d.dir)
+		}
+	}
+
+	if !filepath.IsLocal(rel) {
+		return "", fmt.Errorf("attachment %s: %w %s", name, ErrOutsideAttachDir, d.dir)
+	}
+
+	return rel, nil
+}
+
 // loadAttachment reads the file at path, checks its size and determines its content type and,
 // for GIF, JPEG and PNG images, its dimensions.
-func loadAttachment(path string) (signal.OutgoingAttachment, error) {
-	info, err := os.Stat(path)
+func loadAttachment(files fileOpener, path string) (signal.OutgoingAttachment, error) {
+	info, err := files.Stat(path)
 	if err != nil {
 		return signal.OutgoingAttachment{}, fmt.Errorf("attachment: %w", err)
 	}
@@ -86,7 +187,7 @@ func loadAttachment(path string) (signal.OutgoingAttachment, error) {
 			path, ErrAttachmentTooLarge, info.Size(), MaxAttachmentSize)
 	}
 
-	data, err := os.ReadFile(path) //nolint:gosec // the user names the file to send
+	data, err := readFile(files, path)
 	if err != nil {
 		return signal.OutgoingAttachment{}, fmt.Errorf("attachment: %w", err)
 	}
@@ -105,6 +206,26 @@ func loadAttachment(path string) (signal.OutgoingAttachment, error) {
 	}
 
 	return att, nil
+}
+
+// readFile reads the file at path, at most MaxAttachmentSize bytes of it.
+func readFile(files fileOpener, path string) ([]byte, error) {
+	file, err := files.Open(path)
+	if err != nil {
+		return nil, err //nolint:wrapcheck // the caller wraps it
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(io.LimitReader(file, MaxAttachmentSize+1))
+	if err != nil {
+		return nil, err //nolint:wrapcheck // the caller wraps it
+	}
+
+	if len(data) > MaxAttachmentSize {
+		return nil, fmt.Errorf("%s: %w (at most %d bytes)", path, ErrAttachmentTooLarge, MaxAttachmentSize)
+	}
+
+	return data, nil
 }
 
 // contentType returns the MIME type of a file: sniffed from data, unless that only gives a

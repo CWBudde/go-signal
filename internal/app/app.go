@@ -16,6 +16,8 @@ import (
 type App struct {
 	client signal.Client
 	now    func() time.Time
+	// allow restricts the chats that Send, React and Delete go to; nil doesn't restrict.
+	allow *Allowlist
 }
 
 // Option customises an App.

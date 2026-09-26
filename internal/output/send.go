@@ -48,14 +48,15 @@ type memberJSON struct {
 	Error        string `json:"error,omitempty"`
 }
 
-type sendJSON struct {
+// SendJSON is the "send" object of docs/json.md.
+type SendJSON struct {
 	Timestamp uint64           `json:"timestamp"`
 	Results   []sendResultJSON `json:"results"`
 }
 
 type sendDoc struct {
 	Version int      `json:"version"`
-	Send    sendJSON `json:"send"`
+	Send    SendJSON `json:"send"`
 }
 
 // Send prints the outcome of `send`, one line (or JSON entry) per recipient.
@@ -67,8 +68,15 @@ func (p *Printer) Send(res app.SendResult) error {
 	return p.sendTable(res)
 }
 
-func (p *Printer) sendToJSON(res app.SendResult) sendJSON {
-	out := sendJSON{Timestamp: res.Timestamp, Results: make([]sendResultJSON, 0, len(res.Results))}
+// NewSendJSON converts res to the "send" object, naming users from names.
+func NewSendJSON(res app.SendResult, names app.Names) SendJSON {
+	printer := &Printer{names: names}
+
+	return printer.sendToJSON(res)
+}
+
+func (p *Printer) sendToJSON(res app.SendResult) SendJSON {
+	out := SendJSON{Timestamp: res.Timestamp, Results: make([]sendResultJSON, 0, len(res.Results))}
 	for _, result := range res.Results {
 		out.Results = append(out.Results, p.sendResultToJSON(res.Timestamp, result))
 	}

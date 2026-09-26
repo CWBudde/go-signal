@@ -26,7 +26,7 @@ const (
 func toolsFake() *signaltest.Fake {
 	own := testAccount().ACI
 	groups := map[string]signal.Group{
-		familyID: {ID: familyID, Title: "Family", Revision: 3, Members: []signal.GroupMember{
+		familyID: {ID: familyID, Title: familyTitle, Revision: 3, Members: []signal.GroupMember{
 			{Recipient: signal.Recipient{ACI: own}, Role: signal.GroupRoleAdmin},
 			{Recipient: signal.Recipient{ACI: aliceACI}, Role: signal.GroupRoleMember},
 		}},

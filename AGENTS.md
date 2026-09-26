@@ -35,6 +35,8 @@ Layering, top to bottom:
 - `internal/mcp/`: MCP server (`mcp serve`, official go-sdk) whose tools call `internal/app`.
   Stdout carries only JSON-RPC; the SDK's logs are demoted to debug. While it runs, `app.Inbox`
   receives events into the account's inbox table, which the message tools and resources read.
+  The write tools' safety policy lives in `internal/app` (`WithAllowlist`, `SendRequest.AttachDir`);
+  `--read-only` and `--confirm` are handled in `internal/mcp`.
 - `internal/output/`: plain/JSON renderers. The JSON schema is documented in `docs/json.md` and
   versioned by `output.SchemaVersion`; bump it only when a field is removed or changes meaning.
 

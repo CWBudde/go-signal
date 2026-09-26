@@ -30,6 +30,9 @@ type SendRequest struct {
 	Body string
 	// Attachments are paths of files to attach, each at most MaxAttachmentSize.
 	Attachments []string
+	// AttachDir, if set, confines Attachments to this directory: their paths are relative to it,
+	// and files outside it (also through symlinks) fail with ErrOutsideAttachDir.
+	AttachDir string
 	// Quote makes the message a reply to the message <author>:<timestamp> (see ParseQuote).
 	Quote string
 	// QuoteText is the quoted text that clients show when they don't have the quoted message.
@@ -109,8 +112,9 @@ func (a *App) Send(ctx context.Context, req SendRequest) (SendResult, error) {
 }
 
 // sendContent runs action (send, react, delete): it connects in send-only mode, resolves the
-// recipient arguments, builds the message with build (after resolving, so that it can resolve
-// users and upload) and sends it to every target with one timestamp.
+// recipient arguments, checks them against the allowlist (see WithAllowlist), builds the message
+// with build (after resolving, so that it can resolve users and upload) and sends it to every
+// target with one timestamp.
 func (a *App) sendContent(
 	ctx context.Context, action string, recipients []string, build func(context.Context) (content, error),
 ) (SendResult, error) {
@@ -120,6 +124,11 @@ func (a *App) sendContent(
 	}
 
 	targets, err := a.ResolveRecipients(ctx, recipients)
+	if err != nil {
+		return SendResult{}, fmt.Errorf("%s: %w", action, err)
+	}
+
+	err = a.checkAllowed(ctx, targets)
 	if err != nil {
 		return SendResult{}, fmt.Errorf("%s: %w", action, err)
 	}
@@ -160,7 +169,7 @@ func prepare(req SendRequest) (SendRequest, []signal.OutgoingAttachment, error) 
 		return req, nil, err
 	}
 
-	files, err := loadAttachments(req.Attachments)
+	files, err := loadAttachments(req.AttachDir, req.Attachments)
 	if err != nil {
 		return req, nil, err
 	}

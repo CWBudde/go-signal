@@ -27,6 +27,8 @@ Legend: `[x]` done · `[ ]` open
 | 2026-09-25 | Later stage: **pure-Go backend** from a fork of `GoCodeAlone/libsignal-go` plus zkgroup/attestation/HPKE ports, behind a `purego` build tag. See Phases 7–10.            |
 | 2026-09-26 | **Blocking** goes out as a complete `SyncMessage.Blocked` to our own devices; the phone applies it and writes the storage service. No storage-service writes of our own. |
 | 2026-09-26 | **Identity trust is TOFU**: a changed key blocks sending to that user until `identities trust`; receiving keeps working.                                                 |
+| 2026-09-26 | **MCP write tools send to nobody by default**: only `--allow-recipient` entries are allowed; `--allow-recipient '*'` opts in to everyone.                                |
+| 2026-09-26 | **`mcp serve --read-only`** drops every tool that sends (`send_message`, `react`, `delete_message`, `mark_read`); `attachment_get` stays (it only writes locally).       |
 
 ### 1.1 Why signalmeow
 
@@ -939,24 +941,44 @@ background `subscriptions/listen`, so its errors don't reach the client.
 
 #### 5.5 Write tools and safety policy
 
-- [ ] `send_message` (recipients or group, text, attachments from local paths, quote),
-      `react`, `delete_message`
-- [ ] `--read-only`: write tools are not registered at all
-- [ ] `--allow-recipient <r>` (repeatable, also via config): write tools reject other recipients
+- [x] `send_message` (recipients or group, text, attachments from local paths, quote),
+      `react`, `delete_message` (recipients and `chat` take users or group IDs/titles as
+      `messages_list` does; `quote` and `react`'s `message` take an inbox id or
+      `<author>:<timestamp>`; the output is the `docs/json.md` `send`/`react`/`delete` object;
+      partial failures are tool errors that keep the structured result)
+- [x] `--read-only`: write tools are not registered at all (`mark_read` too, see §1)
+- [x] `--allow-recipient <r>` (repeatable, also via config): write tools reject other recipients
       with a sentinel error; default when unset is decided here (all vs. none) and recorded in §1
-- [ ] Attachment paths restricted to `--attach-dir` (no arbitrary file exfiltration)
-- [ ] Tool annotations: `destructiveHint` for `delete_message`, `openWorldHint` for sends
-- [ ] Optional `--confirm` mode using MCP elicitation, where the client supports it
+      (none; `'*'` allows all. `app.WithAllowlist` enforces it in `sendContent`, after resolving
+      and before anything is uploaded; entries are resolved once, users match by ACI. Config key
+      `mcp.allow-recipient`, env `GOSIGNAL_MCP_ALLOW_RECIPIENT` separated by commas; the other
+      three flags are bound the same way)
+- [x] Attachment paths restricted to `--attach-dir` (no arbitrary file exfiltration) (paths are
+      relative to it and opened through `os.Root`, so `..` and symlinks can't leave it
+      (`app.ErrOutsideAttachDir`); without `--attach-dir` attachments are rejected)
+- [x] Tool annotations: `destructiveHint` for `delete_message`, `openWorldHint` for sends
+- [x] Optional `--confirm` mode using MCP elicitation, where the client supports it (the tool
+      returns an input request (SEP-2322); the SDK falls back to `elicitation/create` for older
+      protocol versions. The answer is one-shot and bound to the tool and its arguments; a
+      client without elicitation gets an error, so nothing is sent unconfirmed)
 - [ ] Incoming message text is returned as data with sender metadata; tool descriptions state
-      that message content is untrusted (prompt-injection note in `docs/mcp.md`)
+      that message content is untrusted (prompt-injection note in `docs/mcp.md`) (descriptions
+      and instructions done in 5.4/5.5; the `docs/mcp.md` note lands with 5.6)
 
 **Done when:** sends work end to end, and the allowlist, read-only mode and attach-dir
-restriction each have tests that prove the rejection.
+restriction each have tests that prove the rejection. (Done with the fake: `internal/app`
+`TestAllowlistRejects`/`TestSendAttachDir`, `internal/mcp` `TestWriteToolsRejected`,
+`TestListTools`, `TestConfirm*`, and `cmd` `TestMCPServeAllowlist*`/`TestMCPServeReadOnly`
+over stdio; not yet verified against the live server or Claude Code's elicitation UI.)
+
+Notes: the allowlist covers the chats a message goes to, not mentioned users or quote authors,
+and not `mark_read`'s receipts. With `--confirm`, the allowlist is checked before the user is
+asked.
 
 #### 5.6 Docs and optional HTTP transport
 
 - [ ] `docs/mcp.md`: tool/resource reference, config snippets for Claude Code and Claude Desktop,
-      safety flags, the "one process per account" rule
+      safety flags, the "one process per account" rule, the prompt-injection note (from 5.5)
 - [ ] Optional: streamable HTTP transport (`--listen 127.0.0.1:<port>`, bearer token) for
       clients that can't spawn a process. This overlaps with the daemon item in "Later".
 

@@ -40,13 +40,19 @@ func testAccount() signal.Account {
 func connect(t *testing.T, fake *signaltest.Fake) *sdk.ClientSession {
 	t.Helper()
 
-	return connectWith(t, fake, mcp.Options{}, nil)
+	return connectWith(t, fake, mcp.Options{}, testClient{})
+}
+
+// testClient configures the MCP client of connectWith; nil fields are the SDK's defaults.
+type testClient struct {
+	options *sdk.ClientOptions
+	session *sdk.ClientSessionOptions
 }
 
 // connectWith is connect with server options (Version, Location and a DownloadDir are filled
-// in) and client options.
+// in), the MCP client's configuration and options of the server's App.
 func connectWith(
-	t *testing.T, fake *signaltest.Fake, opts mcp.Options, clientOpts *sdk.ClientOptions,
+	t *testing.T, fake *signaltest.Fake, opts mcp.Options, mcpClient testClient, appOpts ...app.Option,
 ) *sdk.ClientSession {
 	t.Helper()
 
@@ -67,7 +73,7 @@ func connectWith(
 		opts.DownloadDir = t.TempDir()
 	}
 
-	server := mcp.NewServer(app.New(client), opts)
+	server := mcp.NewServer(app.New(client, appOpts...), opts)
 
 	if len(fake.Linked) > 0 {
 		receive(t, server, client)
@@ -82,9 +88,8 @@ func connectWith(
 
 	t.Cleanup(func() { _ = serverSession.Close() })
 
-	mcpClient := sdk.NewClient(&sdk.Implementation{Name: "test", Version: "0"}, clientOpts)
-
-	session, err := mcpClient.Connect(t.Context(), clientTransport, nil)
+	session, err := sdk.NewClient(&sdk.Implementation{Name: "test", Version: "0"}, mcpClient.options).
+		Connect(t.Context(), clientTransport, mcpClient.session)
 	if err != nil {
 		t.Fatalf("client connect: %v", err)
 	}
@@ -140,39 +145,67 @@ func TestInitialize(t *testing.T) {
 func TestListTools(t *testing.T) {
 	t.Parallel()
 
-	session := connect(t, &signaltest.Fake{Linked: []signal.Account{testAccount()}})
-
-	res, err := session.ListTools(t.Context(), nil)
-	if err != nil {
-		t.Fatalf("list tools: %v", err)
-	}
-
-	// The tools that change something: attachment_get writes a file, mark_read sends receipts.
-	writes := map[string]bool{"attachment_get": true, "mark_read": true}
-
-	names := make([]string, 0, len(res.Tools))
-	for _, tool := range res.Tools {
-		names = append(names, tool.Name)
-
-		if tool.Annotations == nil || tool.Annotations.ReadOnlyHint == writes[tool.Name] {
-			t.Errorf("%s: annotations %+v, want readOnlyHint %v", tool.Name, tool.Annotations, !writes[tool.Name])
-		}
-
-		if writes[tool.Name] && (tool.Annotations.DestructiveHint == nil || *tool.Annotations.DestructiveHint) {
-			t.Errorf("%s: not annotated as non-destructive", tool.Name)
-		}
-
-		if tool.OutputSchema == nil {
-			t.Errorf("%s: no output schema", tool.Name)
-		}
-	}
-
-	want := []string{
+	readTools := []string{
 		accountShowTool, "attachment_get", "contacts_list", "contacts_show", "groups_list", "groups_show",
-		"identities_list", "mark_read", "messages_list", "messages_wait",
+		"identities_list", "messages_list", "messages_wait",
 	}
-	if !slices.Equal(names, want) {
-		t.Errorf("tools %v, want %v", names, want)
+	allTools := slices.Sorted(slices.Values(append(slices.Clone(readTools),
+		"delete_message", "mark_read", "react", "send_message")))
+
+	for _, test := range []struct {
+		readOnly bool
+		want     []string
+	}{{false, allTools}, {true, readTools}} {
+		session := connectWith(t, &signaltest.Fake{Linked: []signal.Account{testAccount()}},
+			mcp.Options{ReadOnly: test.readOnly}, testClient{})
+
+		res, err := session.ListTools(t.Context(), nil)
+		if err != nil {
+			t.Fatalf("list tools: %v", err)
+		}
+
+		names := make([]string, 0, len(res.Tools))
+		for _, tool := range res.Tools {
+			names = append(names, tool.Name)
+			checkAnnotations(t, tool)
+		}
+
+		if !slices.Equal(names, test.want) {
+			t.Errorf("read-only %v: tools %v, want %v", test.readOnly, names, test.want)
+		}
+	}
+}
+
+// checkAnnotations checks the hints of a tool: whether it only reads, and whether it destroys
+// something (delete_message) or reaches other people.
+func checkAnnotations(t *testing.T, tool *sdk.Tool) {
+	t.Helper()
+
+	type hints struct{ readOnly, destructive, openWorld bool }
+
+	// The tools that change something: attachment_get writes a file, the others send.
+	writes := map[string]hints{
+		"attachment_get": {}, "mark_read": {openWorld: true}, "send_message": {openWorld: true},
+		"react": {openWorld: true}, "delete_message": {destructive: true, openWorld: true},
+	}
+
+	want, ok := writes[tool.Name]
+	if !ok {
+		want = hints{readOnly: true}
+	}
+
+	ann := tool.Annotations
+	if ann == nil || ann.ReadOnlyHint != want.readOnly ||
+		ann.OpenWorldHint == nil || *ann.OpenWorldHint != want.openWorld {
+		t.Errorf("%s: annotations %+v, want %+v", tool.Name, ann, want)
+	}
+
+	if !want.readOnly && (ann.DestructiveHint == nil || *ann.DestructiveHint != want.destructive) {
+		t.Errorf("%s: destructiveHint %v, want %v", tool.Name, ann.DestructiveHint, want.destructive)
+	}
+
+	if tool.OutputSchema == nil {
+		t.Errorf("%s: no output schema", tool.Name)
 	}
 }
 

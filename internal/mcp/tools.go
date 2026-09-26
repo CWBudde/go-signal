@@ -49,9 +49,12 @@ type tools struct {
 	app   *app.App
 	inbox *app.Inbox
 	loc   *time.Location
-	// dir is where attachment_get saves attachments.
-	dir    string
-	logger *slog.Logger
+	// dir is where attachment_get saves attachments, attachDir where send_message takes them from.
+	dir       string
+	attachDir string
+	// confirmer asks the user to confirm write tools' calls; nil doesn't ask.
+	confirmer *confirmer
+	logger    *slog.Logger
 }
 
 // readOnly are the annotations of tools that only read our own account's data.

@@ -96,7 +96,7 @@ type chatJSON struct {
 	Cursor   string                  `json:"cursor"`
 }
 
-// addInboxTools registers the tools on the inbox.
+// addInboxTools registers the tools that read the inbox.
 func addInboxTools(server *sdk.Server, handlers *tools) {
 	sdk.AddTool(server, &sdk.Tool{
 		Name:  "messages_list",
@@ -125,7 +125,10 @@ func addInboxTools(server *sdk.Server, handlers *tools) {
 			"Signal's CDN keeps attachments for about 30 days." + untrusted,
 		Annotations: &sdk.ToolAnnotations{DestructiveHint: new(false), OpenWorldHint: new(false)},
 	}, handlers.attachmentGet)
+}
 
+// addMarkRead registers mark_read, which sends read receipts.
+func addMarkRead(server *sdk.Server, handlers *tools) {
 	sdk.AddTool(server, &sdk.Tool{
 		Name:  "mark_read",
 		Title: "Mark messages read",

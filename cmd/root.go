@@ -281,7 +281,7 @@ func loadConfig(cfg *viper.Viper, cfgFile string) error {
 	}
 
 	cfg.SetEnvPrefix(envPrefix)
-	cfg.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
+	cfg.SetEnvKeyReplacer(strings.NewReplacer("-", "_", ".", "_"))
 	cfg.AutomaticEnv()
 
 	err := cfg.ReadInConfig()

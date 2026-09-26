@@ -31,6 +31,8 @@ var (
 	ErrUnknownEntry = errors.New("no such inbox entry")
 	// ErrNoAttachment means that an inbox entry has no attachment with the number.
 	ErrNoAttachment = errors.New("no such attachment")
+	// ErrNotAMessage means that an inbox entry is another event than a message.
+	ErrNotAMessage = errors.New("inbox entry is no message")
 )
 
 // InboxOptions configures an Inbox.
@@ -299,8 +301,10 @@ type AttachmentResult struct {
 // Attachment downloads an attachment of a message in the inbox and saves it to a new file in
 // req.Dir, named like SaveAttachments does.
 func (i *Inbox) Attachment(ctx context.Context, req AttachmentRequest) (AttachmentResult, error) {
-	msg, err := i.message(ctx, req.ID)
-	if err != nil {
+	msg, err := i.Message(ctx, req.ID)
+	if errors.Is(err, ErrNotAMessage) {
+		return AttachmentResult{}, fmt.Errorf("%w: %w", ErrNoAttachment, err)
+	} else if err != nil {
 		return AttachmentResult{}, err
 	}
 
@@ -326,6 +330,31 @@ func (i *Inbox) Attachment(ctx context.Context, req AttachmentRequest) (Attachme
 	}
 
 	return AttachmentResult{Attachment: att, Path: path, Data: data}, nil
+}
+
+// Message returns the message of the inbox entry with the ID (see FormatCursor); other events
+// fail with ErrNotAMessage.
+func (i *Inbox) Message(ctx context.Context, entryID string) (*signal.Message, error) {
+	id, err := parseCursor(entryID)
+	if err != nil || id == 0 {
+		return nil, fmt.Errorf("%w %q", ErrUnknownEntry, entryID)
+	}
+
+	entries, err := i.app.client.InboxList(ctx, signal.InboxQuery{After: id - 1, Until: id})
+	if err != nil {
+		return nil, fmt.Errorf("inbox: %w", err)
+	}
+
+	if len(entries) == 0 {
+		return nil, fmt.Errorf("%w %q", ErrUnknownEntry, entryID)
+	}
+
+	msg, ok := entries[0].Event.(*signal.Message)
+	if !ok {
+		return nil, fmt.Errorf("%w: %s", ErrNotAMessage, entryID)
+	}
+
+	return msg, nil
 }
 
 func (i *Inbox) store(ctx context.Context, evt signal.Event) error {
@@ -399,30 +428,6 @@ func (i *Inbox) latestCursor(ctx context.Context) (string, error) {
 	}
 
 	return FormatCursor(latest[0].ID), nil
-}
-
-// message returns the message of the inbox entry with the ID (see FormatCursor).
-func (i *Inbox) message(ctx context.Context, entryID string) (*signal.Message, error) {
-	id, err := parseCursor(entryID)
-	if err != nil || id == 0 {
-		return nil, fmt.Errorf("%w %q", ErrUnknownEntry, entryID)
-	}
-
-	entries, err := i.app.client.InboxList(ctx, signal.InboxQuery{After: id - 1, Until: id})
-	if err != nil {
-		return nil, fmt.Errorf("inbox: %w", err)
-	}
-
-	if len(entries) == 0 {
-		return nil, fmt.Errorf("%w %q", ErrUnknownEntry, entryID)
-	}
-
-	msg, ok := entries[0].Event.(*signal.Message)
-	if !ok {
-		return nil, fmt.Errorf("%w: entry %s is no message", ErrNoAttachment, entryID)
-	}
-
-	return msg, nil
 }
 
 // FormatCursor returns the cursor (and entry ID) for an inbox entry's ID.

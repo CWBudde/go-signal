@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -142,9 +143,18 @@ func startMCP(
 ) (*mcpSession, func() error) {
 	t.Helper()
 
+	return startMCPConfig(t, ctx, fake, "", args...)
+}
+
+// startMCPConfig is startMCP with the config file's content.
+func startMCPConfig(
+	t *testing.T, ctx context.Context, fake *signaltest.Fake, config string, args ...string,
+) (*mcpSession, func() error) {
+	t.Helper()
+
 	cfgFile := filepath.Join(t.TempDir(), "config.yaml")
 
-	err := os.WriteFile(cfgFile, nil, 0o600)
+	err := os.WriteFile(cfgFile, []byte(config), 0o600)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -332,6 +342,102 @@ func TestMCPServeInboxLimits(t *testing.T) {
 			t.Errorf("%s: %v, want an error", arg, err)
 		}
 	}
+}
+
+func TestMCPServePolicyErrors(t *testing.T) {
+	t.Parallel()
+
+	file := filepath.Join(t.TempDir(), "file")
+
+	err := os.WriteFile(file, nil, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for arg, want := range map[string]string{
+		"--allow-recipient=alice":                               "--allow-recipient",
+		"--attach-dir=" + filepath.Join(t.TempDir(), "missing"): "--attach-dir",
+		"--attach-dir=" + file:                                  "not a directory",
+	} {
+		session, wait := startMCP(t, t.Context(), &signaltest.Fake{Linked: []signal.Account{*testAccount()}}, arg)
+
+		err := wait()
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: %v, want an error about %s", arg, err, want)
+		}
+
+		if _, ok := session.next(); ok {
+			t.Errorf("%s: wrote to stdout", arg)
+		}
+	}
+}
+
+func TestMCPServeReadOnly(t *testing.T) {
+	t.Parallel()
+
+	session, wait := startMCP(t, t.Context(), &signaltest.Fake{Linked: []signal.Account{*testAccount()}}, "--read-only")
+
+	tools := session.exchange()
+	if len(tools) == 0 || slices.Contains(tools, "send_message") || slices.Contains(tools, "mark_read") {
+		t.Errorf("tools %v, want the read-only ones", tools)
+	}
+
+	err := wait()
+	if err != nil {
+		t.Fatalf("mcp serve: %v", err)
+	}
+}
+
+// checkSendPolicy sends to Alice and Bob through send_message and checks that only the first
+// went out.
+func checkSendPolicy(t *testing.T, session *mcpSession, fake *signaltest.Fake, wait func() error) {
+	t.Helper()
+
+	session.call(1, "initialize",
+		`{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"0"}}`)
+	session.send(`{"jsonrpc":"2.0","method":"notifications/initialized"}`)
+
+	result := session.call(2, "tools/call",
+		`{"name":"send_message","arguments":{"recipients":["`+aliceNumber+`"],"text":"hi"}}`)
+	if strings.Contains(string(result), `"isError":true`) || !strings.Contains(string(result), `"success":true`) {
+		t.Errorf("send to alice: %s", result)
+	}
+
+	result = session.call(3, "tools/call",
+		`{"name":"send_message","arguments":{"recipients":["@bob.42"],"text":"hi"}}`)
+	if !strings.Contains(string(result), `"isError":true`) || !strings.Contains(string(result), "not allowed") {
+		t.Errorf("send to bob: %s", result)
+	}
+
+	err := session.stdin.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = wait()
+	if err != nil {
+		t.Fatalf("mcp serve: %v", err)
+	}
+
+	if sent := fake.Sent(); len(sent) != 1 || sent[0].Recipients[0].ACI != aliceACI {
+		t.Errorf("sent %+v, want only alice's message", sent)
+	}
+}
+
+func TestMCPServeAllowlistConfig(t *testing.T) {
+	t.Parallel()
+
+	fake := sendFake()
+	session, wait := startMCPConfig(t, t.Context(), fake, "mcp:\n  allow-recipient:\n    - \""+aliceNumber+"\"\n")
+	checkSendPolicy(t, session, fake, wait)
+}
+
+func TestMCPServeAllowlistEnv(t *testing.T) {
+	t.Setenv("GOSIGNAL_MCP_ALLOW_RECIPIENT", aliceNumber+",self")
+
+	fake := sendFake()
+	session, wait := startMCP(t, t.Context(), fake)
+	checkSendPolicy(t, session, fake, wait)
 }
 
 // TestMCPServeStdout runs `mcp serve` in a child process (TestMCPServeChild) with debug logging
