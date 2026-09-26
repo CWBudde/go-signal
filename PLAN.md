@@ -1017,6 +1017,30 @@ confirmations. `TestServeHTTP*` (`internal/mcp`) and `TestMCPServeHTTP`/`TestMCP
 `internal/mcp`, `TestMCPDoctor*` in `cmd`, `TestProbe` in `internal/store`; not yet tried against a
 linked account.)
 
+#### 5.8 Hooks: reacting to messages
+
+With `mcp serve --listen` running as a user service, the server can react to messages instead of
+only storing them, e.g. by having an LLM answer through the same server.
+
+- [x] `mcp serve --on-message <program>`: the server runs the program (absolute path, no shell)
+      for every incoming message (`*signal.Message`, no sync transcript, so the program's own
+      replies never trigger it) of a chat that `--hook-from` allows. The program gets the inbox
+      entry as JSON on stdin (`output.NewInboxEntryJSON`) plus `GOSIGNAL_ENTRY_ID`, `GOSIGNAL_CHAT`
+      and `GOSIGNAL_SENDER`. It hangs off `app.InboxOptions.Added` (`internal/mcp/hook.go`).
+- [x] `--hook-from` is required with `--on-message` and uses the allowlist syntax; it matches the
+      chat (`app.ChatAllowed`, which shares the resolution with the send allowlist). A startup
+      warning lists `--hook-from` chats that `--allow-recipient` lacks (`Allowlist.Missing`).
+- [x] Runs happen one at a time from a queue of 64 (a full queue drops, with a warning). A run is
+      killed with its process group after `--on-message-timeout` (default 5m) or at shutdown. Its
+      output goes to the log, and nothing is retried.
+- [x] Example `contrib/hooks/claude-reply.sh` (`claude -p`, no built-in tools, only
+      `messages_list`/`send_message`/`mark_read`); `docs/mcp.md` "Hooks".
+- [ ] Not covered by tests: queue overflow.
+
+**Done when:** a message from a `--hook-from` chat runs the program once, with the entry on stdin,
+and nothing else runs it. (`TestHook*` in `internal/mcp`, `TestMCPServeHook*` in `cmd`,
+`TestChatAllowed` in `internal/app`.)
+
 ### Phase 6 — Packaging and release
 
 Decision: releases ship only fully static musl Linux binaries (plus macOS arm64), so 6.1 and 6.2

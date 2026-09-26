@@ -94,12 +94,15 @@ If the device is unlinked while the server runs, the server ends with exit code 
 | `--inbox-max-count <n>`      | `10000`                          | Keep at most this many inbox entries (`0`: no limit)                                            |
 | `--listen <addr>`            | none (stdio)                     | Serve HTTP on this loopback address instead of stdin/stdout                                     |
 | `--token-file <file>`        | none                             | File with the bearer token that `--listen` requires                                             |
+| `--on-message <program>`     | none                             | Run this program for every incoming message of the `--hook-from` chats. See [Hooks](#hooks)     |
+| `--hook-from <r>`            | nobody                           | A user or group whose messages run `--on-message`. Repeatable. `'*'` allows everyone            |
+| `--on-message-timeout <d>`   | `5m`                             | Kill an `--on-message` run after this long (`0`: no limit)                                      |
 
 The global flags (`-a/--account`, `--data-dir`, `--config`, `-v`) work as for every command.
 Logs go to stderr. With `-v`, they include debug output.
 
-`--allow-recipient`, `--read-only`, `--attach-dir`, `--confirm`, `--listen` and `--token-file`
-can also be set in the config file under `mcp`, or as environment variables. A list in an
+`--allow-recipient`, `--read-only`, `--attach-dir`, `--confirm`, `--listen`, `--token-file`,
+`--on-message`, `--hook-from` and `--on-message-timeout` can also be set in the config file under `mcp`, or as environment variables. A list in an
 environment variable is separated by commas. Flags win over the environment, which wins over the
 config file:
 
@@ -338,6 +341,51 @@ URIs from `signal://chats`.
 
 Clients can subscribe to both resources. A new inbox entry sends
 `notifications/resources/updated` for `signal://chats` and for its chat.
+
+## Hooks
+
+`--on-message` makes the server react to messages instead of only storing them. For every
+incoming message from a chat that `--hook-from` allows, the server runs the program. It gets the
+[inbox entry](#inbox-entries) as one line of JSON on stdin, and these environment variables:
+
+| Variable            | Value                                                                                  |
+| ------------------- | -------------------------------------------------------------------------------------- |
+| `GOSIGNAL_ENTRY_ID` | The entry's ID, e.g. for `mark_read`                                                   |
+| `GOSIGNAL_CHAT`     | The chat as `send_message` takes it: the other user's ACI, or `group:<id>` for a group |
+| `GOSIGNAL_SENDER`   | The sender's number, or the ACI if the number isn't known                              |
+
+The usual program is a script that has an LLM answer through this same server. An example for
+Claude Code is [`contrib/hooks/claude-reply.sh`](../contrib/hooks/claude-reply.sh):
+
+```sh
+go-signal mcp serve --listen 127.0.0.1:8765 --token-file ~/.config/go-signal/mcp-token \
+  --allow-recipient +4915112345678 --hook-from +4915112345678 \
+  --on-message ~/.local/share/go-signal/hooks/claude-reply.sh
+```
+
+The script calls `claude -p`, which reaches the server through the user-scope `signal` entry
+from [HTTP transport](#http-transport). A hook can't start its own stdio server, because the
+running server holds the account.
+
+- **What runs it.** Only messages from other people run the hook: text, attachments and
+  stickers. Messages you send, from any device and including Note to Self, never do, so a reply
+  can't trigger the next run. Edits, reactions and deletes don't run it either. To try a hook,
+  write to the account from another number.
+- **`--hook-from` is required.** It takes the same entries as `--allow-recipient` and matches the
+  chat: a user for the 1:1 chat, `group:<id>` for everything in the group. A user entry doesn't
+  cover the groups that user is in. The server warns at startup about `--hook-from` chats that
+  `--allow-recipient` doesn't list, since the hook couldn't reply there.
+- **One run at a time**, in the order the messages arrived. Up to 64 messages wait. Beyond that,
+  messages are left out, with a warning in the log. A run that takes longer than
+  `--on-message-timeout` is killed, together with everything it started. Nothing is retried.
+  The message stays in the inbox either way, unread until something marks it read.
+- **Output.** The program's stdout and stderr go to the server's log, one line per entry, along
+  with a note on how the run ended.
+- **Prompt injection.** Anyone in a `--hook-from` chat can write text that the model reads as
+  input. Keep `--hook-from` to people you trust, give the model as few tools as it needs (the
+  example allows only `messages_list`, `send_message` and `mark_read`, with no shell or files),
+  and keep `--allow-recipient` narrow. `--confirm` doesn't help here, since no one is there to
+  confirm.
 
 ## HTTP transport
 

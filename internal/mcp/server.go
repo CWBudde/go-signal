@@ -55,6 +55,13 @@ type Options struct {
 	// Confirm has the user confirm every call of a tool that sends a message, through
 	// elicitation; with a client that can't elicit, these calls fail.
 	Confirm bool
+	// OnMessage is a program that runs for every incoming message (no sync transcript of our
+	// own) of a chat that HookFrom allows, with the inbox entry as JSON on stdin; empty runs
+	// nothing. The runs happen one at a time while Receive runs, each killed after HookTimeout
+	// (zero: no limit).
+	OnMessage   string
+	HookFrom    *app.Allowlist
+	HookTimeout time.Duration
 }
 
 // Server is an MCP server on an App, with the inbox that Receive fills.
@@ -62,6 +69,7 @@ type Server struct {
 	*sdk.Server
 
 	inbox  *app.Inbox
+	hook   *hook // nil without Options.OnMessage
 	logger *slog.Logger
 }
 
@@ -91,10 +99,10 @@ func NewServer(a *app.App, opts Options) *Server {
 				return checkSubscription(req.Params.URI)
 			},
 		},
-	), logger: logger}
+	), hook: newHook(a, opts, logger), logger: logger}
 
 	server.inbox = a.Inbox(app.InboxOptions{
-		MaxAge: opts.InboxMaxAge, MaxCount: opts.InboxMaxCount, Added: server.notify,
+		MaxAge: opts.InboxMaxAge, MaxCount: opts.InboxMaxCount, Added: server.added,
 	})
 
 	handlers := &tools{
@@ -119,10 +127,37 @@ func NewServer(a *app.App, opts Options) *Server {
 }
 
 // Receive stores the events from events, the client's Events, in the inbox until events is
-// closed, ctx ends or the connection is lost for good (see app.Inbox.Run), and tells the MCP
-// clients that subscribed to the chats.
+// closed, ctx ends or the connection is lost for good (see app.Inbox.Run), tells the MCP
+// clients that subscribed to the chats and runs Options.OnMessage for the new messages.
 func (s *Server) Receive(ctx context.Context, events <-chan signal.Event) error {
-	return s.inbox.Run(ctx, events) //nolint:wrapcheck // app wraps it
+	if s.hook == nil {
+		return s.inbox.Run(ctx, events) //nolint:wrapcheck // app wraps it
+	}
+
+	hookCtx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+
+		s.hook.run(hookCtx)
+	}()
+
+	err := s.inbox.Run(ctx, events)
+
+	cancel()
+	<-done
+
+	return err //nolint:wrapcheck // app wraps it
+}
+
+// added handles a new inbox entry.
+func (s *Server) added(ctx context.Context, entry signal.InboxEntry) {
+	s.notify(ctx, entry)
+
+	if s.hook != nil {
+		s.hook.offer(ctx, entry)
+	}
 }
 
 // Serve runs an MCP server on a over newline-delimited JSON-RPC on in and out (stdin and stdout

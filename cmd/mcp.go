@@ -69,6 +69,13 @@ must be on the loopback interface (plain HTTP), and every request must carry a b
 ("Authorization: Bearer <token>") of at least 16 characters, read from --token-file or from
 GOSIGNAL_MCP_TOKEN (or mcp.token in the config file). See docs/mcp.md.
 
+--on-message runs a program for every incoming message (not our own, from any device) of the
+users and groups allowed with --hook-from (the same syntax as --allow-recipient; required with
+--on-message), e.g. a script that has an LLM answer through this server. The program gets the
+inbox entry as a line of JSON on stdin and GOSIGNAL_ENTRY_ID, GOSIGNAL_CHAT and GOSIGNAL_SENDER in
+its environment. Runs happen one at a time; one that takes longer than --on-message-timeout is
+killed. Message content comes from other people: see docs/mcp.md, "Hooks".
+
 When the server doesn't start or the client can't use it, run the same command line with
 "mcp doctor" instead of "mcp serve".`
 
@@ -86,12 +93,18 @@ const (
 	cfgConfirm        = "mcp.confirm"
 	cfgListen         = "mcp.listen"
 	cfgTokenFile      = "mcp.token-file"
+	cfgOnMessage      = "mcp.on-message"
+	cfgHookFrom       = "mcp.hook-from"
+	cfgHookTimeout    = "mcp.on-message-timeout"
 	// cfgToken has no flag, so that the token doesn't show in the process list.
 	cfgToken = "mcp.token"
 )
 
 // minTokenLength is the shortest bearer token that --listen accepts.
 const minTokenLength = 16
+
+// defaultHookTimeout is how long an --on-message run may take by default.
+const defaultHookTimeout = 5 * time.Minute
 
 func newMCPServeCmd(clients *clientOpener, loc *time.Location, appOpts []app.Option) *cobra.Command {
 	var (
@@ -119,6 +132,15 @@ func newMCPServeCmd(clients *clientOpener, loc *time.Location, appOpts []app.Opt
 
 			logPolicy(policy)
 
+			for _, key := range []string{cfgOnMessage, cfgHookFrom, cfgHookTimeout} {
+				cobra.CheckErr(clients.cfg.BindPFlag(key, cmd.Flags().Lookup(strings.TrimPrefix(key, "mcp."))))
+			}
+
+			hook, err := loadHook(clients.cfg, policy)
+			if err != nil {
+				return err
+			}
+
 			listen, err := loadListen(clients.cfg)
 			if err != nil {
 				return err
@@ -128,6 +150,7 @@ func newMCPServeCmd(clients *clientOpener, loc *time.Location, appOpts []app.Opt
 				Version: Version, Logger: slog.Default(), Location: loc,
 				InboxMaxAge: maxAge, InboxMaxCount: maxCount, DownloadDir: dlDir,
 				ReadOnly: policy.readOnly, AttachDir: policy.attachDir, Confirm: policy.confirm,
+				OnMessage: hook.program, HookFrom: hook.from, HookTimeout: hook.timeout,
 			})
 		},
 	}
@@ -137,8 +160,18 @@ func newMCPServeCmd(clients *clientOpener, loc *time.Location, appOpts []app.Opt
 	cmd.Flags().IntVar(&maxCount, "inbox-max-count", defaultInboxMaxCount,
 		"keep at most this many inbox entries (0: no limit)")
 	addMCPFlags(cmd, &dlDir)
+	addHookFlags(cmd)
 
 	return cmd
+}
+
+// addHookFlags adds the flags of --on-message to `mcp serve`.
+func addHookFlags(cmd *cobra.Command) {
+	flags := cmd.Flags()
+	flags.String("on-message", "", "program to run for every incoming message of the --hook-from chats (absolute path)")
+	flags.StringSlice("hook-from", nil,
+		"user or group:<id> whose messages run --on-message (repeatable; '*' allows everyone; default: nobody)")
+	flags.Duration("on-message-timeout", defaultHookTimeout, "kill an --on-message run after this long (0: no limit)")
 }
 
 // addMCPFlags adds the flags that `mcp serve` and `mcp doctor` share: the safety settings,
@@ -180,17 +213,9 @@ var errNotADir = errors.New("not a directory")
 func loadPolicy(cfg *viper.Viper) (policy, error) {
 	out := policy{readOnly: cfg.GetBool(cfgReadOnly), confirm: cfg.GetBool(cfgConfirm)}
 
-	// A list from the environment is one string separated by commas.
-	values := cfg.GetStringSlice(cfgAllowRecipient)
-
-	entries := make([]string, 0, len(values))
-	for _, entry := range values {
-		entries = append(entries, strings.FieldsFunc(entry, func(r rune) bool { return r == ',' })...)
-	}
-
 	var err error
 
-	out.allow, err = app.ParseAllowlist(entries)
+	out.allow, err = app.ParseAllowlist(configList(cfg, cfgAllowRecipient))
 	if err != nil {
 		return policy{}, fmt.Errorf("--allow-recipient: %w", err)
 	}
@@ -212,6 +237,91 @@ func loadPolicy(cfg *viper.Viper) (policy, error) {
 	}
 
 	return out, nil
+}
+
+// configList returns the list under key; a list from the environment is one string separated
+// by commas.
+func configList(cfg *viper.Viper, key string) []string {
+	values := cfg.GetStringSlice(key)
+
+	entries := make([]string, 0, len(values))
+	for _, entry := range values {
+		entries = append(entries, strings.FieldsFunc(entry, func(r rune) bool { return r == ',' })...)
+	}
+
+	return entries
+}
+
+// Errors of --on-message.
+var (
+	errHookNotAbs     = errors.New("--on-message: the program must be an absolute path")
+	errHookNotExec    = errors.New("--on-message: the program is no executable file")
+	errNoHookFrom     = errors.New("--on-message needs --hook-from: the users or groups whose messages run it")
+	errHookNegTimeout = errors.New("--on-message-timeout must not be negative")
+)
+
+// hookConfig is what `mcp serve --on-message` runs, and for which chats; a zero value runs nothing.
+type hookConfig struct {
+	program string
+	from    *app.Allowlist
+	timeout time.Duration
+}
+
+// checkProgram checks that program is the absolute path of an executable file.
+func checkProgram(program string) error {
+	if !filepath.IsAbs(program) {
+		return errHookNotAbs
+	}
+
+	info, err := os.Stat(program)
+	if err != nil {
+		return fmt.Errorf("--on-message: %w", err)
+	}
+
+	if !info.Mode().IsRegular() || info.Mode().Perm()&0o111 == 0 {
+		return fmt.Errorf("%w: %s", errHookNotExec, program)
+	}
+
+	return nil
+}
+
+// loadHook reads and checks --on-message, --hook-from and --on-message-timeout, and points out
+// --hook-from chats that p doesn't allow to send to.
+func loadHook(cfg *viper.Viper, p policy) (hookConfig, error) {
+	program := cfg.GetString(cfgOnMessage)
+	if program == "" {
+		return hookConfig{}, nil
+	}
+
+	err := checkProgram(program)
+	if err != nil {
+		return hookConfig{}, err
+	}
+
+	timeout := cfg.GetDuration(cfgHookTimeout)
+	if timeout < 0 {
+		return hookConfig{}, errHookNegTimeout
+	}
+
+	from, err := app.ParseAllowlist(configList(cfg, cfgHookFrom))
+	if err != nil {
+		return hookConfig{}, fmt.Errorf("--hook-from: %w", err)
+	}
+
+	if from.Empty() {
+		return hookConfig{}, errNoHookFrom
+	}
+
+	if from.All() {
+		slog.Warn("--hook-from '*': a message from anyone runs --on-message")
+	}
+
+	if missing := p.allow.Missing(from); len(missing) > 0 && !p.readOnly {
+		slog.Warn("--hook-from has chats that --allow-recipient doesn't list: the hook can't reply there "+
+			"(unless they name the same user differently)", "chats", strings.Join(missing, ", "))
+	}
+
+	return hookConfig{program: program, from: from, timeout: timeout}, nil
 }
 
 // logPolicy points out safety settings that may not be intended.
