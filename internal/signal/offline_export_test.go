@@ -22,6 +22,7 @@ func ConnectOffline(ctx context.Context, client Client, opts ...ConnectOption) {
 	}
 
 	meow.connDevice = device
+	meow.trust = installTrust(device, meow.data, meow.log, time.Now)
 	meow.ownACI = device.ACI.String()
 	meow.account = acc
 	meow.sendOnly = NewConnectOptions(opts...).SendOnly
