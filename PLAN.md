@@ -1248,7 +1248,16 @@ is needed for this standalone milestone.)
       mutual verification and altered metadata/key/ciphertext rejection.
       Go retains exact-length parsing; a differential regression test records
       the pinned Rust decoder's unexpected acceptance of trailing proof bytes.)
-- [ ] `zkcredential`: attributes, credentials, issuance, presentation, endorsements
+- [x] `zkcredential`: attributes, credentials, issuance, presentation, endorsements
+      (Implemented in the sibling fork's `zkcredential` package: domain-separated
+      attributes, standard/legacy credential modes, clear/blinded issuance,
+      mixed encrypted/revealed presentations and tag-derived batch endorsements.
+      `compat/vectors/zkcredential.json` contains 52 complete pinned Rust flows
+      spanning every supported arity and both presentation key policies. Live
+      interop adds 26 fresh randomized flows, mutual verification, altered-input
+      rejection and a regression for standard-mode individual public-key binding.
+      Parsers bound vector allocations and reject trailing data; empty endorsement
+      batches return errors instead of upstream's indexing panic.)
 
 **Done when:** crypto-layer vectors match byte for byte.
 (Attribute/encryption milestone verified: vectors and two regenerations are byte-identical;
@@ -1258,8 +1267,12 @@ Legacy credential/proof milestone also verified: all serialized artifacts and fi
 SHO states match Rust, two vector regenerations are byte-identical, and full fork
 pure-Go tests/build, race tests, vet, lint and live Rust interop pass. Credential
 encoding fuzzing completed 499,755 executions. `zkgroup/zkcrypto/CONSTANT_TIME.md`
-records the extended source-level review. Generic zkcredential work above remains
-open; no fork release or dependency bump is needed yet.)
+records the extended source-level review. Generic zkcredential milestone verified:
+all artifacts and final SHO states match Rust, two regenerations are byte-identical,
+and full fork pure-Go tests/build, race tests, vet, lint and live Rust interop pass.
+Generic encoding fuzzing completed 392,873 executions; `zkcredential/CONSTANT_TIME.md`
+records its source-level timing review. Phase 8.2 is complete; no fork release or
+dependency bump is needed until the API/shim integration.)
 
 #### 8.3 zkgroup API: groups and profiles
 
