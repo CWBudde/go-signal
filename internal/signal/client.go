@@ -106,6 +106,31 @@ type Client interface { //nolint:interfacebloat // the one facade over signalmeo
 	// ErrClosed), makes sure the acks of events read from Events reach the server, disconnects
 	// and releases the store.
 	Close() error
+
+	// Contacts returns the users the store knows with a name or number, and those we blocked,
+	// without the account itself, in no particular order. It reads only the store (filled by
+	// Sync, the storage service and received messages) and needs no Connect. A pending block or
+	// unblock made with SetBlocked shows even while the store is still being overridden by
+	// the storage service (see BlockOverrideTTL). It fails with ErrClosed after Close.
+	Contacts(ctx context.Context) ([]Contact, error)
+
+	// Contact returns what the store knows about one user, looked up by ACI, else PNI, else
+	// number (a username alone is not stored; Resolve it first). Our own account can be looked
+	// up, too. It reads only the store and needs no Connect. A user the store doesn't know fails
+	// with ErrUnknownContact.
+	Contact(ctx context.Context, rcpt Recipient) (Contact, error)
+
+	// SetBlocked blocks (or unblocks) the recipients, which need their ACI (see Resolve;
+	// ErrUnresolvable otherwise). It reads the current blocked list (users and groups) from the
+	// storage service (ErrStorageKeyUnknown if its key is unknown), applies the change and sends
+	// the complete list to our other devices as a blocked-list sync message: the phone applies it
+	// and updates the storage service itself. Once that went out, the store is updated and the
+	// change is kept against storage syncs that still say otherwise until the storage service
+	// agrees, or for BlockOverrideTTL. It needs Connect (ErrNotConnected; SendOnly is enough) and
+	// fails with ErrClosed after Close. An error such as a sync message that didn't go out or a
+	// connection lost for good means that nothing changed; only an error from the store after
+	// the list went out (it says so) leaves the store behind the phone.
+	SetBlocked(ctx context.Context, recipients []Recipient, blocked bool) error
 }
 
 // Options configures a Client.

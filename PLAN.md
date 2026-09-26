@@ -102,7 +102,7 @@ go-signal send --stdin <recipient>             # message body from stdin
 go-signal receive [--timeout 5s] [--max N] [--follow] [--download-attachments <dir>] [--send-read-receipts]
 go-signal react <recipient>... --target <author>:<ts> --emoji 👍 [--remove] [--group <id>]
 go-signal delete <recipient>... --target <ts> [--group <id>]   # remote delete of our own message
-go-signal contacts list | show <recipient> | block | unblock
+go-signal contacts list [--blocked] [--query <q>] | show <recipient> | block <recipient>... | unblock <recipient>...
 go-signal groups list | show <id> | leave <id>
 go-signal devices list
 go-signal account show | sync [--timeout 60s] | unlink   # unlink = remove local data
@@ -566,7 +566,7 @@ stories, admin deletes, and the MCP tools for react/delete (5.x).
 - [x] `link` waits for the initial sync (with progress on stderr and a timeout) (on the same
       client right after `Link`, which keeps the database and lock; `SyncOptions.Progress` reports
       the stages, printed as `Sync: <stage>...` lines on stderr, then `Synced N contacts and M
-    groups.` on stdout. `--sync-timeout` defaults to 60 s, 0 skips the sync. The timeout is the
+groups.` on stdout. `--sync-timeout` defaults to 60 s, 0 skips the sync. The timeout is the
       context deadline: `Sync` then returns what it has with an error wrapping
       `signal.ErrSyncIncomplete` and the cause, which `app.Sync` turns into
       `SyncResult.Incomplete`; `link` and `account sync` print a warning on stderr and exit 0.
@@ -594,12 +594,60 @@ against the fake); `cmd/` only parses flags, calls `app` and renders via `intern
 
 #### 4.1 Contacts
 
-- [ ] `contacts list` (name, number, ACI, username, blocked), filters `--blocked`, `--query`
-- [ ] `contacts show <recipient>`
-- [ ] `contacts block|unblock <recipient>` (updates storage service so the phone sees it)
-- [ ] Name resolution (contact name → profile name → number → ACI) used by all plain renderers
+- [x] `contacts list` (name, number, ACI, username, blocked), filters `--blocked`, `--query`
+      (new `Client.Contacts`, store only: signalmeow's `LoadAllContacts` (users with a contact
+      name, profile name or number) plus the blocked users (new `store.(*Store).BlockedACIs`),
+      without us. `app.ContactsList` filters (`--query`/`-q`: case-insensitive substring of any
+      name, the number, ACI or PNI) and sorts by display name. Plain table NAME/NUMBER/ACI/BLOCKED,
+      JSON `contacts` document with `output.ContactJSON` objects. No USERNAME column: signalmeow
+      stores no usernames)
+- [x] `contacts show <recipient>` (new `Client.Contact`, store only, by ACI, else PNI, else number,
+      through signalmeow's concrete `LoadRecipientBy{ACI,PNI}`, which, unlike
+      `LoadAndUpdateRecipient`, don't create rows; `signal.ErrUnknownContact` otherwise.
+      `app.ContactsShow` resolves `@username` first (no connection needed), allows `self` and
+      rejects groups (`app.ErrNotAUser`). Key/value view with names, number, ACI, PNI, blocked and
+      message request state; JSON `contact` document)
+- [x] `contacts block|unblock <recipient>` (updates storage service so the phone sees it)
+      (not through a storage service write: new `Client.SetBlocked` reads the current blocked list
+      (users and groups) from the storage service, applies the change and sends the complete list
+      as a `SyncMessage.Blocked` to our own ACI, both the current fields (with the storage
+      service's block times) and the deprecated ones; the phone applies it and writes the storage
+      service itself. Then the store is updated. The storage service key is required
+      (`signal.ErrStorageKeyUnknown`), since a list without the blocked groups would unblock them
+      on the phone. `app.ContactsBlock`/`ContactsUnblock` connect `SendOnly`, resolve like `send`,
+      reject groups and self, and report per user whether it changed; plain table
+      NAME/NUMBER/ACI/STATUS, JSON `block` document. Exit 3 for an unlinked device)
+- [x] Name resolution (contact name → profile name → number → ACI) used by all plain renderers
+      (nickname first, as the Signal apps do: nickname → contact name → profile name → number →
+      ACI (`signal.Contact.Name`/`DisplayName`). `app.Names` is built from `Client.Contacts`; a
+      display name shared by several contacts gets the number (or the first 8 characters of the
+      ACI) added. `output.(*Printer).SetNames` makes plain output show names (and `me` for our own
+      ACI, e.g. as a quote author) in `receive`, `send`, `react` and `delete`; JSON recipient
+      objects and send results gain an optional `name` (no schema bump). `receive` loads the names
+      once and reloads them (`app.NameBook`) when an event names a user without a name, at most
+      every 30 s, since profiles and contacts arrive while receiving)
 
-**Done when:** `receive` plain output shows names instead of UUIDs.
+**Done when:** `receive` plain output shows names instead of UUIDs. (Done: golden
+`receive_events_names` with the fake's contacts, plus cgo tests for the store reads, the override
+handling and the blocked-list message. Not yet verified against the live server.)
+
+Notes: signalmeow's storage sync always overwrites the blocked flag with the storage service's,
+and it runs on `account sync`, on an incoming `Keys` or `FetchLatest` sync message and whenever
+signalmeow feels like it; until the phone has written our change to the storage service, that
+would undo it. So `SetBlocked` records an override (`gosignal_block_overrides`, migration
+`02-contacts.sql`) wherever the storage service still disagrees. Overrides are re-applied on
+`Connect`, after our own storage syncs (`Client.Sync`) and when signalmeow reports contacts changed
+by a background storage sync (`ContactList` with `IsFromDB`); `Contacts`/`Contact` show them even
+before that. An override ends once a storage sync agrees with it or after
+`signal.BlockOverrideTTL` (7 days), after which the storage service wins again, e.g. if the phone
+never applied our list. A background storage sync that changes nothing about the user can't end
+an override (only the next `account sync` or block does). Between a background sync and the
+re-apply, signalmeow may briefly see the old state (a message from a freshly blocked user could
+get through then). Blocking needs an ACI (users not on Signal can't be blocked) and doesn't cover
+groups. The phone's handling of our blocked list (the official apps replace their whole list with
+it) is untested. Users that only have a nickname in the store are missing from `contacts list`
+(signalmeow's `LoadAllContacts` skips them); `contacts show` finds them. With names loaded, our own
+ACI as a quote author now shows as `me` (one line of the `receive_events` golden changed).
 
 #### 4.2 Groups
 
@@ -639,7 +687,9 @@ lacks something we need).
 - [x] `cmd/` becomes flag parsing + `internal/app` call + `internal/output` rendering (`account`
       and `devices`; `link` and `receive` stay in `cmd/` since MCP doesn't expose them as tools)
 - [ ] Recipient resolution, name resolution and trust checks live only in `internal/app` (lands
-      with 3.2, 4.1 and 4.3; recipient resolution is in since 3.2: `app.ResolveRecipients`)
+      with 3.2, 4.1 and 4.3; recipient resolution is in since 3.2: `app.ResolveRecipients`, name
+      resolution since 4.1: `app.Names`/`app.NameBook`, which `output` only renders; trust checks
+      are open)
 
 **Done when:** the CLI behaves as before (golden files unchanged), and `internal/app` has unit
 tests against the fake facade.

@@ -71,6 +71,13 @@ type Fake struct {
 	// error wrapping signal.ErrSyncIncomplete.
 	SyncResult signal.SyncResult
 	SyncErr    error
+	// Contacts are the users in the store, for Contacts and Contact (our own account among them
+	// is left out of Contacts, like the real client does). SetBlocked sets their Blocked flag
+	// and adds the users it doesn't know.
+	Contacts []signal.Contact
+	// ContactsErr makes Contacts and Contact fail; SetBlockedErr makes SetBlocked fail.
+	ContactsErr   error
+	SetBlockedErr error
 
 	mu        sync.Mutex
 	opened    []signal.Options
@@ -83,6 +90,7 @@ type Fake struct {
 	delivered int
 	nextTS    uint64
 	clients   []*client
+	blocks    []BlockCall
 }
 
 // Factory is a signal.Factory that opens clients on f.

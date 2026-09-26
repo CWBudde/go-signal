@@ -192,6 +192,7 @@ messages, and run it as a JSON-RPC daemon for scripts and bots.`,
 
 	root.AddCommand(
 		newAccountCmd(clients, printers),
+		newContactsCmd(clients, printers, rootOpts.appOpts),
 		newDeleteCmd(clients, printers, rootOpts.appOpts),
 		newDevicesCmd(clients, printers),
 		newLinkCmd(clients),

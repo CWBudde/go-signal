@@ -92,7 +92,14 @@ func allEvents() []signal.Event {
 func receiveAll(t *testing.T, events []signal.Event, args ...string) string {
 	t.Helper()
 
-	fake := &signaltest.Fake{Linked: []signal.Account{*testAccount()}, Incoming: events}
+	return receiveAllFrom(t, &signaltest.Fake{Linked: []signal.Account{*testAccount()}}, events, args...)
+}
+
+// receiveAllFrom is receiveAll on fake.
+func receiveAllFrom(t *testing.T, fake *signaltest.Fake, events []signal.Event, args ...string) string {
+	t.Helper()
+
+	fake.Incoming = events
 
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -123,4 +130,28 @@ func TestReceiveEventsJSON(t *testing.T) {
 	t.Parallel()
 
 	golden(t, "receive_events_json", receiveAll(t, allEvents(), "-o", "json"))
+}
+
+// namedContacts are alice with a name and bob known only by number.
+func namedContacts() []signal.Contact {
+	return []signal.Contact{
+		{Recipient: signal.Recipient{ACI: aliceACI, Number: aliceNumber}, ContactName: "Alice Smith", ProfileName: "Ali"},
+		{Recipient: signal.Recipient{ACI: bobACI, Number: "+15550102"}},
+	}
+}
+
+// TestReceiveEventsNames shows the contacts' names (or numbers) instead of their ACIs.
+func TestReceiveEventsNames(t *testing.T) {
+	t.Parallel()
+
+	goldens := map[string]string{"receive_events_names": formatPlain, "receive_events_names_json": formatJSON}
+
+	for name, format := range goldens {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			fake := &signaltest.Fake{Linked: []signal.Account{*testAccount()}, Contacts: namedContacts()}
+			golden(t, name, receiveAllFrom(t, fake, allEvents(), "-o", format))
+		})
+	}
 }

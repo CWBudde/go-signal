@@ -1,0 +1,4 @@
+NAME         NUMBER     ACI                                   BLOCKED
+-            +15550102  bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb  yes
+Alice Smith  +15550101  aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa  no
+carol        -          cccccccc-cccc-4ccc-8ccc-cccccccccccc  no

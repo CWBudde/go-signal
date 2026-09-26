@@ -126,6 +126,103 @@ what the store holds afterwards, including what earlier syncs and received messa
 | `missing`     | string[] | What didn't arrive: `storage key`, `storage service`, `contact list`; _optional_ |
 | `error`       | string   | Why the sync is incomplete; _optional_ (only when `complete` is `false`)         |
 
+## `contacts list`
+
+```json
+{
+  "version": 1,
+  "contacts": [
+    {
+      "aci": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "number": "+15550102",
+      "blocked": true,
+      "messageRequestAccepted": false
+    },
+    {
+      "aci": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "pni": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+      "number": "+15550101",
+      "name": "Alice Smith",
+      "contactName": "Alice Smith",
+      "profileName": "Ali",
+      "blocked": false,
+      "messageRequestAccepted": true
+    }
+  ]
+}
+```
+
+`contacts` lists the users go-signal knows with a name or number, and the blocked ones, without the
+account itself, sorted by display name (`name`, else `number`, else `aci`). `--blocked` and
+`--query` filter the list. Each entry is a **contact**:
+
+| Field                    | Type    | Description                                                                           |
+| ------------------------ | ------- | ------------------------------------------------------------------------------------- |
+| `aci`                    | string  | Account identity (ACI); _optional_                                                    |
+| `pni`                    | string  | Phone number identity (PNI); _optional_                                               |
+| `number`                 | string  | Phone number (E.164); _optional_                                                      |
+| `name`                   | string  | The name Signal shows: `nickname`, else `contactName`, else `profileName`; _optional_ |
+| `nickname`               | string  | The nickname we gave the user in Signal; _optional_                                   |
+| `contactName`            | string  | The name in the phone's address book; _optional_                                      |
+| `profileName`            | string  | The name the user set in their Signal profile; _optional_                             |
+| `blocked`                | boolean | `true` if we blocked the user (including a block not yet confirmed by the phone)      |
+| `messageRequestAccepted` | boolean | Whether we accepted the user's message request; _optional_ (unknown)                  |
+
+go-signal stores no usernames, so contacts have no `username`.
+
+## `contacts show`
+
+```json
+{
+  "version": 1,
+  "contact": {
+    "aci": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    "number": "+15550101",
+    "name": "Alice Smith",
+    "contactName": "Alice Smith",
+    "profileName": "Ali",
+    "blocked": false,
+    "messageRequestAccepted": true
+  }
+}
+```
+
+`contact` is a contact as in [`contacts list`](#contacts-list). An unknown user is an error (no
+document).
+
+## `contacts block` and `contacts unblock`
+
+```json
+{
+  "version": 1,
+  "block": {
+    "blocked": true,
+    "results": [
+      {
+        "aci": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "number": "+15550101",
+        "name": "Alice Smith",
+        "contactName": "Alice Smith",
+        "blocked": true,
+        "changed": true
+      },
+      {
+        "aci": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "number": "+15550102",
+        "blocked": true,
+        "changed": false
+      }
+    ]
+  }
+}
+```
+
+Both commands print a `block` document. `blocked` is `true` for `contacts block` and `false` for
+`contacts unblock`. `results` has one entry per user, in the order given on the command line,
+without duplicates: the contact afterwards (as in [`contacts list`](#contacts-list)) plus `changed`
+(boolean), which is `false` if the user already was blocked (or unblocked). When the command fails,
+nothing was changed and no document is printed.
+
 ## `send`
 
 ```json
@@ -187,6 +284,7 @@ unknown recipients) print no document.
 | `number`       | string  | Phone number of a user; _optional_                                                 |
 | `username`     | string  | Username of a user, as given; _optional_                                           |
 | `aci`          | string  | ACI of a user; _optional_ (always set for `user` and `self`)                       |
+| `name`         | string  | Name of a user (see [`contacts list`](#contacts-list)); _optional_                 |
 | `groupId`      | string  | Base64 group ID; _optional_ (only for `group`)                                     |
 | `timestamp`    | number  | Sent timestamp of the message                                                      |
 | `success`      | boolean | `true` if the recipient (for a group: every member) got the message                |
@@ -200,6 +298,7 @@ Each entry of `members`:
 | -------------- | ------- | ------------------------------------------------------------- |
 | `aci`          | string  | ACI of the member; _optional_ (members can also have a `pni`) |
 | `pni`          | string  | PNI of a member known only by phone number; _optional_        |
+| `name`         | string  | Name of the member (see `contacts list`); _optional_          |
 | `success`      | boolean | `true` if the member got the message                          |
 | `unidentified` | boolean | `true` if sent with sealed sender                             |
 | `error`        | string  | Why sending to the member failed; _optional_                  |
@@ -298,18 +397,20 @@ any release, so scripts should skip types they don't know.
 | `connection`        | The connection state changed                                     |
 
 Plain output prints the same events, one line each (`[time] <sender> → <dest>: <text>`, where
-`me` is this account), except `queueEmpty` and `connection`, which only go to the log (`-v`).
+`me` is this account and other users show by name, else by number or ACI), except `queueEmpty` and `connection`, which only go to the log (`-v`).
 
 ### Common objects
 
-A **recipient** identifies a user. At least one field is set; names are not resolved yet.
+A **recipient** identifies a user. At least one of `aci`, `pni`, `number` and `username` is set;
+they are what the event said. `name` comes from go-signal's store.
 
-| Field      | Type   | Description                                   |
-| ---------- | ------ | --------------------------------------------- |
-| `aci`      | string | Account identity (ACI); _optional_            |
-| `pni`      | string | Phone number identity (PNI); _optional_       |
-| `number`   | string | Phone number (E.164); _optional_              |
-| `username` | string | Username, without the leading `@`; _optional_ |
+| Field      | Type   | Description                                                                          |
+| ---------- | ------ | ------------------------------------------------------------------------------------ |
+| `aci`      | string | Account identity (ACI); _optional_                                                   |
+| `pni`      | string | Phone number identity (PNI); _optional_                                              |
+| `number`   | string | Phone number (E.164); _optional_                                                     |
+| `username` | string | Username, without the leading `@`; _optional_                                        |
+| `name`     | string | The user's name (see [`contacts list`](#contacts-list)); _optional_ (unknown, or us) |
 
 A **chat** is the conversation an event belongs to. It has one of these fields, or none (`{}`)
 when the event isn't about a single conversation.

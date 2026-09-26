@@ -1,9 +1,11 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"strings"
 
 	"github.com/cwbudde/go-signal/internal/app"
@@ -95,10 +97,14 @@ func runSend[R any](cmd *cobra.Command, clients *clientOpener, printers *printer
 	}
 	defer closeClient(client)
 
-	res, err := run(app.New(client, appOpts...))
+	use := app.New(client, appOpts...)
+
+	res, err := run(use)
 	if err != nil && !errors.Is(err, app.ErrSendFailed) {
 		return err
 	}
+
+	showNames(cmd.Context(), printer, use)
 
 	printErr := show(printer, res)
 	if printErr != nil {
@@ -128,4 +134,17 @@ func recipientArgs(args, groups []string) []string {
 	}
 
 	return out
+}
+
+// showNames makes printer show the names of the contacts in the store. Without them, users show
+// as they are identified.
+func showNames(ctx context.Context, printer *output.Printer, use *app.App) {
+	names, err := use.Names(ctx)
+	if err != nil {
+		slog.Debug("names not loaded", "error", err)
+
+		return
+	}
+
+	printer.SetNames(names)
 }

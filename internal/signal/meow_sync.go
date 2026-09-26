@@ -89,11 +89,14 @@ func (c *meowClient) runSync(ctx context.Context, cli *signalmeow.Client, opts S
 
 		opts.Report(SyncFetchingStorage)
 
-		err = syncStorage(ctx, cli, key)
+		update, err := syncStorage(ctx, cli, key)
 		if err != nil {
 			problems = append(problems, err)
 		} else {
 			res.Storage = true
+
+			// The sync may have undone a pending block or unblock (see SetBlocked).
+			c.storageFetched(ctx, update)
 		}
 	}
 
@@ -209,11 +212,11 @@ func (c *meowClient) storedMasterKey(ctx context.Context) ([]byte, error) {
 }
 
 // syncStorage fetches the storage service once to find out whether that works, and then has
-// signalmeow fetch and store it (see Sync).
-func syncStorage(ctx context.Context, cli *signalmeow.Client, key []byte) error {
-	_, err := cli.FetchStorage(ctx, key, 0, nil)
+// signalmeow fetch and store it (see Sync). It returns what the first fetch got.
+func syncStorage(ctx context.Context, cli *signalmeow.Client, key []byte) (*signalmeow.StorageUpdate, error) {
+	update, err := cli.FetchStorage(ctx, key, 0, nil)
 	if err != nil {
-		return fmt.Errorf("fetch storage service: %w", err)
+		return nil, fmt.Errorf("fetch storage service: %w", err)
 	}
 
 	cli.SyncStorage(ctx)
@@ -221,10 +224,10 @@ func syncStorage(ctx context.Context, cli *signalmeow.Client, key []byte) error 
 	// SyncStorage gives up silently when ctx ends.
 	err = ctx.Err()
 	if err != nil {
-		return fmt.Errorf("sync storage service: %w", err)
+		return nil, fmt.Errorf("sync storage service: %w", err)
 	}
 
-	return nil
+	return update, nil
 }
 
 // waitContactList waits for the phone's contact list.

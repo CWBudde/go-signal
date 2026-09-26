@@ -32,12 +32,12 @@ type deleteResultDoc struct {
 // React prints the outcome of `react` like Send, one line (or JSON entry) per recipient.
 func (p *Printer) React(res app.ReactResult) error {
 	if p.format == JSON {
-		sent := sendToJSON(res.SendResult)
+		sent := p.sendToJSON(res.SendResult)
 
 		return p.writeJSON(reactResultDoc{Version: SchemaVersion, React: reactResultJSON{
 			Emoji:           res.Emoji,
 			Remove:          res.Remove,
-			TargetAuthor:    recipient(res.TargetAuthor.Recipient),
+			TargetAuthor:    p.recipient(res.TargetAuthor.Recipient),
 			TargetTimestamp: res.TargetTimestamp,
 			Timestamp:       sent.Timestamp,
 			Results:         sent.Results,
@@ -50,7 +50,7 @@ func (p *Printer) React(res app.ReactResult) error {
 // Delete prints the outcome of `delete` like Send, one line (or JSON entry) per recipient.
 func (p *Printer) Delete(res app.DeleteResult) error {
 	if p.format == JSON {
-		sent := sendToJSON(res.SendResult)
+		sent := p.sendToJSON(res.SendResult)
 
 		return p.writeJSON(deleteResultDoc{Version: SchemaVersion, Delete: deleteResultJSON{
 			TargetTimestamp: res.TargetTimestamp,

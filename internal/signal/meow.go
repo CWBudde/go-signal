@@ -101,6 +101,9 @@ type meowClient struct {
 	uploadsMu sync.Mutex
 	uploads   map[string]*signalpb.AttachmentPointer
 
+	// overridesMu serializes changes to the block overrides (see SetBlocked).
+	overridesMu sync.Mutex
+
 	// mu guards closing, so that no handler or send starts once Close waits for them.
 	mu        sync.Mutex
 	closing   bool
@@ -197,6 +200,9 @@ func (c *meowClient) Connect(ctx context.Context, opts ...ConnectOption) error {
 	c.ownACI = device.ACI.String()
 	c.account = acc
 	c.sendOnly = NewConnectOptions(opts...).SendOnly
+
+	// A storage sync may have undone a block or unblock made here since the last connection.
+	c.settleOverrides(ctx, device.RecipientStore, nil)
 
 	// The loops outlive ctx: cancelling the command must not cut the websockets before Close
 	// has drained them.
@@ -528,6 +534,14 @@ func (c *meowClient) handle(raw events.SignalEvent) bool {
 	// too: there is nothing left to deliver.
 	if list, ok := raw.(*events.ContactList); ok && !list.IsFromDB {
 		c.contactListArrived(len(list.Contacts))
+	}
+
+	// signalmeow stored contacts from the storage service, which may have undone a pending
+	// block or unblock.
+	if list, ok := raw.(*events.ContactList); ok && list.IsFromDB {
+		ctx, cancel := context.WithTimeout(c.zlog.WithContext(context.Background()), overrideSettleTimeout)
+		c.storageSynced(ctx, c.connDevice, list.Contacts)
+		cancel()
 	}
 
 	evt := c.checkLoggedOut(convertEvent(raw, c.ownACI))
