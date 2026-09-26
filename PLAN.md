@@ -1434,13 +1434,19 @@ the fork's main, no tag. The shim wiring is 9.3.)
       matches) and fails two years later, with a wrong MRENCLAVE, or with an unaccepted advisory.
       It also passes one second before the earliest collateral expiry and fails one second after.
       `test_attestation_metrics` passes.)
-- [ ] Use upstream's recorded attestation blobs (`rust/attest/tests/data`) as positive **and**
+- [x] Use upstream's recorded attestation blobs (`rust/attest/tests/data`) as positive **and**
       negative vectors (tampered quote, expired collateral, wrong measurement)
-      (2026-09-26 — partial: `cdsi.*` and `dcap.*` are in use, including a tampered quote and
-      tampered TCB info. Still to do: `dcap_v3.*`, `dcap-expired.*`, `cds2_test.*` and `svr2.*`.
-      `cds2_test` and `dcap_v3` have TCB evaluation data number 12, which upstream accepts only
-      under `cfg(test)`, so they need a test-only hook. The `svr2.rs`/`cds2.rs` handshake tests
-      also need the Noise session from `feat/noise`.)
+      (2026-09-27 — fork commits `2df1e3706` and `eef58c872` on `feat/dcap`, unpublished. Every
+      blob is in use. `TestRecordedVectors` covers `cds2_test` at the four `test_clock_skew`
+      times plus the one-day skew, where the `pk` claim is the X25519 key of
+      `cds2_test.privatekey`. It also covers `dcap_v3`, `dcap-expired` and the attestation half
+      of `attest_svr2`. Each comes with tampered quote, expiry and wrong measurement cases, 18 in
+      all. The expected outcomes come from upstream's `verify_remote_attestation`, run on the same
+      inputs and times with `test-util`. That was needed because no upstream test uses `dcap_v3`
+      and `dcap-expired`. Upstream rejects `dcap-expired` while parsing, because its PCK CRL is
+      not DER. Upstream's test-only acceptance of evaluation data number 12 is an unexported
+      switch that only the package's tests turn on. `TestVeryExpiredEvalNumber` checks that it
+      is off by default and that the number-12 blobs fail without it.)
 
 **Done when:** every upstream attestation test case gives the same accept/reject result in Go.
 
@@ -1448,6 +1454,15 @@ the fork's main, no tag. The shim wiring is 9.3.)
 
 - [ ] `SGXClientState`/`CDS2ClientState`: initial request, `CompleteHandshake`,
       `EstablishedSend`/`EstablishedRecv`, wired into the shim
+- [ ] Port the handshake-level attestation tests on the recorded blobs:
+      - `sgx_session.rs`: `test_clock_skew` with `SKEW_ADJUSTMENT` in the session,
+        `test_happy_path`, `test_mismatched_keys` and `test_invalid_private_key`, on `cds2_test`;
+      - `cds2.rs`: `attest_cds2`.
+
+      The DCAP half of all of these is already covered by 9.2. The remaining half needs
+      `Handshake::for_sgx` and Noise NK from `feat/noise`. Other packages' tests will need an
+      exported form of the evaluation number 12 exception (upstream's `test-util`). `svr2.rs`
+      `attest_svr2_bad_config` checks the raft config, not DCAP; PLAN.md has no SVR2 item.
 
 **Done when:** a purego build resolves a phone number through contact discovery (Phase 3.2).
 
