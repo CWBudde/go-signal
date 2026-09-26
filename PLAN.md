@@ -1375,13 +1375,30 @@ local workspace instructions in `docs/dev.md`.
 
 #### 9.1 Noise
 
-- [ ] `Noise_NK_25519_ChaChaPoly_SHA256` and `Noise_NKhfs_25519+Kyber1024_ChaChaPoly_SHA256`
+- [x] `Noise_NK_25519_ChaChaPoly_SHA256` and `Noise_NKhfs_25519+Kyber1024_ChaChaPoly_SHA256`
       (hybrid forward secrecy with Kyber). Check whether an existing Go Noise library can be
       extended for `hfs`; otherwise write a minimal handshake that only supports these two
       patterns.
-- [ ] Vectors from libsignal's `snow`-based implementation (`attest/src/snow_resolver.rs`)
+      (2026-09-26 — Minimal handshake of our own: flynn/noise has no hfs/KEM support. New `noise`
+      package in the libsignal-go fork, fork commit `526388cb7`. It follows snow 0.10.0 token for
+      token. snow puts `e1` after the DH, so the pattern is `-> e, es, e1` / `<- e, ee, ekem1`.
+      "Kyber1024" is ML-KEM-1024 (std `crypto/mlkem`), as in attest's resolver, not the fork's
+      round-3 `kem` Kyber. Initiator and responder, injectable randomness, and a `Transport` that
+      chunks like `ClientConnection`. Stricter than snow: it rejects all-zero X25519 results.
+      Unit tests, race tests, lint and `FuzzReadMessage` pass.)
+- [x] Vectors from libsignal's `snow`-based implementation (`attest/src/snow_resolver.rs`)
+      (2026-09-26 — The harness `noise` domain, fork commit `460a03a76`: snow 0.10.0 with attest's
+      resolver, fed from a seeded, recording ChaCha20 stream. `compat/vectors/noise.json` has 9 cases,
+      including a two-chunk transport message. `TestNoiseVectors` replays the initiator byte for
+      byte and `noise.TestSnowResponderKAT` does the same for the responder (derandomized ML-KEM).
+      Two regenerations are byte-identical (`TestNoiseVectorRegeneration`).)
 
 **Done when:** Go↔Rust handshakes interoperate for both patterns.
+(Green on 2026-09-26: `TestNoiseInterop` runs fresh NK and NKhfs handshakes with Go as initiator
+and as responder, exchanges transport messages both ways, and checks that each side rejects
+tampered or truncated messages and a wrong static key. Branch `feat/noise` of the fork (worktree
+`~/Code/libsignal-go-noise`, based on `f1669cb0b`) is unpublished: not pushed, not merged into
+the fork's main, no tag. The shim wiring is 9.3.)
 
 #### 9.2 SGX DCAP attestation
 
