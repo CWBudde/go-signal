@@ -50,6 +50,11 @@ func TestOpenWithoutAccount(t *testing.T) {
 		t.Errorf("Send: got %v, want ErrNotConnected", err)
 	}
 
+	_, err = client.Sync(ctx, signal.SyncOptions{})
+	if !errors.Is(err, signal.ErrNotConnected) {
+		t.Errorf("Sync: got %v, want ErrNotConnected", err)
+	}
+
 	err = client.Close()
 	if err != nil {
 		t.Fatalf("close: %v", err)

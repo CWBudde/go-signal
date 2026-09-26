@@ -93,6 +93,10 @@ type meowClient struct {
 	lostMu   sync.Mutex
 	lost     error
 
+	// contactWaiters are told when the phone's contact list has been stored (see Sync).
+	contactsMu     sync.Mutex
+	contactWaiters []chan int
+
 	// uploads are the attachments Upload put on the CDN, by UploadedAttachment.ID.
 	uploadsMu sync.Mutex
 	uploads   map[string]*signalpb.AttachmentPointer
@@ -518,6 +522,13 @@ func (c *meowClient) handle(raw events.SignalEvent) bool {
 		return false
 	}
 	defer c.handling.Done()
+
+	// signalmeow has stored the phone's contact list by now (IsFromDB marks contacts changed by
+	// a storage sync instead). The event itself is dropped below and acked, in send-only mode
+	// too: there is nothing left to deliver.
+	if list, ok := raw.(*events.ContactList); ok && !list.IsFromDB {
+		c.contactListArrived(len(list.Contacts))
+	}
 
 	evt := c.checkLoggedOut(convertEvent(raw, c.ownACI))
 	if evt == nil {

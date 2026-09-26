@@ -76,6 +76,19 @@ type Client interface { //nolint:interfacebloat // the one facade over signalmeo
 	// unknown type or no timestamps.
 	SendReceipt(ctx context.Context, sender Recipient, typ ReceiptType, timestamps []uint64) error
 
+	// Sync fetches the account's contacts and groups from the phone and the storage service
+	// into the store, as right after Link: it asks the phone for its contact list, makes sure
+	// the storage service key is known (asking the phone for it if not), fetches the storage
+	// service (contacts with names, numbers, profile keys and blocked state; group master keys;
+	// the account record), and waits for the contact list. It needs Connect (ErrNotConnected;
+	// SendOnly is enough) and fails with ErrClosed after Close.
+	//
+	// ctx bounds the whole sync. When it ends first, or a part fails (e.g. the storage service),
+	// Sync returns the result so far with an error wrapping ErrSyncIncomplete and the cause;
+	// what did arrive is stored. Other errors (such as a connection lost for good, e.g.
+	// ErrDeviceUnlinked) mean that nothing was synced. opts.Progress reports the stages.
+	Sync(ctx context.Context, opts SyncOptions) (SyncResult, error)
+
 	// Devices lists all devices of the selected account as the server knows them. It needs
 	// neither Connect nor the account lock. Like Connect, it fails with ErrDeviceUnlinked on an
 	// account marked as unlinked, and marks the account when the server rejects the device.

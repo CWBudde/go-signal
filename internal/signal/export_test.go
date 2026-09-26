@@ -3,6 +3,7 @@
 package signal
 
 import (
+	"context"
 	"time"
 
 	"github.com/google/uuid"
@@ -82,4 +83,33 @@ func ACIServiceID(rcpt Recipient) (libsignalgo.ServiceID, error) {
 // ReceiptContent exposes receiptContent to the signal_test package.
 func ReceiptContent(typ ReceiptType, timestamps []uint64) (*signalpb.Content, error) {
 	return receiptContent(typ, timestamps)
+}
+
+// ContactListHook registers a contact list waiter on client, which must come from Open (see
+// Sync), and returns it with the client's signalmeow event handler and the unregister function.
+func ContactListHook(client Client) (<-chan int, func(events.SignalEvent) bool, func()) {
+	meow, ok := client.(*meowClient)
+	if !ok {
+		panic("ContactListHook: not a signalmeow-backed client")
+	}
+
+	arrived, stop := meow.awaitContactList()
+
+	return arrived, meow.handle, stop
+}
+
+// SyncCounts counts what Sync would report for the selected account of client, which must come
+// from Open, without connecting.
+func SyncCounts(ctx context.Context, client Client) (int, int, error) {
+	meow, ok := client.(*meowClient)
+	if !ok {
+		panic("SyncCounts: not a signalmeow-backed client")
+	}
+
+	device, err := meow.device(ctx)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	return meow.syncCounts(ctx, device)
 }

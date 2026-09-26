@@ -93,6 +93,39 @@ fields they don't know.
 | `localOnly`  | boolean | `true` if only local data was deleted (`--local-only`), without the server        |
 | `unlinkedAt` | string  | When go-signal found the device unlinked; _optional_ (then `localOnly` is `true`) |
 
+## `account sync`
+
+```json
+{
+  "version": 1,
+  "sync": {
+    "contacts": 5,
+    "groups": 3,
+    "masterKey": true,
+    "storage": true,
+    "contactList": false,
+    "complete": false,
+    "missing": ["contact list"],
+    "error": "sync incomplete (missing contact list): wait for contact list: context deadline exceeded"
+  }
+}
+```
+
+An incomplete sync (e.g. `--timeout` ran out before the phone answered) is not an error: the
+document shows what is missing, a warning goes to stderr and the exit code is 0. The counts are
+what the store holds afterwards, including what earlier syncs and received messages stored.
+
+| Field         | Type     | Description                                                                      |
+| ------------- | -------- | -------------------------------------------------------------------------------- |
+| `contacts`    | number   | Known users with a name or number, not counting the account itself               |
+| `groups`      | number   | Groups whose master key is known                                                 |
+| `masterKey`   | boolean  | `true` if the storage service key is known                                       |
+| `storage`     | boolean  | `true` if the storage service (contacts, groups, blocked list) was fetched       |
+| `contactList` | boolean  | `true` if the phone's contact list arrived                                       |
+| `complete`    | boolean  | `true` if every part succeeded                                                   |
+| `missing`     | string[] | What didn't arrive: `storage key`, `storage service`, `contact list`; _optional_ |
+| `error`       | string   | Why the sync is incomplete; _optional_ (only when `complete` is `false`)         |
+
 ## `send`
 
 ```json

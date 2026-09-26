@@ -67,6 +67,10 @@ type Fake struct {
 	UnlinkErr error
 	// ReceiptErr makes SendReceipt fail.
 	ReceiptErr error
+	// SyncResult and SyncErr are what Sync returns once connected, e.g. a partial result with an
+	// error wrapping signal.ErrSyncIncomplete.
+	SyncResult signal.SyncResult
+	SyncErr    error
 
 	mu        sync.Mutex
 	opened    []signal.Options
@@ -75,6 +79,7 @@ type Fake struct {
 	connects  []string
 	unlinks   []UnlinkCall
 	receipts  []ReceiptCall
+	syncs     []string
 	delivered int
 	nextTS    uint64
 	clients   []*client
@@ -150,6 +155,14 @@ func (f *Fake) Receipts() []ReceiptCall {
 	defer f.mu.Unlock()
 
 	return append([]ReceiptCall(nil), f.receipts...)
+}
+
+// Syncs returns the ACI of the account each Sync that got past the connection checks used.
+func (f *Fake) Syncs() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	return append([]string(nil), f.syncs...)
 }
 
 // UnlinkCall records a successful Unlink.
@@ -456,6 +469,39 @@ func (c *client) SendReceipt(
 	})
 
 	return nil
+}
+
+func (c *client) Sync(_ context.Context, opts signal.SyncOptions) (signal.SyncResult, error) {
+	c.fake.mu.Lock()
+
+	switch {
+	case c.closed:
+		c.fake.mu.Unlock()
+
+		return signal.SyncResult{}, signal.ErrClosed
+	case c.connected == "":
+		c.fake.mu.Unlock()
+
+		return signal.SyncResult{}, signal.ErrNotConnected
+	case c.lost != nil:
+		c.fake.mu.Unlock()
+
+		return signal.SyncResult{}, fmt.Errorf("sync: %w", c.lost)
+	}
+
+	c.fake.syncs = append(c.fake.syncs, c.connected)
+	res, err := c.fake.SyncResult, c.fake.SyncErr
+	c.fake.mu.Unlock()
+
+	// Outside the lock, in case Progress calls back into the fake. The storage key is always
+	// known.
+	for _, stage := range []signal.SyncStage{
+		signal.SyncRequestingContacts, signal.SyncFetchingStorage, signal.SyncWaitingForContacts, signal.SyncDone,
+	} {
+		opts.Report(stage)
+	}
+
+	return res, err
 }
 
 // lostError returns the error of the first event in incoming that ends the connection for good.

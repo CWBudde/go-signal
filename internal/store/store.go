@@ -119,6 +119,21 @@ func (s *Store) SetMeta(ctx context.Context, key, value string) error {
 	return nil
 }
 
+// GroupIdentifiers returns the IDs (base64) of the groups whose master key signalmeow stored for
+// the account aci, sorted. signalmeow stores a key when it syncs the storage service or sees a
+// group message, but its GroupStore has no way to list them.
+func (s *Store) GroupIdentifiers(ctx context.Context, aci string) ([]string, error) {
+	rows, err := s.db.Query(ctx,
+		"SELECT group_identifier FROM signalmeow_groups WHERE account_id=$1 ORDER BY group_identifier", aci)
+
+	ids, err := dbutil.NewRowIterWithError(rows, dbutil.ScanSingleColumn[string], err).AsList()
+	if err != nil {
+		return nil, fmt.Errorf("list groups: %w", err)
+	}
+
+	return ids, nil
+}
+
 // Close closes the database.
 func (s *Store) Close() error {
 	err := s.db.Close()

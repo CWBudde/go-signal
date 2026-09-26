@@ -62,7 +62,7 @@ Consequences:
   `link`), so a real facade needs to filter those.
 - **Prekeys.** Linking uploads only signed and last-resort Kyber prekeys; one-time prekeys are
   generated and uploaded by `keyCheckLoop` on the first connect. The bridge connects right after
-  linking; we don't yet.
+  linking; we do too since 3.9 (for the initial sync, unless `--sync-timeout 0`).
 - **Acks.** The handler's return value decides whether the envelope is acked, and acks go out
   asynchronously, so closing right after the handler returns can lose the ack. The spike sleeps
   1 s; Phase 3.1 needs a proper drain. (Done in 3.1: a keepalive round trip flushes the acks.)
@@ -96,7 +96,7 @@ Noun-verb subcommands with kebab-case names. Global flags: `-a/--account`, `-o/-
 `-v/--verbose`, `--data-dir`, `--config`, `--log-format`.
 
 ```
-go-signal link [--name <device-name>]          # print sgnl:// URI + terminal QR, wait for scan
+go-signal link [--name <device-name>] [--sync-timeout 60s]   # print sgnl:// URI + terminal QR, wait for scan, sync
 go-signal send <recipient>... -m <text> [--attach <file>]... [--group <id>] [--quote <ts>]
 go-signal send --stdin <recipient>             # message body from stdin
 go-signal receive [--timeout 5s] [--max N] [--follow] [--download-attachments <dir>] [--send-read-receipts]
@@ -105,7 +105,7 @@ go-signal delete <recipient>... --target <ts> [--group <id>]   # remote delete o
 go-signal contacts list | show <recipient> | block | unblock
 go-signal groups list | show <id> | leave <id>
 go-signal devices list
-go-signal account show | unlink                 # unlink = remove local data
+go-signal account show | sync [--timeout 60s] | unlink   # unlink = remove local data
 go-signal mcp serve [--read-only] [--allow-recipient <r>]...   # MCP server on stdio
 go-signal version
 ```
@@ -540,11 +540,52 @@ stories, admin deletes, and the MCP tools for react/delete (5.x).
 
 #### 3.9 Initial sync after linking
 
-- [ ] Request/receive contacts, groups and the storage-service master key after `link`
-- [ ] Fetch the storage service manifest and persist contacts/groups/blocked list
-- [ ] `link` waits for the initial sync (with progress on stderr and a timeout)
+- [x] Request/receive contacts, groups and the storage-service master key after `link`
+      (new `Client.Sync`, needs `Connect`, `SendOnly` is enough: signalmeow's
+      `SendContactSyncRequest` asks the phone for its contact list; signalmeow stores the reply
+      (`SyncMessage.Contacts`) before it calls our handler with `events.ContactList`, which
+      `handle` now passes to a waiter (unless `IsFromDB`, i.e. contacts changed by a storage
+      sync) and still drops and acks, in send-only mode too. Provisioning already derives the
+      master key from the account entropy pool the phone sends; if it is missing, Sync sends
+      `SendStorageMasterKeyRequest` and polls the device table every 500 ms until the phone's
+      `SyncMessage.Keys` arrives (signalmeow stores it without calling our handler). There is no
+      group sync request: the protocol's GROUPS request is reserved, so groups come from the
+      storage service's GroupV2 records (and from incoming group messages))
+- [x] Fetch the storage service manifest and persist contacts/groups/blocked list (signalmeow's
+      `SyncStorage` stores contact records (profile, system and nick names, number, profile key,
+      blocked, whitelisted), group master keys and the account record. It returns no error, so
+      Sync first calls `FetchStorage` only to learn whether the fetch works and then lets
+      `SyncStorage` fetch and store it again (the manifest and records are downloaded twice).
+      `SyncResult` has the numbers of contacts (users with a name or number, without us) and
+      groups in the store afterwards, from `LoadAllContacts` and the new
+      `store.(*Store).GroupIdentifiers` (signalmeow's `GroupStore` can't list; 4.2 reuses it), and
+      whether the master key is known, the storage service synced and the contact list arrived.
+      A complete sync records its time as `last_sync` in `gosignal_meta`. New
+      `account sync [--timeout 60s]` runs it for an existing account (`app.Sync`: connects with
+      `SendOnly`; plain and JSON `sync` document in `docs/json.md`))
+- [x] `link` waits for the initial sync (with progress on stderr and a timeout) (on the same
+      client right after `Link`, which keeps the database and lock; `SyncOptions.Progress` reports
+      the stages, printed as `Sync: <stage>...` lines on stderr, then `Synced N contacts and M
+    groups.` on stdout. `--sync-timeout` defaults to 60 s, 0 skips the sync. The timeout is the
+      context deadline: `Sync` then returns what it has with an error wrapping
+      `signal.ErrSyncIncomplete` and the cause, which `app.Sync` turns into
+      `SyncResult.Incomplete`; `link` and `account sync` print a warning on stderr and exit 0.
+      Any other sync error is only a warning for `link` (the device is linked) but fails
+      `account sync`, with exit 3 for an unlinked device)
 
-**Done when:** right after linking, contacts and groups from the phone are in the store.
+**Done when:** right after linking, contacts and groups from the phone are in the store. (Done with
+the fake and unit tests for the contact list hook, the counts and the group query; not yet
+verified against the live server.)
+
+Notes: other incoming envelopes that arrive during the sync are left on the server as with every
+send-only command, so the next `receive` gets them; the contact list itself is acked because
+nothing is left to deliver (a redelivered one would only be stored again). The storage service is
+always fetched in full (signalmeow tracks no manifest version), and nothing re-syncs it later
+except signalmeow itself on a `FetchLatest` or `Keys` sync message while connected; `account
+sync` is the manual way. signalmeow only skips a second contact request within a minute of the
+first one on the same client. The counts include users that only messaged us, and the contact
+list and storage records don't say which groups we left. Contact avatars, the storage service's
+blocked groups and story distribution lists aren't handled. `last_sync` isn't shown anywhere yet.
 
 ### Phase 4 — Contacts, groups, identities
 
