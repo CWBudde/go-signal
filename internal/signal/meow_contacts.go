@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"math"
 	"slices"
 	"time"
 
@@ -20,8 +21,10 @@ import (
 	"go.mau.fi/mautrix-signal/pkg/signalmeow/types"
 )
 
-// overrideSettleTimeout bounds re-applying block overrides outside of a command's context.
-const overrideSettleTimeout = 5 * time.Second
+// overrideSettleTimeout bounds settling the block overrides after a background storage sync,
+// including the fetch of the storage service that it may take (see storageSynced; Close cancels
+// that fetch).
+const overrideSettleTimeout = 30 * time.Second
 
 var errNoRecipientLoader = errors.New("signalmeow's recipient store can't load by ACI or PNI")
 
@@ -181,12 +184,18 @@ func rcptLabel(rcpt Recipient) string {
 	return rcpt.String()
 }
 
+// blockTarget is a user to block or unblock: their ACI and the number given, if any.
+type blockTarget struct {
+	aci    uuid.UUID
+	number string
+}
+
 func (c *meowClient) SetBlocked(ctx context.Context, recipients []Recipient, blocked bool) error {
 	if c.cancelLoops == nil {
 		return ErrNotConnected
 	}
 
-	acis := make([]uuid.UUID, 0, len(recipients))
+	targets := make([]blockTarget, 0, len(recipients))
 
 	for _, rcpt := range recipients {
 		id, err := aciServiceID(rcpt)
@@ -194,7 +203,7 @@ func (c *meowClient) SetBlocked(ctx context.Context, recipients []Recipient, blo
 			return err
 		}
 
-		acis = append(acis, id.UUID)
+		targets = append(targets, blockTarget{aci: id.UUID, number: rcpt.Number})
 	}
 
 	if !c.begin(&c.sending) {
@@ -213,7 +222,44 @@ func (c *meowClient) SetBlocked(ctx context.Context, recipients []Recipient, blo
 
 	ctx = c.zlog.WithContext(ctx)
 
-	stored, err := c.storedBlockedList(ctx, cli)
+	update, err := c.fetchStorage(ctx, cli, 0)
+	if err != nil {
+		return err
+	}
+
+	return c.applyBlocked(ctx, c.connDevice.RecipientStore, update, targets, blocked,
+		func(msg *signalpb.SyncMessage) error { return sendSyncMessage(ctx, cli, msg) })
+}
+
+// fetchStorage fetches the storage service's manifest and records, unless the manifest still has
+// the version since (0: fetch in any case). It returns nil if it does, or if there is no manifest.
+func (c *meowClient) fetchStorage(ctx context.Context, cli *signalmeow.Client, since uint64,
+) (*signalmeow.StorageUpdate, error) {
+	key, err := c.storedMasterKey(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if key == nil {
+		return nil, ErrStorageKeyUnknown
+	}
+
+	update, err := cli.FetchStorage(ctx, key, since, nil)
+	if err != nil {
+		return nil, fmt.Errorf("read the blocked list from the storage service: %w", err)
+	}
+
+	return update, nil
+}
+
+// applyBlocked makes the change of SetBlocked against update, the storage service as just
+// fetched: it sends the complete new blocked list with send and then updates the store. Unless
+// update has the complete blocked list (ErrBlockedListIncomplete), it sends and changes nothing.
+func (c *meowClient) applyBlocked(
+	ctx context.Context, recipients mstore.RecipientStore, update *signalmeow.StorageUpdate,
+	targets []blockTarget, blocked bool, send func(*signalpb.SyncMessage) error,
+) error {
+	seen, err := completeStorage(update)
 	if err != nil {
 		return err
 	}
@@ -224,47 +270,29 @@ func (c *meowClient) SetBlocked(ctx context.Context, recipients []Recipient, blo
 
 	now := time.Now()
 
-	list, err := c.pendingBlockedList(ctx, stored, now)
+	list, err := c.pendingBlockedList(ctx, recipients, seen, now)
 	if err != nil {
 		return err
 	}
 
-	for i, aci := range acis {
-		list.set(aci, c.knownNumber(ctx, aci, recipients[i].Number), blocked, now)
+	for _, target := range targets {
+		list.set(target.aci, knownNumber(ctx, recipients, target.aci, target.number), blocked, now)
 	}
 
-	err = sendSyncMessage(ctx, cli, list.syncMessage())
+	err = send(list.syncMessage())
 	if err != nil {
 		return fmt.Errorf("send blocked list to our other devices: %w", err)
 	}
 
-	return c.storeBlocked(ctx, stored, acis, blocked, now)
+	return c.storeBlocked(ctx, recipients, seen, targets, blocked, now)
 }
 
-// storedBlockedList reads the current blocked list from the storage service.
-func (c *meowClient) storedBlockedList(ctx context.Context, cli *signalmeow.Client) (*blockedList, error) {
-	key, err := c.storedMasterKey(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	if key == nil {
-		return nil, ErrStorageKeyUnknown
-	}
-
-	update, err := cli.FetchStorage(ctx, key, 0, nil)
-	if err != nil {
-		return nil, fmt.Errorf("read the blocked list from the storage service: %w", err)
-	}
-
-	return blockedFromStorage(update)
-}
-
-// pendingBlockedList returns stored with the pending overrides applied; the caller holds
-// overridesMu.
-func (c *meowClient) pendingBlockedList(ctx context.Context, stored *blockedList, now time.Time,
+// pendingBlockedList returns the blocked list of seen with the pending overrides applied that
+// seen doesn't supersede; the caller holds overridesMu.
+func (c *meowClient) pendingBlockedList(
+	ctx context.Context, recipients mstore.RecipientStore, seen *storageSnapshot, now time.Time,
 ) (*blockedList, error) {
-	list := stored.clone()
+	list := seen.list.clone()
 
 	overrides, err := c.data.BlockOverrides(ctx)
 	if err != nil {
@@ -272,54 +300,63 @@ func (c *meowClient) pendingBlockedList(ctx context.Context, stored *blockedList
 	}
 
 	for _, override := range overrides {
-		aci, err := uuid.Parse(override.ACI)
-		if err != nil || expired(override, now) || list.isBlocked(aci) == override.Blocked {
+		if expired(override, now) || seen.supersedes(override) {
 			continue
 		}
 
-		list.set(aci, c.knownNumber(ctx, aci, ""), override.Blocked, override.SetAt)
+		aci, err := uuid.Parse(override.ACI)
+		if err != nil || list.isBlocked(aci) == override.Blocked {
+			continue
+		}
+
+		list.set(aci, knownNumber(ctx, recipients, aci, ""), override.Blocked, override.SetAt)
 	}
 
 	return list, nil
 }
 
-// storeBlocked records the change in the store once the blocked list went out: an override
-// where the storage service (stored) says otherwise, and the new state of each user. Then it
-// settles the other overrides against stored. The caller holds overridesMu.
+// storeBlocked records the change in the store once the blocked list went out: an override,
+// tied to seen's version, where the storage service (seen) says otherwise, and the new state of
+// each user. Then it settles the other overrides against seen. The caller holds overridesMu.
 func (c *meowClient) storeBlocked(
-	ctx context.Context, stored *blockedList, acis []uuid.UUID, blocked bool, now time.Time,
+	ctx context.Context, recipients mstore.RecipientStore, seen *storageSnapshot, targets []blockTarget,
+	blocked bool, now time.Time,
 ) error {
-	for _, aci := range acis {
+	for _, target := range targets {
+		aci := target.aci.String()
+
 		var err error
 
-		if stored.isBlocked(aci) == blocked {
-			err = c.data.DeleteBlockOverride(ctx, aci.String())
+		if seen.list.isBlocked(target.aci) == blocked {
+			err = c.data.DeleteBlockOverride(ctx, aci)
 		} else {
-			err = c.data.SetBlockOverride(ctx, store.BlockOverride{ACI: aci.String(), Blocked: blocked, SetAt: now})
+			err = c.data.SetBlockOverride(ctx, store.BlockOverride{
+				ACI: aci, Blocked: blocked, SetAt: now, StorageVersion: seen.version,
+			})
 		}
 
 		if err != nil {
 			return fmt.Errorf("blocked list sent, but: %w", err)
 		}
 
-		err = setBlocked(ctx, c.connDevice.RecipientStore, aci, blocked)
+		err = setBlocked(ctx, recipients, target.aci, blocked)
 		if err != nil {
 			return fmt.Errorf("blocked list sent, but: %w", err)
 		}
 	}
 
-	c.settleOverridesLocked(ctx, c.connDevice.RecipientStore, stored.state, now)
+	c.settleOverridesLocked(ctx, recipients, seen, now)
 
 	return nil
 }
 
 // knownNumber returns number, or else the number the store has for aci ("" if none).
-func (c *meowClient) knownNumber(ctx context.Context, aci uuid.UUID, number string) string {
+func knownNumber(ctx context.Context, recipients mstore.RecipientStore, aci uuid.UUID, number string) string {
 	if number != "" {
 		return number
 	}
 
-	loader, ok := c.connDevice.RecipientStore.(recipientLoader)
+	loader, ok := recipients.(recipientLoader)
 	if !ok {
 		return ""
 	}
@@ -364,23 +401,21 @@ func setBlocked(ctx context.Context, recipients mstore.RecipientStore, aci uuid.
 	return nil
 }
 
-// storageState reports the blocked state the storage service has for an ACI, and whether it is
-// known.
-type storageState func(aci string) (blocked, known bool)
-
-// settleOverrides re-applies the pending block overrides to the store, and drops those that
-// expired (BlockOverrideTTL) or that the storage service agrees with (per storage; nil if
-// unknown). Failures are only logged: the next settle tries again.
-func (c *meowClient) settleOverrides(ctx context.Context, recipients mstore.RecipientStore, storage storageState) {
+// settleOverrides settles the pending block overrides against seen, what a fetch of the storage
+// service found (nil if nothing was fetched): an override that expired (BlockOverrideTTL) is
+// dropped; one that seen supersedes (the phone has written the storage service since) is dropped
+// and the store gets the state seen has; the others are re-applied to the store, since a storage
+// sync may have undone them. Failures are only logged: the next settle tries again.
+func (c *meowClient) settleOverrides(ctx context.Context, recipients mstore.RecipientStore, seen *storageSnapshot) {
 	c.overridesMu.Lock()
 	defer c.overridesMu.Unlock()
 
-	c.settleOverridesLocked(ctx, recipients, storage, time.Now())
+	c.settleOverridesLocked(ctx, recipients, seen, time.Now())
 }
 
 // settleOverridesLocked is settleOverrides; the caller holds overridesMu.
 func (c *meowClient) settleOverridesLocked(
-	ctx context.Context, recipients mstore.RecipientStore, storage storageState, now time.Time,
+	ctx context.Context, recipients mstore.RecipientStore, seen *storageSnapshot, now time.Time,
 ) {
 	overrides, err := c.data.BlockOverrides(ctx)
 	if err != nil {
@@ -390,74 +425,151 @@ func (c *meowClient) settleOverridesLocked(
 	}
 
 	for _, override := range overrides {
-		agrees := false
-
-		if storage != nil {
-			stored, known := storage(override.ACI)
-			agrees = known && stored == override.Blocked
-		}
-
-		if agrees || expired(override, now) {
-			c.log.Debug("dropping block override", "aci", override.ACI, "storage agrees", agrees)
-
-			err = c.data.DeleteBlockOverride(ctx, override.ACI)
-			if err != nil {
-				c.log.Warn("drop block override", "aci", override.ACI, "error", err)
-			}
-
-			continue
-		}
-
-		aci, err := uuid.Parse(override.ACI)
-		if err != nil {
-			continue
-		}
-
-		err = setBlocked(ctx, recipients, aci, override.Blocked)
-		if err != nil {
-			c.log.Warn("re-apply blocked state", "aci", override.ACI, "error", err)
+		switch {
+		case expired(override, now):
+			c.dropOverride(ctx, override, "expired")
+		case seen.supersedes(override):
+			// The phone has written the storage service since: it has our change or a newer one.
+			c.dropOverride(ctx, override, "storage service changed since")
+			c.storeBlockedState(ctx, recipients, override.ACI, seen.state)
+		default:
+			c.storeBlockedState(ctx, recipients, override.ACI, func(uuid.UUID) (bool, bool) {
+				return override.Blocked, true
+			})
 		}
 	}
 }
 
-// storageSynced settles the overrides after signalmeow stored contacts from the storage service
-// (a ContactList event with IsFromDB): changed has the users whose record changed, with the
-// blocked state the storage service has.
+// storeBlockedState sets the blocked flag of the user aci in the store to what state says, if it
+// knows. Failures are only logged.
+func (c *meowClient) storeBlockedState(
+	ctx context.Context, recipients mstore.RecipientStore, aci string, state func(uuid.UUID) (bool, bool),
+) {
+	parsed, err := uuid.Parse(aci)
+	if err != nil {
+		return
+	}
+
+	blocked, known := state(parsed)
+	if !known {
+		return
+	}
+
+	err = setBlocked(ctx, recipients, parsed, blocked)
+	if err != nil {
+		c.log.Warn("re-apply blocked state", "aci", aci, "error", err)
+	}
+}
+
+// dropOverride deletes override from the store (why says why, for the log).
+func (c *meowClient) dropOverride(ctx context.Context, override store.BlockOverride, why string) {
+	c.log.Debug("dropping block override", "aci", override.ACI, "reason", why,
+		"storage version", override.StorageVersion)
+
+	err := c.data.DeleteBlockOverride(ctx, override.ACI)
+	if err != nil {
+		c.log.Warn("drop block override", "aci", override.ACI, "error", err)
+	}
+}
+
+// storageFetcher fetches the storage service unless its manifest still has the version since
+// (see fetchStorage).
+type storageFetcher func(ctx context.Context, since uint64) (*signalmeow.StorageUpdate, error)
+
+// storageSynced settles the overrides after signalmeow stored contacts from a background storage
+// sync (a ContactList event with IsFromDB): changed has the users whose record changed.
 func (c *meowClient) storageSynced(ctx context.Context, device *mstore.Device, changed []*types.Recipient) {
 	if device == nil {
 		return
 	}
 
-	states := make(map[string]bool, len(changed))
+	c.storageSyncedWith(ctx, device.RecipientStore, changed, c.fetchStorageNow)
+}
+
+// storageSyncedWith is storageSynced with fetch for the storage service. If the sync changed an
+// overridden user, it either undid our change (the phone hasn't written the storage service
+// yet) or brought one made on the phone since. signalmeow doesn't tell which manifest version it
+// synced, so fetch asks the storage service whether it still has the overrides' version.
+func (c *meowClient) storageSyncedWith(
+	ctx context.Context, recipients mstore.RecipientStore, changed []*types.Recipient, fetch storageFetcher,
+) {
+	overrides, err := c.data.BlockOverrides(ctx)
+	if err != nil {
+		c.log.Warn("re-apply blocked state", "error", err)
+
+		return
+	}
+
+	changedACIs := make(map[string]bool, len(changed))
 
 	for _, rcpt := range changed {
 		if rcpt != nil && rcpt.ACI != uuid.Nil {
-			states[rcpt.ACI.String()] = rcpt.Blocked
+			changedACIs[rcpt.ACI.String()] = true
 		}
 	}
 
-	c.settleOverrides(ctx, device.RecipientStore, func(aci string) (bool, bool) {
-		blocked, known := states[aci]
+	affected := false
+	since := uint64(math.MaxUint64)
 
-		return blocked, known
-	})
+	for _, override := range overrides {
+		affected = affected || changedACIs[override.ACI]
+		since = min(since, override.StorageVersion)
+	}
+
+	// The sync left the overridden users alone.
+	if !affected {
+		return
+	}
+
+	c.settleOverrides(ctx, recipients, c.storageSince(ctx, fetch, since))
 }
 
-// storageFetched settles the overrides after a storage sync with the records it fetched.
+// storageSince returns what the storage service has if its manifest version isn't since
+// anymore, an empty snapshot at since if it still is, and nil if the fetch failed.
+func (c *meowClient) storageSince(ctx context.Context, fetch storageFetcher, since uint64) *storageSnapshot {
+	update, err := fetch(ctx, since)
+
+	switch {
+	case err != nil:
+		c.log.Debug("check the storage service for block overrides", "error", err)
+
+		return nil
+	case update == nil:
+		// The server answers "no content" while the manifest has the version asked about.
+		return &storageSnapshot{version: since, list: newBlockedList()}
+	default:
+		return readStorage(update)
+	}
+}
+
+// fetchStorageNow is fetchStorage with the current signalmeow client; Close cancels it.
+func (c *meowClient) fetchStorageNow(ctx context.Context, since uint64) (*signalmeow.StorageUpdate, error) {
+	c.cliMu.Lock()
+	cli := c.cli
+	c.cliMu.Unlock()
+
+	if cli == nil {
+		return nil, ErrNotConnected
+	}
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	go func() {
+		select {
+		case <-c.done:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+
+	return c.fetchStorage(ctx, cli, since)
+}
+
+// storageFetched settles the overrides after our own storage sync (see Sync) with what its fetch
+// found (update; nil if the storage service has no manifest).
 func (c *meowClient) storageFetched(ctx context.Context, update *signalmeow.StorageUpdate) {
-	list, err := blockedFromStorage(update)
-	if err != nil {
-		c.log.Debug("read blocked list from storage update", "error", err)
-
-		list = nil
-	}
-
-	var storage storageState
-	if list != nil {
-		storage = list.state
-	}
-
-	c.settleOverrides(ctx, c.connDevice.RecipientStore, storage)
+	c.settleOverrides(ctx, c.connDevice.RecipientStore, readStorage(update))
 }
 
 // pendingOverrides returns the blocked state of the overrides that haven't expired, by ACI.
@@ -537,6 +649,94 @@ func contactFrom(rcpt *types.Recipient) Contact {
 	return out
 }
 
+// storageSnapshot is what one fetch of the storage service says about blocking.
+type storageSnapshot struct {
+	// version is the manifest version.
+	version uint64
+	// list has the blocked users and groups of the records read.
+	list *blockedList
+	// read has the users (by ACI) whose contact record was read.
+	read map[uuid.UUID]bool
+	// complete reports whether every record of the manifest was read: then a user without a
+	// record is not blocked either.
+	complete bool
+	// problem says why list isn't the complete blocked list the phone has (nil if it is).
+	problem error
+}
+
+// readStorage reads the blocked users and groups from the contact and group records of a fetch
+// of the storage service; nil for a nil update (no manifest).
+func readStorage(update *signalmeow.StorageUpdate) *storageSnapshot {
+	if update == nil {
+		return nil
+	}
+
+	seen := &storageSnapshot{
+		version:  update.Version,
+		list:     newBlockedList(),
+		read:     make(map[uuid.UUID]bool),
+		complete: len(update.MissingRecords) == 0,
+	}
+
+	if !seen.complete {
+		seen.problem = fmt.Errorf("%w: %d records couldn't be read", ErrBlockedListIncomplete,
+			len(update.MissingRecords))
+	}
+
+	for _, record := range update.NewRecords {
+		var err error
+
+		switch data := record.StorageRecord.GetRecord().(type) {
+		case *signalpb.StorageRecord_Contact:
+			aci, parseErr := signalmeow.ParseStringOrBinaryUUID(data.Contact.GetAci(), data.Contact.GetAciBinary())
+			if parseErr == nil && aci != uuid.Nil {
+				seen.read[aci] = true
+			}
+
+			err = seen.list.addContact(data.Contact)
+		case *signalpb.StorageRecord_GroupV2:
+			err = seen.list.addGroup(data.GroupV2)
+		}
+
+		if err != nil && seen.problem == nil {
+			seen.problem = err
+		}
+	}
+
+	return seen
+}
+
+// completeStorage is readStorage for a fetch that must hold the complete blocked list, as the
+// phone replaces its own with the one we send: it fails with ErrBlockedListIncomplete for no
+// manifest, records that couldn't be read, or blocked entries a sync message can't carry.
+func completeStorage(update *signalmeow.StorageUpdate) (*storageSnapshot, error) {
+	seen := readStorage(update)
+	if seen == nil {
+		return nil, fmt.Errorf("%w: it has no manifest yet", ErrBlockedListIncomplete)
+	}
+
+	if seen.problem != nil {
+		return nil, seen.problem
+	}
+
+	return seen, nil
+}
+
+// supersedes reports whether s shows that the phone has written the storage service since
+// override was made: s has a later manifest version. A nil s supersedes nothing.
+func (s *storageSnapshot) supersedes(override store.BlockOverride) bool {
+	return s != nil && override.StorageVersion < s.version
+}
+
+// state returns the blocked state s has for aci, and whether s knows it.
+func (s *storageSnapshot) state(aci uuid.UUID) (bool, bool) {
+	if s.list.isBlocked(aci) {
+		return true, true
+	}
+
+	return false, s.complete || s.read[aci]
+}
+
 // blockedEntry is a blocked user: their number ("" if unknown) and when they were blocked
 // (0 if unknown).
 type blockedEntry struct {
@@ -560,33 +760,11 @@ func newBlockedList() *blockedList {
 	}
 }
 
-// blockedFromStorage reads the blocked users and groups from the storage service's contact and
-// group records. A nil update (no manifest) is an empty list.
-func blockedFromStorage(update *signalmeow.StorageUpdate) (*blockedList, error) {
-	list := newBlockedList()
-	if update == nil {
-		return list, nil
-	}
-
-	for _, record := range update.NewRecords {
-		switch data := record.StorageRecord.GetRecord().(type) {
-		case *signalpb.StorageRecord_Contact:
-			list.addContact(data.Contact)
-		case *signalpb.StorageRecord_GroupV2:
-			err := list.addGroup(data.GroupV2)
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	return list, nil
-}
-
-// addContact adds the user of a storage service contact record if it is blocked.
-func (l *blockedList) addContact(contact *signalpb.ContactRecord) {
+// addContact adds the user of a storage service contact record if it is blocked. A blocked user
+// with neither an ACI nor a number can't be put in a sync message (ErrBlockedListIncomplete).
+func (l *blockedList) addContact(contact *signalpb.ContactRecord) error {
 	if !contact.GetBlocked() {
-		return
+		return nil
 	}
 
 	aci, err := signalmeow.ParseStringOrBinaryUUID(contact.GetAci(), contact.GetAciBinary())
@@ -596,13 +774,22 @@ func (l *blockedList) addContact(contact *signalpb.ContactRecord) {
 		l.acis[aci] = blockedEntry{number: contact.GetE164(), at: contact.GetBlockedAtTimestamp()}
 	case contact.GetE164() != "":
 		l.numbers[contact.GetE164()] = contact.GetBlockedAtTimestamp()
+	default:
+		return fmt.Errorf("%w: a blocked contact has neither an ACI nor a number", ErrBlockedListIncomplete)
 	}
+
+	return nil
 }
 
-// addGroup adds the group of a storage service group record if it is blocked.
+// addGroup adds the group of a storage service group record if it is blocked. A blocked group
+// without a valid master key has no group ID to send (ErrBlockedListIncomplete).
 func (l *blockedList) addGroup(group *signalpb.GroupV2Record) error {
-	if !group.GetBlocked() || len(group.GetMasterKey()) != libsignalgo.GroupMasterKeyLength {
+	if !group.GetBlocked() {
 		return nil
+	}
+
+	if len(group.GetMasterKey()) != libsignalgo.GroupMasterKeyLength {
+		return fmt.Errorf("%w: a blocked group has an invalid master key", ErrBlockedListIncomplete)
 	}
 
 	groupID, err := libsignalgo.GroupMasterKey(group.GetMasterKey()).GroupIdentifier()
@@ -623,16 +810,6 @@ func (l *blockedList) isBlocked(aci uuid.UUID) bool {
 	_, ok := l.acis[aci]
 
 	return ok
-}
-
-// state is a storageState: the list is complete, so every ACI is known.
-func (l *blockedList) state(aci string) (bool, bool) {
-	id, err := uuid.Parse(aci)
-	if err != nil {
-		return false, false
-	}
-
-	return l.isBlocked(id), true
 }
 
 // set blocks or unblocks the user aci (with their number, if known) at the time when.

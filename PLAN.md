@@ -567,7 +567,7 @@ stories, admin deletes, and the MCP tools for react/delete (5.x).
 - [x] `link` waits for the initial sync (with progress on stderr and a timeout) (on the same
       client right after `Link`, which keeps the database and lock; `SyncOptions.Progress` reports
       the stages, printed as `Sync: <stage>...` lines on stderr, then `Synced N contacts and M
-  groups.` on stdout. `--sync-timeout` defaults to 60 s, 0 skips the sync. The timeout is the
+groups.` on stdout. `--sync-timeout` defaults to 60 s, 0 skips the sync. The timeout is the
       context deadline: `Sync` then returns what it has with an error wrapping
       `signal.ErrSyncIncomplete` and the cause, which `app.Sync` turns into
       `SyncResult.Incomplete`; `link` and `account sync` print a warning on stderr and exit 0.
@@ -615,7 +615,11 @@ against the fake); `cmd/` only parses flags, calls `app` and renders via `intern
       service's block times) and the deprecated ones; the phone applies it and writes the storage
       service itself. Then the store is updated. The storage service key is required
       (`signal.ErrStorageKeyUnknown`), since a list without the blocked groups would unblock them
-      on the phone. `app.ContactsBlock`/`ContactsUnblock` connect `SendOnly`, resolve like `send`,
+      on the phone. For the same reason nothing is sent (`signal.ErrBlockedListIncomplete`) when
+      the fetch isn't the complete list: no manifest yet (signalmeow's `nil` update on a 204),
+      `MissingRecords` (records that couldn't be fetched, decrypted or parsed), or a blocked
+      contact with neither ACI nor number or a blocked group without a valid master key, which a
+      `SyncMessage.Blocked` can't carry. `app.ContactsBlock`/`ContactsUnblock` connect `SendOnly`, resolve like `send`,
       reject groups and self, and report per user whether it changed; plain table
       NAME/NUMBER/ACI/STATUS, JSON `block` document. Exit 3 for an unlinked device)
 - [x] Name resolution (contact name → profile name → number → ACI) used by all plain renderers
@@ -636,15 +640,27 @@ Notes: signalmeow's storage sync always overwrites the blocked flag with the sto
 and it runs on `account sync`, on an incoming `Keys` or `FetchLatest` sync message and whenever
 signalmeow feels like it; until the phone has written our change to the storage service, that
 would undo it. So `SetBlocked` records an override (`gosignal_block_overrides`, migration
-`03-contacts.sql`) wherever the storage service still disagrees. Overrides are re-applied on
-`Connect`, after our own storage syncs (`Client.Sync`) and when signalmeow reports contacts changed
-by a background storage sync (`ContactList` with `IsFromDB`); `Contacts`/`Contact` show them even
-before that. An override ends once a storage sync agrees with it or after
-`signal.BlockOverrideTTL` (7 days), after which the storage service wins again, e.g. if the phone
-never applied our list. A background storage sync that changes nothing about the user can't end
-an override (only the next `account sync` or block does). Between a background sync and the
+`03-contacts.sql`) wherever the storage service still disagrees, tied to the manifest version of
+the fetch it built the list from (`storage_version`, migration `05-block-override-version.sql`).
+Once any later manifest version is seen, the phone has written the storage service since (with our
+change, or with a newer one made there), so the override is dropped and the store takes the state
+of that fetch; the phone always wins from then on. Earlier the override ended only when a sync
+reported the contact as changed and agreeing, but signalmeow reports only contacts whose local row
+changed, so an agreeing storage service went unnoticed, the override lived for 7 days, and an
+unblock made on the phone in that time was undone locally and re-sent as a block by the next
+`contacts block`. Versions are seen by `SetBlocked`'s own fetch (older overrides neither go into
+the list nor survive), by `Client.Sync`'s fetch, and, since signalmeow's background storage sync
+exposes no version, by a fetch of our own when that sync (`ContactList` with `IsFromDB`) changed
+an overridden user: `FetchStorage` with the overrides' version gets a 204 (no records fetched)
+while the phone hasn't written; then the override is re-applied. If that fetch fails, the overrides
+are re-applied as before (none has been seen superseded). Overrides are also re-applied on
+`Connect`; `Contacts`/`Contact` show them even before that. After `signal.BlockOverrideTTL` (7
+days) the storage service wins anyway, e.g. if the phone never applied our list; overrides from
+before migration 5 (version 0) end at the next version seen. Between a background sync and the
 re-apply, signalmeow may briefly see the old state (a message from a freshly blocked user could
-get through then). Blocking needs an ACI (users not on Signal can't be blocked) and doesn't cover
+get through then). The phone writing the storage service for another reason before it processed
+our list also ends the override early (the store then shows the old state until the phone's next
+write). Blocking needs an ACI (users not on Signal can't be blocked) and doesn't cover
 groups. The phone's handling of our blocked list (the official apps replace their whole list with
 it) is untested. Users that only have a nickname in the store are missing from `contacts list`
 (signalmeow's `LoadAllContacts` skips them); `contacts show` finds them. With names loaded, our own

@@ -123,13 +123,16 @@ type Client interface { //nolint:interfacebloat // the one facade over signalmeo
 	// SetBlocked blocks (or unblocks) the recipients, which need their ACI (see Resolve;
 	// ErrUnresolvable otherwise). It reads the current blocked list (users and groups) from the
 	// storage service (ErrStorageKeyUnknown if its key is unknown), applies the change and sends
-	// the complete list to our other devices as a blocked-list sync message: the phone applies it
-	// and updates the storage service itself. Once that went out, the store is updated and the
-	// change is kept against storage syncs that still say otherwise until the storage service
-	// agrees, or for BlockOverrideTTL. It needs Connect (ErrNotConnected; SendOnly is enough) and
-	// fails with ErrClosed after Close. An error such as a sync message that didn't go out or a
-	// connection lost for good means that nothing changed; only an error from the store after
-	// the list went out (it says so) leaves the store behind the phone.
+	// the complete list to our other devices as a blocked-list sync message: the phone replaces
+	// its list with it and updates the storage service itself. So the list must be complete: if
+	// the storage service has no manifest, records couldn't be read, or a blocked entry can't be
+	// put in the message, it fails with ErrBlockedListIncomplete. Once the list went out, the
+	// store is updated and the change is kept against storage syncs that still say otherwise
+	// until the storage service has changed since (the phone wrote it, so its state wins), or for
+	// BlockOverrideTTL. It needs Connect (ErrNotConnected; SendOnly is enough) and fails with
+	// ErrClosed after Close. An error such as a sync message that didn't go out or a connection
+	// lost for good means that nothing changed; only an error from the store after the list went
+	// out (it says so) leaves the store behind the phone.
 	SetBlocked(ctx context.Context, recipients []Recipient, blocked bool) error
 
 	// Identities lists the identity keys stored for other users, by ACI, with their trust level

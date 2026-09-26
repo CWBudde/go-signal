@@ -11,18 +11,24 @@ import (
 )
 
 // BlockOverride is a block or unblock made on this device that the storage service doesn't
-// reflect yet. Until it does, storage syncs would undo it, so the client re-applies it.
+// reflect yet. Until the phone writes the storage service, storage syncs would undo it, so the
+// client re-applies it.
 type BlockOverride struct {
 	ACI     string
 	Blocked bool
 	SetAt   time.Time
+	// StorageVersion is the storage service's manifest version the override was made against (0
+	// if unknown). A later version means that the phone has written the storage service since.
+	StorageVersion uint64
 }
 
 // SetBlockOverride records (or replaces) the override for aci.
 func (s *Store) SetBlockOverride(ctx context.Context, override BlockOverride) error {
-	_, err := s.own.Exec(ctx, `INSERT INTO gosignal_block_overrides (aci, blocked, set_at) VALUES ($1, $2, $3)
-		ON CONFLICT (aci) DO UPDATE SET blocked=excluded.blocked, set_at=excluded.set_at`,
-		override.ACI, override.Blocked, override.SetAt.UnixMilli())
+	_, err := s.own.Exec(ctx, `INSERT INTO gosignal_block_overrides (aci, blocked, set_at, storage_version)
+		VALUES ($1, $2, $3, $4) ON CONFLICT (aci) DO UPDATE
+		SET blocked=excluded.blocked, set_at=excluded.set_at, storage_version=excluded.storage_version`,
+		override.ACI, override.Blocked, override.SetAt.UnixMilli(),
+		int64(override.StorageVersion)) //nolint:gosec // manifest versions count writes, far below 2^63
 	if err != nil {
 		return fmt.Errorf("write block override %s: %w", override.ACI, err)
 	}
@@ -32,7 +38,8 @@ func (s *Store) SetBlockOverride(ctx context.Context, override BlockOverride) er
 
 // BlockOverrides returns all overrides, ordered by ACI.
 func (s *Store) BlockOverrides(ctx context.Context) ([]BlockOverride, error) {
-	rows, err := s.own.Query(ctx, "SELECT aci, blocked, set_at FROM gosignal_block_overrides ORDER BY aci")
+	rows, err := s.own.Query(ctx,
+		"SELECT aci, blocked, set_at, storage_version FROM gosignal_block_overrides ORDER BY aci")
 
 	overrides, err := dbutil.NewRowIterWithError(rows, scanBlockOverride, err).AsList()
 	if err != nil {
@@ -70,14 +77,16 @@ func scanBlockOverride(row dbutil.Scannable) (BlockOverride, error) {
 	var (
 		override BlockOverride
 		setAt    int64
+		version  int64
 	)
 
-	err := row.Scan(&override.ACI, &override.Blocked, &setAt)
+	err := row.Scan(&override.ACI, &override.Blocked, &setAt, &version)
 	if err != nil {
 		return BlockOverride{}, fmt.Errorf("scan block override: %w", err)
 	}
 
 	override.SetAt = time.UnixMilli(setAt).UTC()
+	override.StorageVersion = uint64(max(version, 0))
 
 	return override, nil
 }

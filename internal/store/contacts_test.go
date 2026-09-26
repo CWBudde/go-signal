@@ -24,7 +24,7 @@ func TestBlockOverrides(t *testing.T) {
 		{ACI: "b", Blocked: true, SetAt: setAt},
 		{ACI: "a", Blocked: true, SetAt: setAt},
 		// Replaces the first one.
-		{ACI: "b", Blocked: false, SetAt: setAt.Add(time.Minute)},
+		{ACI: "b", Blocked: false, SetAt: setAt.Add(time.Minute), StorageVersion: 7},
 	} {
 		err := data.SetBlockOverride(ctx, override)
 		if err != nil {
@@ -43,7 +43,7 @@ func TestBlockOverrides(t *testing.T) {
 	}
 
 	got, err := data.BlockOverrides(ctx)
-	want := []store.BlockOverride{{ACI: "b", Blocked: false, SetAt: setAt.Add(time.Minute)}}
+	want := []store.BlockOverride{{ACI: "b", Blocked: false, SetAt: setAt.Add(time.Minute), StorageVersion: 7}}
 
 	if err != nil || !slices.Equal(got, want) {
 		t.Errorf("BlockOverrides = %+v, %v; want %+v", got, err, want)

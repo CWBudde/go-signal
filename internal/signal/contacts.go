@@ -12,13 +12,20 @@ var (
 	// ErrStorageKeyUnknown means that the storage service key is unknown, so the phone's current
 	// blocked list can't be read; `account sync` asks the phone for the key.
 	ErrStorageKeyUnknown = errors.New("the storage service key is unknown; run `go-signal account sync` first")
+	// ErrBlockedListIncomplete means that the storage service didn't give the complete blocked
+	// list (no manifest yet, records that couldn't be read, or blocked entries a blocked-list sync
+	// message can't carry). The phone replaces its blocked list with the one we send, so a list
+	// built from it would unblock users or groups there; nothing is sent.
+	ErrBlockedListIncomplete = errors.New("the storage service's blocked list is incomplete")
 )
 
-// BlockOverrideTTL is how long a block or unblock made by SetBlocked is kept against a storage
-// service that still says otherwise. The phone applies the blocked list we send it and then
-// writes it to the storage service; until then, every storage sync would undo our local change.
-// An override ends early once the storage service agrees with it. After BlockOverrideTTL, the
-// storage service wins again (e.g. when the phone never processed our list).
+// BlockOverrideTTL is how long a block or unblock made by SetBlocked is kept at most against a
+// storage service that still says otherwise. The phone applies the blocked list we send it and
+// then writes it to the storage service; until then, every storage sync would undo our local
+// change. An override ends as soon as the storage service is seen at a later version than the
+// one the change was made against: the phone has written it since, so its state wins (whether
+// it applied our change or the user changed it again there). After BlockOverrideTTL, the storage
+// service wins anyway (e.g. when the phone never processed our list).
 const BlockOverrideTTL = 7 * 24 * time.Hour
 
 // Contact is what the store knows about a user: the names from the phone's contacts, the storage
