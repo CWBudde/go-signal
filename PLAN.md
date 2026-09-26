@@ -1454,7 +1454,17 @@ the fork's main, no tag. The shim wiring is 9.3.)
 
 - [ ] `SGXClientState`/`CDS2ClientState`: initial request, `CompleteHandshake`,
       `EstablishedSend`/`EstablishedRecv`, wired into the shim
-- [ ] Port the handshake-level attestation tests on the recorded blobs:
+      (2026-09-27 — partial: the fork side is done, the shim is not. New `attest/enclave`
+      package in the libsignal-go fork, branch `feat/cdsi` (worktree `~/Code/libsignal-go-cdsi`:
+      `feat/dcap` with `feat/noise` merged in), commit `ae07c98cb`, unpublished. It ports
+      `enclave.rs`, `sgx_session.rs`, `cds2.rs` and the bridge's `SgxClientState`: the attested
+      handshake with the one-day skew, NK/NKhfs, prost-style `ClientHandshakeStart` decoding,
+      `extract_metrics`, and `NewCDS2ClientState` → `InitialRequest` → `CompleteHandshake` →
+      `EstablishedSend`/`EstablishedRecv` with `ErrInvalidState` for wrong-state calls. Remaining:
+      publish the fork branches and tag, then implement mautrix-signal's
+      `pkg/libsignalgo/sgxclient_purego.go` on it and bump go.mod. This waits for the uncommitted
+      8.4 work in that package.)
+- [x] Port the handshake-level attestation tests on the recorded blobs:
       - `sgx_session.rs`: `test_clock_skew` with `SKEW_ADJUSTMENT` in the session,
         `test_happy_path`, `test_mismatched_keys` and `test_invalid_private_key`, on `cds2_test`;
       - `cds2.rs`: `attest_cds2`.
@@ -1463,6 +1473,15 @@ the fork's main, no tag. The shim wiring is 9.3.)
       `Handshake::for_sgx` and Noise NK from `feat/noise`. Other packages' tests will need an
       exported form of the evaluation number 12 exception (upstream's `test-util`). `svr2.rs`
       `attest_svr2_bad_config` checks the raft config, not DCAP; PLAN.md has no SVR2 item.
+      (2026-09-27 — fork commits `b9b3d8598` and `ae07c98cb` on `feat/cdsi`. All five are ported
+      under their names in `attest/enclave`, with a Go `noise` responder in place of snow. The
+      evaluation number 12 exception moved to `attest/internal/testhook`, which only packages
+      under `attest/` can import and only tests turn on. Extra cases cover the input checks,
+      `ClientHandshakeStart` decoding, metrics and the state machine, including a failed
+      `CompleteHandshake` and a reply with a payload, which upstream rejects. The expected
+      decoding and reply outcomes were checked against upstream's
+      `cds2::new_handshake_with_advisories` and `Handshake::complete`. SVR2's `config` and
+      `minimum_limits` claims stay undecoded; `attest_svr2_bad_config` remains unported.)
 
 **Done when:** a purego build resolves a phone number through contact discovery (Phase 3.2).
 
