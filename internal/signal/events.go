@@ -2,7 +2,7 @@ package signal
 
 // Event is an incoming event. It is a closed sum type; switch on the concrete pointer types:
 // *Message, *Edit, *Delete, *Reaction, *Typing, *Receipt, *ReadSync, *Unsupported,
-// *DecryptionFailure, *QueueEmpty and *Connection.
+// *DecryptionFailure, *IdentityChanged, *QueueEmpty and *Connection.
 type Event interface {
 	isEvent()
 }

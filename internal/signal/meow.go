@@ -73,6 +73,8 @@ type meowClient struct {
 	connDevice *mstore.Device
 	ownACI     string
 	account    Account
+	// trust decides which identity keys connDevice may send to (see installTrust).
+	trust *identityTrust
 
 	// cli runs the current receive loops; the supervisor replaces it on a restart.
 	cliMu sync.Mutex
@@ -194,6 +196,7 @@ func (c *meowClient) Connect(ctx context.Context, opts ...ConnectOption) error {
 	}
 
 	c.connDevice = device
+	c.trust = installTrust(device, c.data, c.log, time.Now)
 	c.ownACI = device.ACI.String()
 	c.account = acc
 	c.sendOnly = NewConnectOptions(opts...).SendOnly
@@ -516,7 +519,8 @@ func (c *meowClient) selectAccount() (Account, error) {
 
 // handle is signalmeow's event handler. Its return value decides whether the envelope is acked,
 // so it only returns true once the event has been handed to the consumer. Once Close has
-// started, and always in send-only mode, it leaves every envelope for the next run.
+// started, and always in send-only mode, it leaves every envelope for the next run. Identity
+// changes are reported before the event (see reportIdentityChanges).
 func (c *meowClient) handle(raw events.SignalEvent) bool {
 	if !c.begin(&c.handling) {
 		return false
@@ -543,7 +547,7 @@ func (c *meowClient) handle(raw events.SignalEvent) bool {
 		return false
 	}
 
-	if !c.emit(evt) {
+	if !c.reportIdentityChanges(evt) || !c.emit(evt) {
 		return false
 	}
 

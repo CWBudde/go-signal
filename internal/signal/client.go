@@ -106,6 +106,31 @@ type Client interface { //nolint:interfacebloat // the one facade over signalmeo
 	// ErrClosed), makes sure the acks of events read from Events reach the server, disconnects
 	// and releases the store.
 	Close() error
+
+	// Identities lists the identity keys stored for other users, by ACI, with their trust level
+	// (see TrustLevel). With rcpt (which needs its ACI, see Resolve) only that user's key is
+	// listed, or none. It works on the local store, without Connect or the account lock.
+	//
+	// Trust is on first use: the first key seen for a user is trusted without verification. A
+	// key that changes later, while receiving from or sending to them, is untrusted: go-signal
+	// logs a warning, reports an *IdentityChanged event on Events, and fails every send to them
+	// with ErrUntrustedIdentity (see UntrustedError) until TrustIdentity. Receiving keeps working.
+	Identities(ctx context.Context, rcpt *Recipient) ([]Identity, error)
+
+	// SafetyNumber returns the safety number of our account and rcpt (which needs its ACI) for
+	// their current identity key, as the Signal apps show it, with the key's Identity. It fails
+	// with ErrUnknownIdentity when no key is stored for them. Like Identities it only reads the
+	// local store.
+	SafetyNumber(ctx context.Context, rcpt Recipient) (SafetyNumber, error)
+
+	// TrustIdentity trusts rcpt's current identity key, so that sending to them works again after
+	// a change. Without safetyNumber the key becomes TrustUnverified (a key that is already
+	// verified stays so); with it, the key becomes TrustVerified if safetyNumber (60 digits, white
+	// space ignored) is the current one, and otherwise nothing changes and it fails with
+	// ErrSafetyNumberMismatch (or ErrInvalidSafetyNumber). It fails with ErrUnknownIdentity when
+	// no key is stored for them. It works on the local store, also while another process is
+	// connected; that process sees the new trust level with its next send.
+	TrustIdentity(ctx context.Context, rcpt Recipient, safetyNumber string) (Identity, error)
 }
 
 // Options configures a Client.

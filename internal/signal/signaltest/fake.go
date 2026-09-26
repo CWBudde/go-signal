@@ -55,6 +55,15 @@ type Fake struct {
 	// DownloadErrs makes downloading the attachments with these CDN keys fail.
 	DownloadErrs map[string]error
 
+	// Identities are the stored identity keys of other users (Identities, SafetyNumber,
+	// TrustIdentity; see SafetyNumberOf). Sending to a user whose key is signal.TrustUntrusted
+	// fails with signal.UntrustedError. An *signal.IdentityChanged in Incoming changes the user's
+	// key to its NewFingerprint and makes it untrusted when Connect runs, also with SendOnly, as
+	// the real client does when it decrypts the message that carries the new key.
+	Identities []signal.Identity
+	// IdentitiesErr makes Identities, SafetyNumber and TrustIdentity fail.
+	IdentitiesErr error
+
 	// OpenErr, LinkErr, ConnectErr, UploadErr, SendErr and DevicesErr make the respective call
 	// fail.
 	OpenErr    error
@@ -304,6 +313,10 @@ func (c *client) Connect(_ context.Context, opts ...signal.ConnectOption) error 
 			evt = &signal.Connection{State: signal.StateLoggedOut, Err: c.fake.markUnlinked(acc)}
 		}
 
+		if changed, ok := evt.(*signal.IdentityChanged); ok {
+			c.fake.changeIdentity(changed)
+		}
+
 		incoming = append(incoming, evt)
 	}
 
@@ -435,6 +448,10 @@ func (c *client) Send(_ context.Context, req signal.SendRequest) (signal.SendRes
 
 	for _, rcpt := range recipients {
 		result := signal.RecipientResult{Recipient: rcpt, Err: c.fake.SendFailures[rcpt.ACI]}
+		if result.Err == nil && c.fake.untrusted(rcpt.ACI) {
+			result.Err = signal.UntrustedError(rcpt)
+		}
+
 		// Sealed sender, except for the sync transcript of a note-to-self.
 		result.Unidentified = result.Err == nil && rcpt.ACI != c.connected
 		res.Results = append(res.Results, result)

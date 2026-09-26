@@ -225,7 +225,7 @@ func handleEvent(ctx context.Context, printer eventPrinter, evt signal.Event, re
 }
 
 // hasContent reports whether evt counts toward --max: anything but connection changes and
-// queueEmpty.
+// queueEmpty (identity changes count).
 func hasContent(evt signal.Event) bool {
 	switch evt.(type) {
 	case *signal.Connection, *signal.QueueEmpty:
