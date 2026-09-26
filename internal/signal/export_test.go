@@ -114,6 +114,14 @@ func SyncCounts(ctx context.Context, client Client) (int, int, error) {
 	return meow.syncCounts(ctx, device)
 }
 
+// VerifyStorageStored runs Sync's check that the selected account's store of client (see
+// meowOf) holds what signalmeow's storage sync stores from update.
+func VerifyStorageStored(ctx context.Context, client Client, update *signalmeow.StorageUpdate) error {
+	_, device := meowOf(ctx, client)
+
+	return verifyStorageStored(ctx, device, update)
+}
+
 // SetDrainTimeout replaces how long Close of client (from Open) lets sends run before it
 // disconnects.
 func SetDrainTimeout(client Client, timeout time.Duration) {

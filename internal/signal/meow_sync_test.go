@@ -3,14 +3,21 @@
 package signal_test
 
 import (
+	"context"
+	"encoding/base64"
+	"errors"
 	"log/slog"
+	"strings"
 	"testing"
 
 	"github.com/cwbudde/go-signal/internal/signal"
 	"github.com/cwbudde/go-signal/internal/store"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
+	"go.mau.fi/mautrix-signal/pkg/signalmeow"
 	"go.mau.fi/mautrix-signal/pkg/signalmeow/events"
+	"go.mau.fi/mautrix-signal/pkg/signalmeow/protobuf/signalpb"
+	mstore "go.mau.fi/mautrix-signal/pkg/signalmeow/store"
 	"go.mau.fi/mautrix-signal/pkg/signalmeow/types"
 )
 
@@ -115,4 +122,81 @@ func seedSynced(t *testing.T, dataDir string) {
 	if err != nil {
 		t.Fatalf("store group: %v", err)
 	}
+}
+
+func TestVerifyStorageStored(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	dataDir := seedAccount(t)
+	seedContacts(t, dataDir)
+
+	storedKey, unstoredKey := randomKey(t), randomKey(t)
+	storeGroupKey(t, dataDir, base64.StdEncoding.EncodeToString(storedKey))
+
+	client := openSeeded(t, dataDir)
+	bob := uuid.MustParse(bobUser)
+
+	record := func(r *signalpb.StorageRecord) *signalmeow.DecryptedStorageRecord {
+		return &signalmeow.DecryptedStorageRecord{StorageRecord: r}
+	}
+	contact := func(c *signalpb.ContactRecord) *signalmeow.DecryptedStorageRecord {
+		return record(&signalpb.StorageRecord{Record: &signalpb.StorageRecord_Contact{Contact: c}})
+	}
+	group := func(key []byte) *signalmeow.DecryptedStorageRecord {
+		return record(&signalpb.StorageRecord{
+			Record: &signalpb.StorageRecord_GroupV2{GroupV2: &signalpb.GroupV2Record{MasterKey: key}},
+		})
+	}
+
+	// What signalmeow stores is there (alice by string ACI, bob by binary ACI, the group); what
+	// it skips isn't checked: contacts without an ACI or with a malformed one, a group key of the
+	// wrong length, other record types.
+	healthy := storageUpdate(seededVersion,
+		contactRecord(aliceUser, false),
+		contact(&signalpb.ContactRecord{AciBinary: bob[:], Blocked: true}),
+		contact(&signalpb.ContactRecord{Pni: carolPNI}),
+		contact(&signalpb.ContactRecord{E164: "+15550199"}),
+		contact(&signalpb.ContactRecord{Aci: "not-a-uuid"}),
+		group(storedKey),
+		group([]byte("short")),
+		record(&signalpb.StorageRecord{Record: &signalpb.StorageRecord_Account{Account: &signalpb.AccountRecord{}}}),
+	)
+
+	for _, update := range []*signalmeow.StorageUpdate{nil, storageUpdate(seededVersion), healthy} {
+		err := signal.VerifyStorageStored(ctx, client, update)
+		if err != nil {
+			t.Errorf("VerifyStorageStored(%v) = %v, want nil", update, err)
+		}
+	}
+
+	// frank has no row and the other group no key: signalmeow's sync didn't store them.
+	healthy.NewRecords = append(healthy.NewRecords, contactRecord(frankUser, false), group(unstoredKey))
+
+	err := signal.VerifyStorageStored(ctx, client, healthy)
+	if !errors.Is(err, signal.ErrStorageNotStored) || !strings.Contains(err.Error(), "1 contacts, 1 groups missing") {
+		t.Errorf("VerifyStorageStored = %v, want ErrStorageNotStored with 1 contact and 1 group", err)
+	}
+
+	// Checking created no row for frank.
+	wantNoRow(t, dataDir, uuid.MustParse(frankUser))
+}
+
+// wantNoRow checks that the store has no recipient row for aci.
+func wantNoRow(t *testing.T, dataDir string, aci uuid.UUID) {
+	t.Helper()
+
+	withStore(t, dataDir, func(device *mstore.Device, _ *store.Store) {
+		loader, ok := device.RecipientStore.(interface {
+			LoadRecipientByACI(ctx context.Context, aci uuid.UUID) (*types.Recipient, error)
+		})
+		if !ok {
+			t.Fatal("no LoadRecipientByACI")
+		}
+
+		rcpt, err := loader.LoadRecipientByACI(t.Context(), aci)
+		if err != nil || rcpt != nil {
+			t.Errorf("row of %s = %+v, %v; want none", aci, rcpt, err)
+		}
+	})
 }

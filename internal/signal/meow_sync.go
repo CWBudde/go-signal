@@ -10,7 +10,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+	"go.mau.fi/mautrix-signal/pkg/libsignalgo"
 	"go.mau.fi/mautrix-signal/pkg/signalmeow"
+	"go.mau.fi/mautrix-signal/pkg/signalmeow/protobuf/signalpb"
 	mstore "go.mau.fi/mautrix-signal/pkg/signalmeow/store"
 	"go.mau.fi/mautrix-signal/pkg/signalmeow/types"
 )
@@ -33,6 +36,8 @@ const (
 // signalmeow's SyncStorage returns no error, so Sync first fetches the storage service itself
 // with FetchStorage only to see whether that works, and then lets SyncStorage fetch and store
 // it again: the manifest and records are downloaded twice, which is cheap next to not knowing.
+// Since SyncStorage's own fetch or database update can still fail silently, Sync then checks that
+// the store holds the contacts and groups of the first fetch.
 func (c *meowClient) Sync(ctx context.Context, opts SyncOptions) (SyncResult, error) {
 	if c.cancelLoops == nil {
 		return SyncResult{}, ErrNotConnected
@@ -212,11 +217,18 @@ func (c *meowClient) storedMasterKey(ctx context.Context) ([]byte, error) {
 }
 
 // syncStorage fetches the storage service once to find out whether that works, and then has
-// signalmeow fetch and store it (see Sync). It returns what the first fetch got.
+// signalmeow fetch and store it (see Sync). SyncStorage only logs its failures, so the store is
+// checked afterwards for what the first fetch got (see verifyStorageStored). It returns what the
+// first fetch got; nil, without syncing, if the storage service has no manifest.
 func syncStorage(ctx context.Context, cli *signalmeow.Client, key []byte) (*signalmeow.StorageUpdate, error) {
 	update, err := cli.FetchStorage(ctx, key, 0, nil)
 	if err != nil {
 		return nil, fmt.Errorf("fetch storage service: %w", err)
+	}
+
+	// Nothing to store, and SyncStorage would dereference its own nil update.
+	if update == nil {
+		return nil, nil //nolint:nilnil // no manifest yet: synced, with nothing to store
 	}
 
 	cli.SyncStorage(ctx)
@@ -227,7 +239,112 @@ func syncStorage(ctx context.Context, cli *signalmeow.Client, key []byte) (*sign
 		return nil, fmt.Errorf("sync storage service: %w", err)
 	}
 
+	err = verifyStorageStored(ctx, cli.Store, update)
+	if err != nil {
+		return nil, fmt.Errorf("sync storage service: %w", err)
+	}
+
 	return update, nil
+}
+
+// verifyStorageStored checks that the store holds what signalmeow's SyncStorage stores from
+// update: a recipient row for every contact record with an ACI, and the master key of every
+// GroupV2 record with a valid one. SyncStorage returns no error, so this is how Sync notices that
+// its fetch or the database update failed (ErrStorageNotStored). Only what signalmeow is known to
+// store is checked: it skips contact records with neither ACI nor PNI and group keys of the wrong
+// length, stores PNI-only contacts by PNI, and has no use for the other record types. Nothing is
+// created while checking. signalmeow deletes nothing, so a record the phone removed between the
+// two fetches only counts as missing if it was new in the first one (e.g. a group joined and left
+// in that second), which the next sync resolves; one added in between isn't checked. A nil update
+// (no manifest) has nothing to check.
+func verifyStorageStored(ctx context.Context, device *mstore.Device, update *signalmeow.StorageUpdate) error {
+	if update == nil {
+		return nil
+	}
+
+	loader, ok := device.RecipientStore.(recipientLoader)
+	if !ok {
+		return errNoRecipientLoader
+	}
+
+	var contacts, groups int
+
+	for _, record := range update.NewRecords {
+		contact, group, err := recordMissing(ctx, loader, device.GroupStore, record)
+		if err != nil {
+			return err
+		}
+
+		if contact {
+			contacts++
+		}
+
+		if group {
+			groups++
+		}
+	}
+
+	if contacts > 0 || groups > 0 {
+		return fmt.Errorf("%w: %d contacts, %d groups missing", ErrStorageNotStored, contacts, groups)
+	}
+
+	return nil
+}
+
+// recordMissing reports whether the store lacks the user of a contact record or the group of a
+// group record (see verifyStorageStored).
+func recordMissing(
+	ctx context.Context, loader recipientLoader, groups mstore.GroupStore, record *signalmeow.DecryptedStorageRecord,
+) (bool, bool, error) {
+	switch data := record.StorageRecord.GetRecord().(type) {
+	case *signalpb.StorageRecord_Contact:
+		missing, err := contactMissing(ctx, loader, data.Contact)
+
+		return missing, false, err
+	case *signalpb.StorageRecord_GroupV2:
+		missing, err := groupMissing(ctx, groups, data.GroupV2)
+
+		return false, missing, err
+	default:
+		return false, false, nil
+	}
+}
+
+// contactMissing reports whether the store lacks the user of a contact record with an ACI (see
+// verifyStorageStored).
+func contactMissing(ctx context.Context, loader recipientLoader, contact *signalpb.ContactRecord) (bool, error) {
+	// signalmeow ignores the parse error; a malformed ACI is not checked.
+	aci, parseErr := signalmeow.ParseStringOrBinaryUUID(contact.GetAci(), contact.GetAciBinary())
+	if parseErr == nil && aci != uuid.Nil {
+		rcpt, err := loader.LoadRecipientByACI(ctx, aci)
+		if err != nil {
+			return false, fmt.Errorf("check stored contact %s: %w", aci, err)
+		}
+
+		return rcpt == nil, nil
+	}
+
+	return false, nil
+}
+
+// groupMissing reports whether the store lacks the master key of a group record with a valid
+// one (see verifyStorageStored).
+func groupMissing(ctx context.Context, groups mstore.GroupStore, group *signalpb.GroupV2Record) (bool, error) {
+	if len(group.GetMasterKey()) != libsignalgo.GroupMasterKeyLength {
+		return false, nil
+	}
+
+	gid, err := groupIDFromMasterKey(group.GetMasterKey())
+	if err != nil {
+		return false, fmt.Errorf("check stored group: %w", err)
+	}
+
+	known, err := knownGroup(ctx, groups, gid)
+	if err != nil {
+		return false, fmt.Errorf("check stored group: %w", err)
+	}
+
+	return !known, nil
 }
 
 // waitContactList waits for the phone's contact list.

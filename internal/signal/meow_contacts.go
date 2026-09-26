@@ -402,10 +402,20 @@ func setBlocked(ctx context.Context, recipients mstore.RecipientStore, aci uuid.
 }
 
 // settleOverrides settles the pending block overrides against seen, what a fetch of the storage
-// service found (nil if nothing was fetched): an override that expired (BlockOverrideTTL) is
-// dropped; one that seen supersedes (the phone has written the storage service since) is dropped
-// and the store gets the state seen has; the others are re-applied to the store, since a storage
-// sync may have undone them. Failures are only logged: the next settle tries again.
+// service found (nil if nothing was fetched):
+//   - an override that expired (BlockOverrideTTL) is dropped, and the store gets the state seen
+//     has for the user if seen knows it. If it doesn't, the store keeps the overridden state until
+//     signalmeow's next storage sync: that fetches every record and sets the blocked flag from
+//     each contact record, changed or not (processStorageInTxn), so only a user without any
+//     contact record in the storage service keeps it for good;
+//   - one that seen supersedes (the phone has written the storage service since) is dropped and
+//     the store gets the state seen has, if seen knows it (it read the user's record, or every
+//     record). If seen's version is later but the user's record couldn't be read, the override
+//     stays as it is, not re-applied (the phone may have changed it), until a fetch that knows or
+//     until it expires;
+//   - the others are re-applied to the store, since a storage sync may have undone them.
+//
+// Failures are only logged: the next settle tries again.
 func (c *meowClient) settleOverrides(ctx context.Context, recipients mstore.RecipientStore, seen *storageSnapshot) {
 	c.overridesMu.Lock()
 	defer c.overridesMu.Unlock()
@@ -427,11 +437,17 @@ func (c *meowClient) settleOverridesLocked(
 	for _, override := range overrides {
 		switch {
 		case expired(override, now):
+			c.storeBlockedState(ctx, recipients, override.ACI, seen.state)
 			c.dropOverride(ctx, override, "expired")
-		case seen.supersedes(override):
+		case seen.supersedes(override) && seen.knows(override.ACI):
 			// The phone has written the storage service since: it has our change or a newer one.
 			c.dropOverride(ctx, override, "storage service changed since")
 			c.storeBlockedState(ctx, recipients, override.ACI, seen.state)
+		case seen.supersedes(override):
+			// Written since, but the user's record wasn't read: keep the override, but don't
+			// impose it on the store either.
+			c.log.Debug("keeping block override: its record couldn't be read", "aci", override.ACI,
+				"storage version", seen.version)
 		default:
 			c.storeBlockedState(ctx, recipients, override.ACI, func(uuid.UUID) (bool, bool) {
 				return override.Blocked, true
@@ -728,13 +744,29 @@ func (s *storageSnapshot) supersedes(override store.BlockOverride) bool {
 	return s != nil && override.StorageVersion < s.version
 }
 
-// state returns the blocked state s has for aci, and whether s knows it.
+// state returns the blocked state s has for aci, and whether s knows it. A nil s knows nothing.
 func (s *storageSnapshot) state(aci uuid.UUID) (bool, bool) {
+	if s == nil {
+		return false, false
+	}
+
 	if s.list.isBlocked(aci) {
 		return true, true
 	}
 
 	return false, s.complete || s.read[aci]
+}
+
+// knows reports whether s knows the blocked state of the user aci (a string ACI).
+func (s *storageSnapshot) knows(aci string) bool {
+	parsed, err := uuid.Parse(aci)
+	if err != nil {
+		return false
+	}
+
+	_, known := s.state(parsed)
+
+	return known
 }
 
 // blockedEntry is a blocked user: their number ("" if unknown) and when they were blocked

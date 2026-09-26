@@ -7,6 +7,11 @@ import "errors"
 // stored; the error also wraps the cause (such as context.DeadlineExceeded).
 var ErrSyncIncomplete = errors.New("sync incomplete")
 
+// ErrStorageNotStored means that the storage service was fetched, but the store lacks some of its
+// contacts or groups afterwards: signalmeow's storage sync, which only logs its failures, didn't
+// store them. Sync then reports the storage service as not synced.
+var ErrStorageNotStored = errors.New("storage service records not stored")
+
 // SyncStage is a step of Client.Sync, reported through SyncOptions.Progress.
 type SyncStage int
 
