@@ -135,6 +135,7 @@ func (s *Server) Receive(ctx context.Context, events <-chan signal.Event) error 
 	}
 
 	hookCtx, cancel := context.WithCancel(ctx)
+	s.hook.ctx = hookCtx
 	done := make(chan struct{})
 
 	go func() {
@@ -156,7 +157,7 @@ func (s *Server) added(ctx context.Context, entry signal.InboxEntry) {
 	s.notify(ctx, entry)
 
 	if s.hook != nil {
-		s.hook.offer(ctx, entry)
+		s.hook.offer(entry)
 	}
 }
 

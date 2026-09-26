@@ -41,6 +41,9 @@ type hook struct {
 	timeout time.Duration
 	logger  *slog.Logger
 	queue   chan signal.InboxEntry
+	// ctx is the context of Server.Receive, set before it receives: offer checks chats with it,
+	// since the context that app.Inbox passes on can't be cancelled.
+	ctx context.Context //nolint:containedctx // offer runs on Inbox.Run's goroutine, see above
 }
 
 // newHook returns the hook of opts, nil without Options.OnMessage.
@@ -57,8 +60,11 @@ func newHook(a *app.App, opts Options, logger *slog.Logger) *hook {
 
 // offer queues entry for a run if it is an incoming message (no sync transcript of our own) from
 // a chat that the hook allows. It doesn't wait for the run; when the queue is full, the entry is
-// left out. Either way the entry stays in the inbox.
-func (h *hook) offer(ctx context.Context, entry signal.InboxEntry) {
+// left out. Either way the entry stays in the inbox. Resolving the users of --hook-from (once)
+// ends when h.ctx does.
+func (h *hook) offer(entry signal.InboxEntry) {
+	ctx := h.ctx
+
 	msg, ok := entry.Event.(*signal.Message)
 	if !ok || msg.Sync || !entry.Unread {
 		return

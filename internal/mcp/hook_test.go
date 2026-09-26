@@ -3,7 +3,9 @@
 package mcp_test
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -166,5 +168,48 @@ echo "$GOSIGNAL_ENTRY_ID" >> "$DIR/finished"
 	_, err := os.Stat(filepath.Join(dir, "finished"))
 	if !os.IsNotExist(err) {
 		t.Errorf("a run finished (%v), want it killed", err)
+	}
+}
+
+// TestHookStalledLookup checks that the server stops while resolving --hook-from hangs.
+func TestHookStalledLookup(t *testing.T) {
+	t.Parallel()
+
+	script, _ := hookScript(t, "exit 0\n")
+	fake := toolsFake()
+	fake.ResolveHangs = true
+
+	client, err := fake.Factory(t.Context(), signal.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() { _ = client.Close() })
+
+	err = client.Connect(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	server := mcp.NewServer(app.New(client), mcp.Options{OnMessage: script, HookFrom: hookFrom(t, aliceNumber)})
+	ctx, cancel := context.WithCancel(t.Context())
+	received := make(chan error, 1)
+
+	go func() { received <- server.Receive(ctx, client.Events()) }()
+
+	aliceRcpt := signal.Recipient{ACI: aliceACI}
+	if !fake.Push(textMessage(aliceRcpt, signal.Chat{Recipient: aliceRcpt}, 1, "hi")) {
+		t.Fatal("push failed")
+	}
+
+	cancel()
+
+	select {
+	case err := <-received:
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("receive: %v, want it cancelled", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("receive did not end while resolving --hook-from hangs")
 	}
 }
