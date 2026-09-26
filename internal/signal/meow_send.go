@@ -340,7 +340,7 @@ func recipientResult(rcpt Recipient, self bool, sent signalmeow.SendMessageResul
 	case sent.WasSuccessful:
 		out.Unidentified = sent.Unidentified
 	case sent.Error != nil:
-		out.Err = sent.Error
+		out.Err = sendError(rcpt, sent.Error)
 	case self:
 		out.Err = ErrSyncFailed
 	default:
@@ -363,15 +363,27 @@ func groupResults(sent *signalmeow.GroupMessageSendResult) []RecipientResult {
 	}
 
 	for _, failed := range sent.FailedToSendTo {
+		rcpt := serviceRecipient(failed.Recipient)
+
 		err := failed.Error
 		if err == nil {
 			err = ErrSendFailed
 		}
 
-		out = append(out, RecipientResult{Recipient: serviceRecipient(failed.Recipient), Err: err})
+		out = append(out, RecipientResult{Recipient: rcpt, Err: sendError(rcpt, err)})
 	}
 
 	return out
+}
+
+// sendError converts the error of sending to rcpt: libsignal refuses to encrypt for an identity
+// key that isn't trusted (see identityTrust), which becomes UntrustedError.
+func sendError(rcpt Recipient, err error) error {
+	if errors.Is(err, libsignalgo.ErrorCodeUntrustedIdentity) {
+		return UntrustedError(rcpt)
+	}
+
+	return err
 }
 
 // serviceRecipient converts a service ID (ACI or PNI) into a Recipient.

@@ -239,6 +239,76 @@ entry per chat given on the command line. The other fields describe the reaction
 A remote delete is a message of its own, too: `timestamp` and `results` are as in
 [`send`](#send). `targetTimestamp` (number) is the sent timestamp of our message that was deleted.
 
+## `identities list`
+
+```json
+{
+  "version": 1,
+  "identities": [
+    {
+      "aci": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "fingerprint": "05ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100",
+      "trust": "untrusted",
+      "firstSeen": "2026-09-20T12:30:00Z",
+      "changedAt": "2026-09-21T08:15:00Z"
+    }
+  ]
+}
+```
+
+One **identity** object per user whose identity key go-signal has stored, ordered by ACI (with a
+recipient argument, only theirs; `[]` if none is known):
+
+| Field         | Type   | Description                                                                                                                                         |
+| ------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `aci`         | string | The user's ACI                                                                                                                                      |
+| `number`      | string | Phone number, if given as the recipient argument; _optional_                                                                                        |
+| `username`    | string | Username, if given as the recipient argument; _optional_                                                                                            |
+| `fingerprint` | string | The identity (public) key in hex: 33 bytes, starting with the key type `05`                                                                         |
+| `trust`       | string | `trusted-unverified` (first key seen, or trusted by hand), `trusted-verified` (safety number compared) or `untrusted` (changed; sending is blocked) |
+| `firstSeen`   | string | When go-signal first stored a key of this user; _optional_ (unknown for keys stored before go-signal tracked them)                                  |
+| `changedAt`   | string | When the key last changed; _optional_                                                                                                               |
+
+## `identities show`
+
+```json
+{
+  "version": 1,
+  "identity": {
+    "aci": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    "fingerprint": "05a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90",
+    "trust": "trusted-unverified",
+    "firstSeen": "2026-09-20T12:30:00Z",
+    "safetyNumber": "847411542415762535671764553031165774357252933441622828935299",
+    "scannable": "CAISIgog…"
+  }
+}
+```
+
+The **identity** object as in `identities list`, plus:
+
+| Field          | Type   | Description                                                                              |
+| -------------- | ------ | ---------------------------------------------------------------------------------------- |
+| `safetyNumber` | string | The 60-digit safety number of this account and the user; the apps show it in blocks of 5 |
+| `scannable`    | string | Base64 of what the apps' safety number QR code contains                                  |
+
+## `identities trust`
+
+```json
+{
+  "version": 1,
+  "identity": {
+    "aci": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    "fingerprint": "05ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100",
+    "trust": "trusted-verified",
+    "firstSeen": "2026-09-20T12:30:00Z",
+    "changedAt": "2026-09-21T08:15:00Z"
+  }
+}
+```
+
+The **identity** object (as in `identities list`) after trusting it.
+
 ## `receive`
 
 `receive` writes one document per event and line ([NDJSON](https://github.com/ndjson/ndjson-spec))
@@ -261,6 +331,7 @@ any release, so scripts should skip types they don't know.
 | `readSync`          | Another of our devices marked messages as read                   |
 | `unsupported`       | Content go-signal can't show yet, named in `content`             |
 | `decryptionFailure` | An incoming message could not be decrypted                       |
+| `identityChanged`   | A user's identity key (safety number) changed                    |
 | `queueEmpty`        | The server has delivered all messages that were queued for us    |
 | `connection`        | The connection state changed                                     |
 
@@ -411,6 +482,20 @@ New names can be added, and some may become event types of their own, in any rel
 | `timestamp` | number    | The message's timestamp           |
 | `time`      | string    | `timestamp` as a time; _optional_ |
 | `error`     | string    | Why decryption failed; _optional_ |
+
+### `identityChanged`
+
+| Field            | Type      | Description                                                        |
+| ---------------- | --------- | ------------------------------------------------------------------ |
+| `recipient`      | recipient | The user whose key changed                                         |
+| `oldFingerprint` | string    | The key trusted before, in hex (see `identities list`); _optional_ |
+| `newFingerprint` | string    | The new key, which is `untrusted`                                  |
+| `time`           | string    | When go-signal noticed the change; _optional_                      |
+
+Sending to the user fails (`error` in the `send` results) until `go-signal identities trust` is
+run for them; receiving from them keeps working. The event comes right before the message that
+carried the new key. A change noticed while sending, or while `receive` wasn't reading, is
+reported by the next `receive`.
 
 ### `queueEmpty`
 

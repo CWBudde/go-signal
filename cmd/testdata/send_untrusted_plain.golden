@@ -1,0 +1,3 @@
+RECIPIENT  TIMESTAMP      STATUS  DETAILS
++15550101  1790000000000  failed  identity key not trusted: safety number with aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa changed; verify it with `go-signal identities show aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa`, then run `go-signal identities trust aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa`
+@bob.42    1790000000000  sent    sealed sender

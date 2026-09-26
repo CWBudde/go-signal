@@ -105,6 +105,7 @@ go-signal delete <recipient>... --target <ts> [--group <id>]   # remote delete o
 go-signal contacts list | show <recipient> | block | unblock
 go-signal groups list | show <id> | leave <id>
 go-signal devices list
+go-signal identities list [<recipient>] | show <recipient> | trust <recipient> [--safety-number <n>]
 go-signal account show | unlink                 # unlink = remove local data
 go-signal mcp serve [--read-only] [--allow-recipient <r>]...   # MCP server on stdio
 go-signal version
@@ -571,13 +572,52 @@ against the fake); `cmd/` only parses flags, calls `app` and renders via `intern
 
 #### 4.3 Identities and safety numbers
 
-- [ ] `identities list [<recipient>]`: identity key fingerprint, trust level, first seen
-- [ ] `identities show <recipient>`: safety number (numeric + QR)
-- [ ] `identities trust <recipient> [--safety-number <n>]`
-- [ ] Policy: TOFU; on identity change, warn on stderr and emit an `identity-changed` event;
-      sending to an untrusted changed identity requires explicit trust
+- [x] `identities list [<recipient>]`: identity key fingerprint, trust level, first seen
+      (`Client.Identities` → `app.IdentitiesList`; the fingerprint is the hex of the 33-byte
+      public key, as signal-cli shows it; trust levels `untrusted`, `trusted-unverified`,
+      `trusted-verified`; plain table RECIPIENT/FINGERPRINT/TRUST/FIRST SEEN/CHANGED, JSON
+      `identities` document. Keys signalmeow stored before go-signal tracked trust count as
+      trusted on first use, with an unknown first-seen date; our own ACI/PNI keys and PNI
+      identities are left out)
+- [x] `identities show <recipient>`: safety number (numeric + QR) (`Client.SafetyNumber`:
+      libsignal's numeric fingerprint, version 2 over both ACIs with 5200 iterations, as the apps
+      compute it; plain shows 12 blocks of 5 digits and the scannable encoding as a QR code via
+      qrterminal, JSON has `safetyNumber` and base64 `scannable`)
+- [x] `identities trust <recipient> [--safety-number <n>]` (`Client.TrustIdentity`: without a
+      number the current key becomes `trusted-unverified` (a verified key stays verified); with
+      one, white space ignored, it becomes `trusted-verified` if it matches, otherwise
+      `signal.ErrSafetyNumberMismatch` and nothing changes)
+- [x] Policy: TOFU; on identity change, warn on stderr and emit an `identity-changed` event;
+      sending to an untrusted changed identity requires explicit trust (a wrapper around
+      signalmeow's ACI/PNI identity stores (`meow_identity.go`, installed on the device in
+      `Connect`) keeps our state in `gosignal_identities` (migration v2) through the context of
+      the callbacks, so inside signalmeow's decryption transaction. A different key, seen when
+      decrypting (`SaveIdentityKey`) or when setting up a session to send (`IsTrustedIdentity`),
+      becomes `untrusted`, is logged as a warning and marked for an `identityChanged` event (JSON
+      type in camelCase like the others), which `receive` gets right before the event of the
+      envelope that carried the key, or with the next event if it was seen while sending. libsignal
+      then refuses to encrypt for it; `Send` maps that per recipient to
+      `signal.ErrUntrustedIdentity` with the `identities trust` hint. Receiving is never refused)
 
 **Done when:** an identity change is detected, reported, and blocked for sending until trusted.
+(Done with the fake, cgo unit tests of the wrapper against a real account database, and
+libsignal's session setup refusing a changed prekey bundle until it is trusted; not yet verified
+against the live server.)
+
+Notes: the last trusted key before a change stays acceptable and isn't taken for another change,
+because the sessions of the user's other (old) devices still use it until the server reports them
+as stale (410), and delayed messages can still carry it. A change is reported until a `receive`
+has handed its event out (`pending_event`), so it isn't lost when receive stops before reading
+it; a change in a rolled-back decryption is neither stored nor reported. Gaps: libsignal's
+multi-recipient (sender key) encryption doesn't ask whether a key is trusted, so group members
+who already have our sender key still get group messages after their key changed (a member
+whose devices changed gets a new sender key distribution message, which is blocked); PNI
+identities aren't listed or checked beyond what libsignal does; signalmeow bypasses the wrapper
+for the PNI identity key of sync messages, PNI signatures and provisioning; the storage
+service's `ContactRecord` identity state/verified flag isn't read or written, and
+`SyncMessage.Verified` is neither sent nor handled, so verification doesn't sync with the phone;
+the identities commands don't connect, so a number must already be cached (the ACI always
+works).
 
 ### Phase 5 — MCP server
 
@@ -598,7 +638,9 @@ lacks something we need).
 - [x] `cmd/` becomes flag parsing + `internal/app` call + `internal/output` rendering (`account`
       and `devices`; `link` and `receive` stay in `cmd/` since MCP doesn't expose them as tools)
 - [ ] Recipient resolution, name resolution and trust checks live only in `internal/app` (lands
-      with 3.2, 4.1 and 4.3; recipient resolution is in since 3.2: `app.ResolveRecipients`)
+      with 3.2, 4.1 and 4.3; recipient resolution is in since 3.2: `app.ResolveRecipients`. The
+      trust policy of 4.3 is enforced in the facade, because libsignal asks the identity store
+      while encrypting; `internal/app` has the `identities` use cases)
 
 **Done when:** the CLI behaves as before (golden files unchanged), and `internal/app` has unit
 tests against the fake facade.
