@@ -39,7 +39,7 @@ func newContactsListCmd(clients *clientOpener, printers *printerFactory) *cobra.
 	var req app.ContactsListRequest
 
 	cmd := &cobra.Command{
-		Use:   "list",
+		Use:   listCmd,
 		Short: "List the known users, sorted by name",
 		Long: `List the users go-signal knows from the phone's contacts, the storage service and
 received messages: users with a name or number, and blocked users. Names come from the

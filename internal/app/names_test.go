@@ -92,6 +92,28 @@ func TestNames(t *testing.T) {
 	}
 }
 
+func TestNamesGroups(t *testing.T) {
+	t.Parallel()
+
+	names := app.NewNames(testAccount().ACI, []signal.Contact{
+		{Recipient: signal.Recipient{ACI: aliceACI}, ContactName: aliceName},
+	})
+
+	withGroups := names.WithGroups(map[string]string{groupID: "Family"})
+	if got := withGroups.GroupTitle(groupID); got != "Family" {
+		t.Errorf("GroupTitle = %q, want Family", got)
+	}
+
+	if names.GroupTitle(groupID) != "" || withGroups.Label(signal.Recipient{ACI: aliceACI}) != aliceName {
+		t.Error("WithGroups changed the names it was called on, or lost the contacts")
+	}
+
+	var zero app.Names
+	if zero.GroupTitle(groupID) != "" {
+		t.Error("the zero Names knows a group")
+	}
+}
+
 func TestAppNames(t *testing.T) {
 	t.Parallel()
 

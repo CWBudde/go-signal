@@ -36,7 +36,7 @@ func (w slogWriter) Write(line []byte) (int, error) {
 	level := slogLevel(fields[zerolog.LevelFieldName])
 	msg, _ := fields[zerolog.MessageFieldName].(string)
 
-	if isWebsocketStatus(msg) || isDeferredEnvelope(msg, fields) {
+	if isWebsocketStatus(msg) || isDeferredEnvelope(msg, fields) || isGroupCacheMiss(msg) {
 		level = slog.LevelDebug
 	}
 
@@ -89,4 +89,11 @@ func isDeferredEnvelope(msg string, fields map[string]any) bool {
 // "Authed websocket logged out" or "Unauthed websocket disconnected".
 func isWebsocketStatus(msg string) bool {
 	return strings.HasPrefix(msg, "Authed websocket ") || strings.HasPrefix(msg, "Unauthed websocket ")
+}
+
+// isGroupCacheMiss reports whether msg is signalmeow's complaint that it couldn't cache a fetched
+// group's send endorsements. That is expected for a group we are only invited to (the server
+// sends none for it); the group itself was fetched fine.
+func isGroupCacheMiss(msg string) bool {
+	return msg == "Failed to cache group response" || msg == "Group not found in cache after fetching"
 }

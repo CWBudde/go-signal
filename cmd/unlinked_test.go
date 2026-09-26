@@ -73,6 +73,9 @@ func TestRemoteUnlink(t *testing.T) {
 	_, err = run(t, fake, "contacts", "block", "+15550101")
 	wantUnlinked(t, err)
 
+	_, err = run(t, fake, "groups", "list")
+	wantUnlinked(t, err)
+
 	if got := fake.Connects(); len(got) != 1 {
 		t.Errorf("connected %d times, want only the first receive", len(got))
 	}

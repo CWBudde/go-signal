@@ -88,6 +88,23 @@ type Fake struct {
 	ContactsErr   error
 	SetBlockedErr error
 
+	// GroupInfo are the groups on the server with their full state, by ID: Groups lists them,
+	// Group and LeaveGroup find them by ID (or master key, see GroupKeys), and GroupTitles
+	// returns their titles (as if cached). Membership and Role are filled in for the connected
+	// account like the real client does. Send knows their members too, unless Groups has an
+	// entry for the same ID.
+	GroupInfo map[string]signal.Group
+	// GroupKeys maps base64 master keys to group IDs, as deriving the ID from a master key does.
+	GroupKeys map[string]string
+	// GroupErrs makes fetching these groups (by ID) fail. Groups lists a group failing with
+	// signal.ErrNotAMember or signal.ErrUnknownGroup with Err set (also IDs missing from
+	// GroupInfo); other errors fail the whole list.
+	GroupErrs map[string]error
+	// LeaveErr makes LeaveGroup fail after its checks.
+	LeaveErr error
+	// LeaveTime is what LeaveGroup records as Group.LeftAt; zero means now.
+	LeaveTime time.Time
+
 	mu        sync.Mutex
 	opened    []signal.Options
 	sent      []signal.SendRequest
@@ -100,6 +117,8 @@ type Fake struct {
 	nextTS    uint64
 	clients   []*client
 	blocks    []BlockCall
+	leaves    []LeaveCall
+	left      map[string]time.Time // groups left with LeaveGroup, by ID
 }
 
 // Factory is a signal.Factory that opens clients on f.
@@ -694,6 +713,10 @@ func (c *client) sendTo(req signal.SendRequest) ([]signal.Recipient, error) {
 	}
 
 	members, ok := c.fake.Groups[req.GroupID]
+	if !ok {
+		members, ok = c.fake.groupMembers(req.GroupID)
+	}
+
 	if !ok {
 		return nil, fmt.Errorf("%w %s (fake)", signal.ErrUnknownGroup, req.GroupID)
 	}

@@ -140,7 +140,8 @@ func namedContacts() []signal.Contact {
 	}
 }
 
-// TestReceiveEventsNames shows the contacts' names (or numbers) instead of their ACIs.
+// TestReceiveEventsNames shows the contacts' names (or numbers) instead of their ACIs, and the
+// titles of known groups.
 func TestReceiveEventsNames(t *testing.T) {
 	t.Parallel()
 
@@ -150,7 +151,10 @@ func TestReceiveEventsNames(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			fake := &signaltest.Fake{Linked: []signal.Account{*testAccount()}, Contacts: namedContacts()}
+			fake := &signaltest.Fake{
+				Linked: []signal.Account{*testAccount()}, Contacts: namedContacts(),
+				GroupInfo: map[string]signal.Group{groupID: {ID: groupID, Title: "Family"}},
+			}
 			golden(t, name, receiveAllFrom(t, fake, allEvents(), "-o", format))
 		})
 	}

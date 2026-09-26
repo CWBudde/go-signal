@@ -20,6 +20,7 @@ type Names struct {
 	own      string
 	byACI    map[string]nameEntry
 	byNumber map[string]nameEntry
+	groups   map[string]string // group titles by ID
 }
 
 type nameEntry struct {
@@ -70,7 +71,20 @@ func distinguish(contact signal.Contact) string {
 	}
 }
 
-// Names returns the names of the contacts in the store. It needs no connection.
+// WithGroups returns n with the group titles by group ID (see Client.GroupTitles).
+func (n Names) WithGroups(titles map[string]string) Names {
+	n.groups = titles
+
+	return n
+}
+
+// GroupTitle returns the title of the group with the ID, or "" if it is unknown.
+func (n Names) GroupTitle(groupID string) string {
+	return n.groups[groupID]
+}
+
+// Names returns the names of the contacts and the titles of the groups in the store. It needs
+// no connection.
 func (a *App) Names(ctx context.Context) (Names, error) {
 	acc, err := a.client.Account(ctx)
 	if err != nil {
@@ -82,7 +96,12 @@ func (a *App) Names(ctx context.Context) (Names, error) {
 		return Names{}, fmt.Errorf("load names: %w", err)
 	}
 
-	return NewNames(acc.ACI, contacts), nil
+	titles, err := a.client.GroupTitles(ctx)
+	if err != nil {
+		return Names{}, fmt.Errorf("load names: %w", err)
+	}
+
+	return NewNames(acc.ACI, contacts).WithGroups(titles), nil
 }
 
 // Name returns the name of rcpt: nickname, name in the phone's contacts or profile name; "" if

@@ -129,7 +129,7 @@ func (p *Printer) recipientLabel(target app.Target) string {
 
 	switch {
 	case target.IsGroup():
-		return app.GroupPrefix + target.GroupID
+		return p.groupLabel(target.GroupID)
 	case target.Self:
 		return app.SelfRecipient
 	case p.names.Name(rcpt) != "":

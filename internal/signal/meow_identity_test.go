@@ -22,11 +22,6 @@ import (
 )
 
 const (
-	aliceACI = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
-	bobACI   = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
-)
-
-const (
 	sending   = libsignalgo.SignalDirectionSending
 	receiving = libsignalgo.SignalDirectionReceiving
 )

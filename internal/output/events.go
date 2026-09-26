@@ -73,14 +73,20 @@ type recipientJSON struct {
 	Name     string `json:"name,omitempty"`
 }
 
+// bareRecipient converts r without a name, for the exported converters.
+func bareRecipient(r signal.Recipient) recipientJSON {
+	return recipientJSON{ACI: r.ACI, PNI: r.PNI, Number: r.Number, Username: r.Username}
+}
+
 // recipient converts r, with its name if the printer knows it (see SetNames).
 func (p *Printer) recipient(r signal.Recipient) recipientJSON {
 	return recipientJSON{ACI: r.ACI, PNI: r.PNI, Number: r.Number, Username: r.Username, Name: p.names.Name(r)}
 }
 
 type chatJSON struct {
-	GroupID   string         `json:"groupId,omitempty"`
-	Recipient *recipientJSON `json:"recipient,omitempty"`
+	GroupID    string         `json:"groupId,omitempty"`
+	GroupTitle string         `json:"groupTitle,omitempty"`
+	Recipient  *recipientJSON `json:"recipient,omitempty"`
 }
 
 type eventHead struct {
@@ -114,6 +120,7 @@ func (p *Printer) envelope(env signal.Envelope) envelopeJSON {
 	switch {
 	case env.Chat.IsGroup():
 		out.Chat.GroupID = env.Chat.GroupID
+		out.Chat.GroupTitle = p.names.GroupTitle(env.Chat.GroupID)
 	case !env.Chat.Recipient.IsZero():
 		rcpt := p.recipient(env.Chat.Recipient)
 		out.Chat.Recipient = &rcpt
@@ -410,9 +417,9 @@ func (p *Printer) envelopeLine(env signal.Envelope, text string) string {
 
 	switch {
 	case env.Chat.IsGroup() && env.Sync:
-		route = self + " → group:" + env.Chat.GroupID
+		route = self + " → " + p.groupLabel(env.Chat.GroupID)
 	case env.Chat.IsGroup():
-		route = p.who(env.Sender) + " → group:" + env.Chat.GroupID
+		route = p.who(env.Sender) + " → " + p.groupLabel(env.Chat.GroupID)
 	case env.Sync && env.Chat.Recipient.IsZero():
 		route = self
 	case env.Sync && env.Chat.Recipient == env.Sender:
@@ -607,6 +614,16 @@ func truncate(s string, n int) string {
 	}
 
 	return string(runes[:n-1]) + "…"
+}
+
+// groupLabel names a group in plain output: `group "<title>"` if the printer knows its title
+// (see SetNames), else `group:<id>`.
+func (p *Printer) groupLabel(groupID string) string {
+	if title := p.names.GroupTitle(groupID); title != "" {
+		return "group " + strconv.Quote(title)
+	}
+
+	return "group:" + groupID
 }
 
 // oneLine escapes line breaks and other control characters, so that an event stays on one line

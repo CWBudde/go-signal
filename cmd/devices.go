@@ -5,6 +5,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// listCmd is the name of the list subcommands (`devices list`, `contacts list`, …).
+const listCmd = "list"
+
 func newDevicesCmd(clients *clientOpener, printers *printerFactory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "devices",
@@ -19,7 +22,7 @@ func newDevicesCmd(clients *clientOpener, printers *printerFactory) *cobra.Comma
 
 func newDevicesListCmd(clients *clientOpener, printers *printerFactory) *cobra.Command {
 	return &cobra.Command{
-		Use:   "list",
+		Use:   listCmd,
 		Short: "List all devices of the account; * marks this one",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {

@@ -1,22 +1,22 @@
 [2026-09-20 12:30:01 UTC] Alice Smith → me: [quote me 2026-09-20 12:30:00 UTC: what are you up to this afternoon, anyt…] hello\nworld [attachment image/jpeg 12.3 KB photo.jpg]
-[2026-09-20 12:30:02 UTC] Alice Smith → group:Z3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXA=: hi all
+[2026-09-20 12:30:02 UTC] Alice Smith → group "Family": hi all
 [2026-09-20 12:30:03 UTC] +15550102 → me: [sticker 😀]
 [2026-09-20 12:30:04 UTC] +15550102 → me: [view-once attachment video/mp4 3.4 MB]
 [2026-09-20 12:30:05 UTC] +15550102 → me: nice story [unsupported storyReply]
 [2026-09-20 12:30:06 UTC] me → +15550102: sent from the phone
-[2026-09-20 12:30:07 UTC] me → group:Z3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXA=: to the group
+[2026-09-20 12:30:07 UTC] me → group "Family": to the group
 [2026-09-20 12:30:08 UTC] me → me: note to self
 [2026-09-20 12:30:09 UTC] Alice Smith → me: [edit of message sent 2026-09-20 12:30:01 UTC] hello there
-[2026-09-20 12:30:10 UTC] Alice Smith → group:Z3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXA=: [deleted message sent 2026-09-20 12:30:02 UTC]
+[2026-09-20 12:30:10 UTC] Alice Smith → group "Family": [deleted message sent 2026-09-20 12:30:02 UTC]
 [2026-09-20 12:30:11 UTC] +15550102 → me: [reaction 👍 to message of Alice Smith sent 2026-09-20 12:30:01 UTC]
 [2026-09-20 12:30:12 UTC] +15550102 → me: [removed reaction 👍 from message of Alice Smith sent 2026-09-20 12:30:01 UTC]
-[2026-09-20 12:30:13 UTC] Alice Smith → group:Z3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXA=: [typing]
-[2026-09-20 12:30:14 UTC] Alice Smith → group:Z3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXA=: [stopped typing]
+[2026-09-20 12:30:13 UTC] Alice Smith → group "Family": [typing]
+[2026-09-20 12:30:14 UTC] Alice Smith → group "Family": [stopped typing]
 +15550102 → me: [delivery receipt for message sent 2026-09-20 12:30:06 UTC]
 +15550102 → me: [read receipt for messages sent 2026-09-20 12:30:06 UTC, 2026-09-20 12:30:07 UTC]
 +15550102 → me: [viewed receipt for message sent 2026-09-20 12:30:06 UTC]
 [2026-09-20 12:30:15 UTC] me: [read on another device: Alice Smith 2026-09-20 12:30:01 UTC, +15550102 2026-09-20 12:30:03 UTC]
 [2026-09-20 12:30:16 UTC] Alice Smith → me: [unsupported call]
-[2026-09-20 12:30:17 UTC] +15550102 → group:Z3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXA=: [unsupported groupUpdate]
+[2026-09-20 12:30:17 UTC] +15550102 → group "Family": [unsupported groupUpdate]
 [2026-09-20 12:30:18 UTC] me: [unsupported deleteForMe]
 [2026-09-20 12:30:19 UTC] Alice Smith → me: [decryption failed: unexpected EOF]
