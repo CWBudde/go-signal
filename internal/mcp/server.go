@@ -131,6 +131,24 @@ func (s *Server) Receive(ctx context.Context, events <-chan signal.Event) error 
 func Serve(
 	ctx context.Context, a *app.App, events <-chan signal.Event, opts Options, in io.Reader, out io.Writer,
 ) error {
+	return serve(ctx, a, events, opts, func(ctx context.Context, server *Server) error {
+		transport := &sdk.IOTransport{Reader: io.NopCloser(in), Writer: nopWriteCloser{out}}
+
+		err := server.Run(ctx, transport)
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+
+		return err //nolint:wrapcheck // serve wraps it
+	})
+}
+
+// serve runs an MCP server on a with run while it receives events into its inbox. It ends when
+// run returns or the receiving fails; a cancelled ctx isn't an error.
+func serve(
+	ctx context.Context, a *app.App, events <-chan signal.Event, opts Options,
+	run func(context.Context, *Server) error,
+) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -146,8 +164,7 @@ func Serve(
 		received <- err
 	}()
 
-	transport := &sdk.IOTransport{Reader: io.NopCloser(in), Writer: nopWriteCloser{out}}
-	err := server.Run(ctx, transport)
+	err := run(ctx, server)
 
 	cancel()
 
@@ -157,7 +174,7 @@ func Serve(
 	}
 
 	switch {
-	case err == nil, errors.Is(err, io.EOF), errors.Is(err, context.Canceled):
+	case err == nil, errors.Is(err, context.Canceled):
 		return nil
 	default:
 		return fmt.Errorf("mcp server: %w", err)

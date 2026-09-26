@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
 	"path/filepath"
 	"slices"
@@ -58,7 +59,13 @@ Without it, they reject every recipient. send_message attaches only files from -
 --confirm asks the user to confirm every message through the client (MCP elicitation); a client
 that can't ask gets an error instead. --read-only leaves out the tools that send, mark_read
 included. These four settings can also be set in the config file under "mcp" (e.g.
-mcp.allow-recipient: [...]) or as GOSIGNAL_MCP_ALLOW_RECIPIENT etc. (a list separated by commas).`
+mcp.allow-recipient: [...]) or as GOSIGNAL_MCP_ALLOW_RECIPIENT etc. (a list separated by commas).
+
+With --listen, the server serves MCP's streamable HTTP transport at http://<address>/mcp instead of
+stdin/stdout, for clients that can't start a process; it runs until SIGINT/SIGTERM. The address
+must be on the loopback interface (plain HTTP), and every request must carry a bearer token
+("Authorization: Bearer <token>") of at least 16 characters, read from --token-file or from
+GOSIGNAL_MCP_TOKEN (or mcp.token in the config file). See docs/mcp.md.`
 
 // Defaults of the inbox's retention.
 const (
@@ -72,7 +79,14 @@ const (
 	cfgAllowRecipient = "mcp.allow-recipient"
 	cfgAttachDir      = "mcp.attach-dir"
 	cfgConfirm        = "mcp.confirm"
+	cfgListen         = "mcp.listen"
+	cfgTokenFile      = "mcp.token-file"
+	// cfgToken has no flag, so that the token doesn't show in the process list.
+	cfgToken = "mcp.token"
 )
+
+// minTokenLength is the shortest bearer token that --listen accepts.
+const minTokenLength = 16
 
 func newMCPServeCmd(clients *clientOpener, loc *time.Location, appOpts []app.Option) *cobra.Command {
 	var (
@@ -96,7 +110,12 @@ func newMCPServeCmd(clients *clientOpener, loc *time.Location, appOpts []app.Opt
 				return err
 			}
 
-			return serveMCP(cmd, clients, append(slices.Clone(appOpts), app.WithAllowlist(policy.allow)), mcp.Options{
+			listen, err := loadListen(clients.cfg)
+			if err != nil {
+				return err
+			}
+
+			return serveMCP(cmd, clients, listen, append(slices.Clone(appOpts), app.WithAllowlist(policy.allow)), mcp.Options{
 				Version: Version, Logger: slog.Default(), Location: loc,
 				InboxMaxAge: maxAge, InboxMaxCount: maxCount, DownloadDir: dlDir,
 				ReadOnly: policy.readOnly, AttachDir: policy.attachDir, Confirm: policy.confirm,
@@ -111,6 +130,14 @@ func newMCPServeCmd(clients *clientOpener, loc *time.Location, appOpts []app.Opt
 	cmd.Flags().StringVar(&dlDir, "download-dir", "",
 		"directory for attachments that attachment_get downloads (default: attachments in the account's directory)")
 	addPolicyFlags(cmd, clients.cfg)
+
+	cmd.Flags().String("listen", "",
+		"serve streamable HTTP on this loopback address (e.g. 127.0.0.1:8765) instead of stdin/stdout")
+	cmd.Flags().String("token-file", "", "file with the bearer token that --listen requires")
+
+	for _, key := range []string{cfgListen, cfgTokenFile} {
+		cobra.CheckErr(clients.cfg.BindPFlag(key, cmd.Flags().Lookup(strings.TrimPrefix(key, "mcp."))))
+	}
 
 	return cmd
 }
@@ -186,9 +213,63 @@ func loadPolicy(cfg *viper.Viper) (policy, error) {
 	return out, nil
 }
 
+// Errors of --listen.
+var (
+	errNotLoopback = errors.New("--listen: the address must be on the loopback interface (127.0.0.1, ::1 or localhost)")
+	errNoToken     = errors.New("--listen needs a bearer token: --token-file or GOSIGNAL_MCP_TOKEN")
+	errShortToken  = fmt.Errorf("the bearer token must have at least %d characters", minTokenLength)
+)
+
+// listenConfig is where `mcp serve --listen` serves HTTP; a zero value serves stdin/stdout.
+type listenConfig struct {
+	addr  string
+	token string
+}
+
+// loadListen reads and checks --listen and its bearer token.
+func loadListen(cfg *viper.Viper) (listenConfig, error) {
+	addr := cfg.GetString(cfgListen)
+	if addr == "" {
+		return listenConfig{}, nil
+	}
+
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return listenConfig{}, fmt.Errorf("--listen: %w", err)
+	}
+
+	if ip := net.ParseIP(host); host != "localhost" && (ip == nil || !ip.IsLoopback()) {
+		return listenConfig{}, errNotLoopback
+	}
+
+	token := cfg.GetString(cfgToken)
+
+	if file := cfg.GetString(cfgTokenFile); file != "" {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			return listenConfig{}, fmt.Errorf("--token-file: %w", err)
+		}
+
+		token = string(data)
+	}
+
+	token = strings.TrimSpace(token)
+
+	switch {
+	case token == "":
+		return listenConfig{}, errNoToken
+	case len(token) < minTokenLength:
+		return listenConfig{}, errShortToken
+	}
+
+	return listenConfig{addr: addr, token: token}, nil
+}
+
 // serveMCP opens and connects the client and runs the MCP server on the command's stdin and
-// stdout.
-func serveMCP(cmd *cobra.Command, clients *clientOpener, appOpts []app.Option, opts mcp.Options) error {
+// stdout, or on HTTP with listen.
+func serveMCP(
+	cmd *cobra.Command, clients *clientOpener, listen listenConfig, appOpts []app.Option, opts mcp.Options,
+) error {
 	ctx := cmd.Context()
 
 	client, err := clients.open(ctx)
@@ -212,8 +293,21 @@ func serveMCP(cmd *cobra.Command, clients *clientOpener, appOpts []app.Option, o
 	slog.Debug("mcp server ready", "download-dir", opts.DownloadDir, "attach-dir", opts.AttachDir,
 		"read-only", opts.ReadOnly, "confirm", opts.Confirm)
 
-	//nolint:wrapcheck // mcp wraps it
-	return mcp.Serve(ctx, app.New(client, appOpts...), client.Events(), opts, cmd.InOrStdin(), cmd.OutOrStdout())
+	a := app.New(client, appOpts...)
+
+	if listen.addr == "" {
+		//nolint:wrapcheck // mcp wraps it
+		return mcp.Serve(ctx, a, client.Events(), opts, cmd.InOrStdin(), cmd.OutOrStdout())
+	}
+
+	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", listen.addr)
+	if err != nil {
+		return fmt.Errorf("--listen: %w", err)
+	}
+
+	slog.Info("mcp server listening", "url", "http://"+listener.Addr().String()+mcp.HTTPPath)
+
+	return mcp.ServeHTTP(ctx, a, client.Events(), opts, listener, listen.token) //nolint:wrapcheck // mcp wraps it
 }
 
 // errInboxLimits rejects negative --inbox-max-age or --inbox-max-count.

@@ -961,9 +961,9 @@ background `subscriptions/listen`, so its errors don't reach the client.
       returns an input request (SEP-2322); the SDK falls back to `elicitation/create` for older
       protocol versions. The answer is one-shot and bound to the tool and its arguments; a
       client without elicitation gets an error, so nothing is sent unconfirmed)
-- [ ] Incoming message text is returned as data with sender metadata; tool descriptions state
+- [x] Incoming message text is returned as data with sender metadata; tool descriptions state
       that message content is untrusted (prompt-injection note in `docs/mcp.md`) (descriptions
-      and instructions done in 5.4/5.5; the `docs/mcp.md` note lands with 5.6)
+      and instructions done in 5.4/5.5; the `docs/mcp.md` note landed with 5.6)
 
 **Done when:** sends work end to end, and the allowlist, read-only mode and attach-dir
 restriction each have tests that prove the rejection. (Done with the fake: `internal/app`
@@ -977,12 +977,26 @@ asked.
 
 #### 5.6 Docs and optional HTTP transport
 
-- [ ] `docs/mcp.md`: tool/resource reference, config snippets for Claude Code and Claude Desktop,
+- [x] `docs/mcp.md`: tool/resource reference, config snippets for Claude Code and Claude Desktop,
       safety flags, the "one process per account" rule, the prompt-injection note (from 5.5)
-- [ ] Optional: streamable HTTP transport (`--listen 127.0.0.1:<port>`, bearer token) for
+      (also the inbox entry and resource JSON that 5.4 left for it, and troubleshooting)
+- [x] Optional: streamable HTTP transport (`--listen 127.0.0.1:<port>`, bearer token) for
       clients that can't spawn a process. This overlaps with the daemon item in "Later".
+      (`mcp.ServeHTTP` on the SDK's `StreamableHTTPHandler` at `/mcp`; the token comes from
+      `--token-file` or `GOSIGNAL_MCP_TOKEN`/`mcp.token`, with no flag so that it stays out of
+      the process list, and needs at least 16 characters; only loopback addresses, since it is
+      plain HTTP; the SDK's DNS-rebinding check plus `http.CrossOriginProtection`; runs until
+      SIGINT/SIGTERM; idle sessions close after an hour)
 
 **Done when:** a new user can wire go-signal into Claude Code by following `docs/mcp.md`.
+(Written against the fake-tested behaviour; the Claude Code and Claude Desktop snippets and the
+HTTP transport with `claude mcp add --transport http` are not yet verified against a linked
+account.)
+
+Notes: the HTTP transport is still one process holding the account, not the daemon of "Later":
+all sessions share one `mcp.Server`, so they share the inbox, the allowlist and pending
+confirmations. `TestServeHTTP*` (`internal/mcp`) and `TestMCPServeHTTP`/`TestMCPServeListenErrors`
+(`cmd`) cover it.
 
 ### Phase 6 — Packaging and release
 
