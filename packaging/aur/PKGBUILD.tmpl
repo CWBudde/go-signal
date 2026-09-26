@@ -1,0 +1,31 @@
+# Rendered by scripts/render-packaging.sh in the release workflow; do not edit the AUR copy.
+# Maintainer: Christian Budde <https://github.com/cwbudde>
+
+pkgname=go-signal-bin
+pkgver=@VERSION@
+pkgrel=1
+pkgdesc="Command-line client for the Signal messenger, running as a linked device"
+arch=('x86_64' 'aarch64')
+url="https://github.com/cwbudde/go-signal"
+license=('AGPL-3.0-only')
+provides=('go-signal')
+conflicts=('go-signal')
+options=('!strip' '!debug')
+source_x86_64=("$url/releases/download/v$pkgver/go-signal_${pkgver}_linux_amd64.tar.gz")
+source_aarch64=("$url/releases/download/v$pkgver/go-signal_${pkgver}_linux_arm64.tar.gz")
+sha256sums_x86_64=('@SHA256_LINUX_AMD64@')
+sha256sums_aarch64=('@SHA256_LINUX_ARM64@')
+
+package() {
+	local goarch=amd64
+	[[ $CARCH == aarch64 ]] && goarch=arm64
+	cd "go-signal_${pkgver}_linux_${goarch}"
+
+	install -Dm755 go-signal "$pkgdir/usr/bin/go-signal"
+	install -Dm644 -t "$pkgdir/usr/share/man/man1" man/*.1
+	install -Dm644 completions/go-signal.bash "$pkgdir/usr/share/bash-completion/completions/go-signal"
+	install -Dm644 completions/_go-signal "$pkgdir/usr/share/zsh/site-functions/_go-signal"
+	install -Dm644 completions/go-signal.fish "$pkgdir/usr/share/fish/vendor_completions.d/go-signal.fish"
+	install -Dm644 -t "$pkgdir/usr/lib/systemd/user" contrib/systemd/go-signal-receive.{service,timer}
+	install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

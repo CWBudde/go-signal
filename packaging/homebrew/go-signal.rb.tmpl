@@ -1,0 +1,37 @@
+# Rendered by scripts/render-packaging.sh in the release workflow; do not edit the tap copy.
+class GoSignal < Formula
+  desc "Command-line client for the Signal messenger, running as a linked device"
+  homepage "https://github.com/cwbudde/go-signal"
+  version "@VERSION@"
+  license "AGPL-3.0-only"
+
+  on_macos do
+    on_arm do
+      url "https://github.com/cwbudde/go-signal/releases/download/v@VERSION@/go-signal_@VERSION@_darwin_arm64.tar.gz"
+      sha256 "@SHA256_DARWIN_ARM64@"
+    end
+  end
+
+  on_linux do
+    on_intel do
+      url "https://github.com/cwbudde/go-signal/releases/download/v@VERSION@/go-signal_@VERSION@_linux_amd64.tar.gz"
+      sha256 "@SHA256_LINUX_AMD64@"
+    end
+    on_arm do
+      url "https://github.com/cwbudde/go-signal/releases/download/v@VERSION@/go-signal_@VERSION@_linux_arm64.tar.gz"
+      sha256 "@SHA256_LINUX_ARM64@"
+    end
+  end
+
+  def install
+    bin.install "go-signal"
+    man1.install Dir["man/*.1"]
+    bash_completion.install "completions/go-signal.bash" => "go-signal"
+    zsh_completion.install "completions/_go-signal"
+    fish_completion.install "completions/go-signal.fish"
+  end
+
+  test do
+    assert_match version.to_s, shell_output("#{bin}/go-signal version")
+  end
+end

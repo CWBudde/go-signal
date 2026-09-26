@@ -31,6 +31,10 @@ func TestVersionCommand(t *testing.T) {
 	if !strings.Contains(out.String(), "libsignal: "+signal.LibsignalVersion+"\n") {
 		t.Errorf("missing libsignal version: %q", out.String())
 	}
+
+	if !strings.Contains(out.String(), "signalmeow: "+signal.SignalmeowVersion()+"\n") {
+		t.Errorf("missing signalmeow version: %q", out.String())
+	}
 }
 
 func TestInvalidLogFormat(t *testing.T) {

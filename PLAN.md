@@ -1000,33 +1000,59 @@ confirmations. `TestServeHTTP*` (`internal/mcp`) and `TestMCPServeHTTP`/`TestMCP
 
 ### Phase 6 — Packaging and release
 
+Decision: releases ship only fully static musl Linux binaries (plus macOS arm64), so 6.1 and 6.2
+are one pipeline and there is no glibc release build. Details and the one-time repo setup are in
+`docs/dev.md` ("Releases").
+
 #### 6.1 Release pipeline
 
-- [ ] release-please config and workflow (conventional commits → changelog + tag)
-- [ ] Tag-triggered release workflow: per-OS/arch runners (linux amd64/arm64 first), reusing the
-      cached `libsignal_ffi.a`
-- [ ] Checksums file and (optional) cosign/SLSA provenance
-- [ ] `version` prints go-signal, signalmeow and libsignal versions
+- [x] release-please config and workflow (conventional commits → changelog + tag)
+      (`release-please-config.json`, manifest at 0.0.0 so the first release is 0.1.0;
+      `release-please.yaml` calls `release.yaml` itself, because a tag pushed with `GITHUB_TOKEN`
+      triggers no workflow; optional `RELEASE_PLEASE_TOKEN` so CI runs on the release PR)
+- [x] Tag-triggered release workflow: per-OS/arch runners (linux amd64/arm64 first), reusing the
+      cached `libsignal_ffi.a` (`release.yaml`: `v*` tags, `workflow_call`, `workflow_dispatch`;
+      native `ubuntu-24.04` / `ubuntu-24.04-arm` runners, the musl `.a` cached per arch and
+      libsignal commit; the release is created if missing, assets uploaded with `--clobber`)
+- [x] Checksums file and (optional) cosign/SLSA provenance (`SHA256SUMS`;
+      `actions/attest-build-provenance` on the archives and the image instead of cosign)
+- [x] `version` prints go-signal, signalmeow and libsignal versions (signalmeow from the build
+      info's `go.mau.fi/mautrix-signal` dep)
 
 **Done when:** pushing a tag produces a GitHub release with linux amd64/arm64 binaries.
+(actionlint-clean; the first real tag run on GitHub is still to come.)
 
 #### 6.2 Static build
 
-- [ ] musl build of `libsignal_ffi.a` (`x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl`)
-- [ ] Static Go link (`-linkmode external -extldflags -static`, musl-gcc or `zig cc`)
-- [ ] Smoke test: the binary runs in a `scratch`/`alpine` container (`ldd` → "not a dynamic
-      executable")
+- [x] musl build of `libsignal_ffi.a` (`x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl`)
+      (native build in `golang:<go>-alpine`, `scripts/build-static.sh`, into
+      `third_party/lib-musl/<arch>/` with a SHA stamp; `RUSTFLAGS=-C target-feature=-crt-static`
+      for proc-macros on a musl host)
+- [x] Static Go link (`-linkmode external -extldflags -static`, musl-gcc or `zig cc`) (Alpine's
+      gcc; tags `netgo,osusergo,timetzdata,sqlite_omit_load_extension`; `just build-static`)
+- [x] Smoke test: the binary runs in a `scratch`/`alpine` container (`ldd` → "not a dynamic
+      executable") (`just smoke-static`: ldd, then `version` and `account show` in the scratch
+      image from the root `Dockerfile`)
 
 **Done when:** the release ships a fully static linux binary.
+(Verified locally on amd64; arm64 is first built by the release workflow.)
 
 #### 6.3 Docs and distribution
 
-- [ ] Man pages and shell completions via `cobra/doc`, included in release archives
-- [ ] README: install, link, send/receive quickstart, keep-alive note (30-day unlink)
-- [ ] Example systemd user unit/timer for periodic `receive`
-- [ ] Optional: macOS build (native runner), Homebrew tap, AUR / container image
+- [x] Man pages and shell completions via `cobra/doc`, included in release archives
+      (`scripts/gendocs`, `just docs-gen`; `<placeholders>` escaped for md2man, the data-dir
+      default shown as `$XDG_DATA_HOME/go-signal`, date from `SOURCE_DATE_EPOCH`)
+- [x] README: install, link, send/receive quickstart, keep-alive note (30-day unlink)
+- [x] Example systemd user unit/timer for periodic `receive` (`contrib/systemd/`)
+- [x] Optional: macOS build (native runner), Homebrew tap, AUR / container image
+      (macOS arm64 on `macos-15`, `continue-on-error` until it is proven;
+      `ghcr.io/cwbudde/go-signal` from scratch for amd64/arm64; Homebrew formula and
+      `go-signal-bin` PKGBUILD rendered from `packaging/` by `scripts/render-packaging.sh`, jobs
+      skipped until `HOMEBREW_TAP_TOKEN` / `AUR_SSH_KEY` are set)
 
 **Done when:** a new user can install from a release and link + send by following the README.
+(Pending the first release. Not yet verified: the macOS link, where libsignalgo passes
+`-lstdc++`; the tap and AUR pushes, until the `cwbudde/homebrew-tap` repo and the secrets exist.)
 
 ### Phase 7 — Pure-Go backend: forks and protocol core
 

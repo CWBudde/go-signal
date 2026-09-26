@@ -1,0 +1,323 @@
+name: release
+
+# Builds the release binaries for a tag and attaches them to its GitHub release (created here
+# if it doesn't exist yet), then publishes the container image, the Homebrew formula and the
+# AUR package.
+#
+# Triggers: pushing a v* tag, a call from release-please.yaml, or a manual run for an existing tag.
+#
+# - linux: fully static musl binaries, built in an Alpine container on native amd64/arm64
+#   runners (just build-static). libsignal_ffi.a for musl is cached per libsignal commit.
+# - macos: a dynamically linked arm64 binary (just build-release).
+# - release: SHA256SUMS, a build provenance attestation and the release assets.
+# - image: ghcr.io/cwbudde/go-signal for linux/amd64 and linux/arm64 (scratch + static binary).
+# - homebrew / aur: skipped until the HOMEBREW_TAP_TOKEN / AUR_SSH_KEY secrets are set.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to build and release (vX.Y.Z)
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
+  IMAGE: ghcr.io/cwbudde/go-signal
+
+jobs:
+  linux:
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    env:
+      VERSION: ${{ inputs.tag || github.ref_name }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up just
+        uses: extractions/setup-just@v2
+
+      - name: Resolve libsignal commit
+        id: libsignal
+        run: echo "sha=$(git rev-parse HEAD:third_party/libsignal)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache libsignal_ffi.a (musl)
+        uses: actions/cache@v4
+        with:
+          path: third_party/lib-musl
+          key: libsignal-ffi-musl-linux-${{ matrix.arch }}-${{ steps.libsignal.outputs.sha }}
+
+      - name: Check libsignal version
+        run: just check-libsignal
+
+      - name: Build static binary
+        run: just build-static
+
+      - name: Smoke test in a scratch container
+        run: just smoke-static
+
+      - name: Package
+        run: just package linux ${{ matrix.arch }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.arch }}
+          path: |
+            dist/go-signal_*.tar.gz
+            dist/linux_${{ matrix.arch }}/go-signal
+          if-no-files-found: error
+
+  macos:
+    runs-on: macos-15
+    # The macOS build is new and not yet proven in CI; don't let it hold back the Linux release.
+    continue-on-error: true
+    env:
+      VERSION: ${{ inputs.tag || github.ref_name }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up just
+        uses: extractions/setup-just@v2
+
+      - name: Resolve libsignal commit
+        id: libsignal
+        run: echo "sha=$(git rev-parse HEAD:third_party/libsignal)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache libsignal_ffi.a
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: third_party/lib
+          key: libsignal-ffi-${{ runner.os }}-${{ runner.arch }}-${{ steps.libsignal.outputs.sha }}
+
+      - name: Check libsignal version
+        run: just check-libsignal
+
+      - name: Install libsignal build dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        working-directory: third_party/libsignal
+        run: |
+          brew install protobuf cmake
+          rustup toolchain install --profile minimal
+
+      - name: Build libsignal_ffi.a
+        run: just libsignal
+
+      - name: Build
+        run: just build-release
+
+      - name: Package
+        run: just package darwin arm64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: darwin-arm64
+          path: dist/go-signal_*.tar.gz
+          if-no-files-found: error
+
+  release:
+    needs: [linux, macos]
+    # Release even when the (continue-on-error) macOS build failed.
+    if: ${{ !cancelled() && needs.linux.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Checksums
+        working-directory: dist
+        run: |
+          sha256sum go-signal_*.tar.gz > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-checksums: dist/SHA256SUMS
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: checksums
+          path: dist/SHA256SUMS
+
+      - name: Publish release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release view "$TAG" >/dev/null 2>&1 ||
+            gh release create "$TAG" --verify-tag --generate-notes --title "$TAG"
+          gh release upload "$TAG" dist/go-signal_*.tar.gz dist/SHA256SUMS --clobber
+
+  image:
+    needs: linux
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: linux-*
+          path: dist
+          merge-multiple: true
+
+      # Artifacts don't keep file modes.
+      - run: chmod +x dist/linux_*/go-signal
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=semver,pattern={{version}},value=${{ env.TAG }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ env.TAG }}
+            type=raw,value=latest
+
+      - id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+  homebrew:
+    needs: release
+    runs-on: ubuntu-latest
+    env:
+      TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+    steps:
+      - name: Check for the tap token
+        if: env.TAP_TOKEN == ''
+        run: echo "::notice::HOMEBREW_TAP_TOKEN is not set; skipping the Homebrew tap"
+
+      - uses: actions/checkout@v4
+        if: env.TAP_TOKEN != ''
+        with:
+          ref: ${{ env.TAG }}
+
+      - uses: actions/download-artifact@v4
+        if: env.TAP_TOKEN != ''
+        with:
+          name: checksums
+          path: dist
+
+      - uses: actions/checkout@v4
+        if: env.TAP_TOKEN != ''
+        with:
+          repository: cwbudde/homebrew-tap
+          token: ${{ env.TAP_TOKEN }}
+          path: tap
+
+      - name: Update the formula
+        if: env.TAP_TOKEN != ''
+        run: |
+          mkdir -p tap/Formula
+          scripts/render-packaging.sh packaging/homebrew/go-signal.rb.tmpl "$TAG" dist/SHA256SUMS > tap/Formula/go-signal.rb
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/go-signal.rb
+          git diff --cached --quiet || git commit -m "go-signal ${TAG#v}"
+          git push
+
+  aur:
+    needs: release
+    runs-on: ubuntu-latest
+    env:
+      AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
+
+    steps:
+      - name: Check for the AUR key
+        if: env.AUR_SSH_KEY == ''
+        run: echo "::notice::AUR_SSH_KEY is not set; skipping the AUR package"
+
+      - uses: actions/checkout@v4
+        if: env.AUR_SSH_KEY != ''
+        with:
+          ref: ${{ env.TAG }}
+
+      - uses: actions/download-artifact@v4
+        if: env.AUR_SSH_KEY != ''
+        with:
+          name: checksums
+          path: dist
+
+      - name: Render PKGBUILD
+        if: env.AUR_SSH_KEY != ''
+        run: scripts/render-packaging.sh packaging/aur/PKGBUILD.tmpl "$TAG" dist/SHA256SUMS > dist/PKGBUILD
+
+      - uses: KSXGitHub/github-actions-deploy-aur@084b0d9b15415bf9cdb65d44dad1efe37a354050 # v4.2.0
+        if: env.AUR_SSH_KEY != ''
+        with:
+          pkgname: go-signal-bin
+          pkgbuild: dist/PKGBUILD
+          commit_username: ${{ vars.AUR_USERNAME || 'cwbudde' }}
+          commit_email: ${{ vars.AUR_EMAIL || 'cwbudde@users.noreply.github.com' }}
+          ssh_private_key: ${{ env.AUR_SSH_KEY }}
+          commit_message: go-signal ${{ env.TAG }}

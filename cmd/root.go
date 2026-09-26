@@ -168,9 +168,9 @@ func NewRootCmd(opts ...Option) *cobra.Command {
 		Short: "Command-line client for the Signal messenger",
 		Long: `go-signal is a command-line client for the Signal messenger, written in Go.
 
-It aims to be a drop-in alternative to signal-cli (https://github.com/AsamK/signal-cli)
-without requiring a Java runtime: link it as a secondary device, send and receive
-messages, and run it as a JSON-RPC daemon for scripts and bots.`,
+It is a Java-free alternative to signal-cli (https://github.com/AsamK/signal-cli) with its
+own command set: link it as a secondary device next to your phone, send and receive
+messages, manage contacts and groups, and serve your account to AI assistants over MCP.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		PersistentPreRunE: func(_ *cobra.Command, _ []string) error {

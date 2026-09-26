@@ -1,0 +1,51 @@
+name: release-please
+
+# Keeps a release PR open that bumps the version and CHANGELOG.md from the conventional commits
+# on main. Merging it tags vX.Y.Z and creates the GitHub release, and then this workflow calls
+# release.yaml to build and attach the binaries. The tag push itself triggers nothing: events
+# caused by GITHUB_TOKEN don't start workflows.
+#
+# With the default token, CI doesn't run on the release PR either; set the RELEASE_PLEASE_TOKEN
+# secret (a fine-grained PAT with contents and pull-requests write) to change that.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+
+    steps:
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        id: release
+        with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  release:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    uses: ./.github/workflows/release.yaml
+    with:
+      tag: ${{ needs.release-please.outputs.tag_name }}
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      attestations: write
+    secrets: inherit

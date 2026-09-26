@@ -1,0 +1,7 @@
+# The image only needs the static binaries (see Dockerfile).
+*
+!dist/
+dist/*
+!dist/linux_*/
+dist/linux_*/*
+!dist/linux_*/go-signal
