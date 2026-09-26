@@ -1413,11 +1413,34 @@ the fork's main, no tag. The shim wiring is 9.3.)
       `TestIntelPCKChain` validates the recorded Intel PCK chain against the recorded CRLs, as
       `verify_certificates` does. The fixture uses a test-only endorsements field reader; the real
       parser is the next item.)
-- [ ] TCB info and QE identity verification, TCB status policy identical to `attest/src/dcap`
-- [ ] MRENCLAVE/config checks against the enclave constants of the pinned version, and evidence
+- [x] TCB info and QE identity verification, TCB status policy identical to `attest/src/dcap`
+      (2026-09-26 — fork commit `7eed573c3` on `feat/dcap`, unpublished. `ParseEndorsements` reads
+      the Open Enclave collateral and checks the TCB info and QE identity signatures over the raw
+      JSON before decoding it. The decoding follows serde: exact keys, duplicate and missing fields
+      rejected, u8/u16 ranges, untagged v2/v3 TCB layout. `attest` follows `attest_impl` step by
+      step: all four chains and both CRLs against the root key, the QE identity (vendor ID,
+      MRSIGNER, ISVPRODID, masked MISCSELECT and attributes, QE TCB level), the TCB level lookup
+      (first level reached; UpToDate or SWHardeningNeeded only), the claims hash and the debug flag.
+      All 5 `endorsements.rs` tests and the 21 `FakeAttestation` tests of `dcap.rs` pass under their
+      names, on a port of `fakes.rs`. Extra cases cover other TCB statuses, strict JSON and tampered
+      collateral.)
+- [x] MRENCLAVE/config checks against the enclave constants of the pinned version, and evidence
       expiry
+      (2026-09-26 — same commit. `VerifyRemoteAttestation` requires the expected MRENCLAVE and the
+      acceptance of every advisory of a SWHardeningNeeded level. Expiry covers the PCK chain, all
+      collateral chains and CRLs, and TCB info/QE identity `nextUpdate` with evaluation data number
+      ≥ 21. `SWAdvisories` and the 15 `EnclaveID*` values are those of v0.102.2 `constants.rs`;
+      raft configs stay with SVR2. The recorded CDSI handshake verifies at its timestamp (pk claim
+      matches) and fails two years later, with a wrong MRENCLAVE, or with an unaccepted advisory.
+      It also passes one second before the earliest collateral expiry and fails one second after.
+      `test_attestation_metrics` passes.)
 - [ ] Use upstream's recorded attestation blobs (`rust/attest/tests/data`) as positive **and**
       negative vectors (tampered quote, expired collateral, wrong measurement)
+      (2026-09-26 — partial: `cdsi.*` and `dcap.*` are in use, including a tampered quote and
+      tampered TCB info. Still to do: `dcap_v3.*`, `dcap-expired.*`, `cds2_test.*` and `svr2.*`.
+      `cds2_test` and `dcap_v3` have TCB evaluation data number 12, which upstream accepts only
+      under `cfg(test)`, so they need a test-only hook. The `svr2.rs`/`cds2.rs` handshake tests
+      also need the Noise session from `feat/noise`.)
 
 **Done when:** every upstream attestation test case gives the same accept/reject result in Go.
 
