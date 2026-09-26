@@ -1197,20 +1197,23 @@ and `just check` is green.)
       callback trampolines
       (Fork `3027201`, `storeadapters_purego.go`: direct method calls. The fork's session, group
       and sealed-sender tests go through them in the purego build.)
-- [ ] Session cipher (`Encrypt`, `Decrypt`, `DecryptPreKey`, `ProcessPreKeyBundle`), group cipher
+- [x] Session cipher (`Encrypt`, `Decrypt`, `DecryptPreKey`, `ProcessPreKeyBundle`), group cipher
       and SKDM, sealed sender (`SealedSenderEncrypt`, `SealedSenderMultiRecipientEncrypt`,
       `SealedSenderDecryptToUSMC`, `SenderCertificate`), `DecryptionErrorMessage`,
       `PlaintextContent`
-      (Partial: ported in fork `3027201`. libsignal-go interoperates with the cgo build in both
+      (Ported in fork `3027201`. libsignal-go interoperates with the cgo build in both
       directions for all of it (`TestDiffSessions`, `TestDiffGroupCipher`,
-      `TestDiffSealedSender` for v1 and v2, `TestDiffDecryptionErrorMessage`). The fork's
-      `DecryptionErrorMessage`/`PlaintextContent` wrappers have no purego test yet.)
-- [ ] Account entropy pool, `BackupKey`/`BackupID`/`MessageBackupKey`, `AccessKey`, AES-GCM-SIV,
+      `TestDiffSealedSender` for v1 and v2, `TestDiffDecryptionErrorMessage`). Fork `0a18785`
+      adds `TestDerivations`: the purego `DecryptionErrorMessage`/`PlaintextContent` wrappers
+      reproduce the cgo build's serialized DEM, content, body and ratchet key byte for byte.)
+- [x] Account entropy pool, `BackupKey`/`BackupID`/`MessageBackupKey`, `AccessKey`, AES-GCM-SIV,
       fingerprints
-      (Partial: ported in fork `3027201`. `TestDiffAccountEntropyPool`, `TestDiffAccessKey`,
+      (Ported in fork `3027201`. `TestDiffAccountEntropyPool`, `TestDiffAccessKey`,
       `TestDiffAES256GCMSIV` and `TestDiffFingerprint` give equal outputs on both backends, and
-      the fork tests the AES-GCM-SIV and fingerprint wrappers in the purego build. The account
-      entropy pool, backup key and `AccessKey` wrappers have no purego test yet.)
+      the fork tests the AES-GCM-SIV and fingerprint wrappers in the purego build. Fork
+      `0a18785`'s `TestDerivations` holds the purego AEP, backup key (ID, EC key, metadata,
+      media and thumbnail keys), `MessageBackupKey` and `AccessKey` wrappers to known answers
+      recorded by the cgo build.)
 - [x] `InitLogger`/`Version` as thin stubs. `Version` reports the libsignal-go version and our pin.
       (`InitLogger` does nothing in the fork. `libsignalgo.Version` stays the pin, and go-signal's
       `version` adds a `libsignal-go:` line from the build info in purego builds:
