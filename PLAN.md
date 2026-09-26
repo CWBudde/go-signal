@@ -1334,9 +1334,9 @@ WebSocket test exposes an existing shutdown race in signalmeow's `connectLoop` u
 `-race`; it is outside the libsignalgo-only fork boundary and remains unfixed.
 
 **Done when:** a purego build lists groups (Phase 4.2) and fetches profiles against the live
-server. **Live acceptance remains pending**: no account was accessed. Changes are local
-and unpublished, with no fork commits/tags or dependency pin changes; use the temporary
-workspace instructions in `docs/dev.md`. Endorsements are implemented locally in Phase 8.4.
+server. **Live acceptance remains pending**: no account was accessed. Endorsements are
+Phase 8.4. (2026-09-27: published. The zkgroup packages are in libsignal-go `v0.7.1-cw.4`, the
+shim in mautrix-signal `v0.2609.0-purego.4`, and go.mod pins both.)
 
 #### 8.4 Group send endorsements
 
@@ -1368,8 +1368,9 @@ WebSocket shutdown race documented in 8.3 remains outside the fork boundary.
 
 **Done when:** a purego build sends to a group using endorsements (no fallback to per-recipient
 sends). **Offline acceptance passes; live-server acceptance remains pending.** No
-account was accessed and no fork release or dependency pin was changed; use the
-local workspace instructions in `docs/dev.md`.
+account was accessed. (2026-09-27: published with 8.3 in libsignal-go `v0.7.1-cw.4` and
+mautrix-signal `v0.2609.0-purego.4`, which go.mod pins. The CGO wrapper fix is its own fork
+commit, `303436b`.)
 
 ### Phase 9 — Enclaves, HPKE and the version delta
 
@@ -1396,9 +1397,8 @@ local workspace instructions in `docs/dev.md`.
 **Done when:** Go↔Rust handshakes interoperate for both patterns.
 (Green on 2026-09-26: `TestNoiseInterop` runs fresh NK and NKhfs handshakes with Go as initiator
 and as responder, exchanges transport messages both ways, and checks that each side rejects
-tampered or truncated messages and a wrong static key. Branch `feat/noise` of the fork (worktree
-`~/Code/libsignal-go-noise`, based on `f1669cb0b`) is unpublished: not pushed, not merged into
-the fork's main, no tag. The shim wiring is 9.3.)
+tampered or truncated messages and a wrong static key. The shim wiring is 9.3.
+2026-09-27: branch `feat/noise` is merged into the fork's main and released in `v0.7.1-cw.4`.)
 
 #### 9.2 SGX DCAP attestation
 
@@ -1449,31 +1449,29 @@ the fork's main, no tag. The shim wiring is 9.3.)
       is off by default and that the number-12 blobs fail without it.)
 
 **Done when:** every upstream attestation test case gives the same accept/reject result in Go.
+(2026-09-27: branch `feat/dcap` is merged into the fork's main and released in
+`v0.7.1-cw.4`; the commits named above are unchanged.)
 
 #### 9.3 CDSI client state
 
 - [ ] `SGXClientState`/`CDS2ClientState`: initial request, `CompleteHandshake`,
       `EstablishedSend`/`EstablishedRecv`, wired into the shim
       (2026-09-27 — partial: the fork side is done, the shim is not. New `attest/enclave`
-      package in the libsignal-go fork, branch `feat/cdsi` (worktree `~/Code/libsignal-go-cdsi`:
-      `feat/dcap` with `feat/noise` merged in), commit `ae07c98cb`, unpublished. It ports
+      package in the libsignal-go fork, commit `ae07c98cb`, released in `v0.7.1-cw.4`. It ports
       `enclave.rs`, `sgx_session.rs`, `cds2.rs` and the bridge's `SgxClientState`: the attested
       handshake with the one-day skew, NK/NKhfs, prost-style `ClientHandshakeStart` decoding,
       `extract_metrics`, and `NewCDS2ClientState` → `InitialRequest` → `CompleteHandshake` →
       `EstablishedSend`/`EstablishedRecv` with `ErrInvalidState` for wrong-state calls. Remaining:
-      publish the fork branches and tag, then implement mautrix-signal's
-      `pkg/libsignalgo/sgxclient_purego.go` on it and bump go.mod. This waits for the uncommitted
-      8.4 work in that package.)
-- [x] Port the handshake-level attestation tests on the recorded blobs:
-      - `sgx_session.rs`: `test_clock_skew` with `SKEW_ADJUSTMENT` in the session,
-        `test_happy_path`, `test_mismatched_keys` and `test_invalid_private_key`, on `cds2_test`;
-      - `cds2.rs`: `attest_cds2`.
-
-      The DCAP half of all of these is already covered by 9.2. The remaining half needs
+      implement mautrix-signal's `pkg/libsignalgo/sgxclient_purego.go` on it, tag the fork and
+      bump go.mod.)
+- [x] Port the handshake-level attestation tests on the recorded blobs: `sgx_session.rs`
+      `test_clock_skew` with `SKEW_ADJUSTMENT` in the session, `test_happy_path`,
+      `test_mismatched_keys` and `test_invalid_private_key` on `cds2_test`, and `cds2.rs`
+      `attest_cds2`. The DCAP half of all of these is already covered by 9.2. The remaining half needs
       `Handshake::for_sgx` and Noise NK from `feat/noise`. Other packages' tests will need an
       exported form of the evaluation number 12 exception (upstream's `test-util`). `svr2.rs`
       `attest_svr2_bad_config` checks the raft config, not DCAP; PLAN.md has no SVR2 item.
-      (2026-09-27 — fork commits `b9b3d8598` and `ae07c98cb` on `feat/cdsi`. All five are ported
+      (2026-09-27 — fork commits `b9b3d8598` and `ae07c98cb`. All five are ported
       under their names in `attest/enclave`, with a Go `noise` responder in place of snow. The
       evaluation number 12 exception moved to `attest/internal/testhook`, which only packages
       under `attest/` can import and only tests turn on. Extra cases cover the input checks,
@@ -1496,19 +1494,16 @@ the fork's main, no tag. The shim wiring is 9.3.)
       listed as a known gap in the fork's scope matrix
       (2026-09-27 — partial: the fork side is done, the shim is not. Three purego stubs are left:
       `sgxclient` (9.3), `hsmenclave` and `devicetransfer`; signalmeow calls only the first. The
-      other two are now ported in the libsignal-go fork on `feat/cdsi` (unpublished), with scope
-      matrix rows:
-      - `attest/hsmenclave` (`981059a87`) ports `hsm_enclave.rs` and the bridge's
-        `HsmEnclaveClient`: an NK handshake carrying the trusted code hashes, and a reply that must
-        name one of them. It was checked live against a snow NK responder, and its reply errors
-        against upstream's `complete`.
-      - `devicetransfer` (`07f8c1ccd`) makes the 4096-bit PKCS#8 RSA key and upstream's
-        self-signed v1 certificate. RSA certificates are byte-identical to upstream's for the same
-        key and second, and BoringSSL reads Go's keys and certificates. Key formats, name length,
-        validity limit and time encodings follow upstream.
-
-      Remaining: after 8.4 is committed, publish the fork branches and tag, replace the three
-      `_purego.go` stubs in mautrix-signal `pkg/libsignalgo`, and bump go.mod.)
+      other two are ported in the libsignal-go fork and released in `v0.7.1-cw.4`, with scope
+      matrix rows. `attest/hsmenclave` (`981059a87`) ports `hsm_enclave.rs` and the bridge's
+      `HsmEnclaveClient`: an NK handshake carrying the trusted code hashes, and a reply that must
+      name one of them. It was checked live against a snow NK responder, and its reply errors
+      against upstream's `complete`. `devicetransfer` (`07f8c1ccd`) makes the 4096-bit PKCS#8 RSA
+      key and upstream's self-signed v1 certificate. RSA certificates are byte-identical to
+      upstream's for the same key and second, and BoringSSL reads Go's keys and certificates. Key
+      formats, name length, validity limit and time encodings follow upstream. Remaining: replace
+      the three `_purego.go` stubs in mautrix-signal `pkg/libsignalgo`, tag the fork and bump
+      go.mod.)
 
 **Done when:** `grep ErrNotImplemented` in the shim finds nothing, and `devices list` shows
 creation times in a purego build.

@@ -43,7 +43,7 @@ How it fits together:
   `vX.YYMM.Z-purego.N`). The fork changes only `pkg/libsignalgo`: every cgo file builds with
   `!purego`, and `x_purego.go` twins implement the same API on top of
   [`cwbudde/libsignal-go`](https://github.com/cwbudde/libsignal-go). The fork's `PUREGO.md` and
-  `internal/stubgen` (stub generator and API parity check) describe the details. The cgo build uses upstream libsignal. The local 8.4 change also corrects
+  `internal/stubgen` (stub generator and API parity check) describe the details. The cgo build uses upstream libsignal. The fork also corrects
   the CGO endorsement wrapper to use the combined result supplied by Rust.
 - `cwbudde/libsignal-go` is a fork of `GoCodeAlone/libsignal-go` whose Rust compat harness is
   pinned to the libsignal tag libsignalgo expects (its `decisions/0007-cwbudde-fork-policy.md`).
@@ -66,18 +66,17 @@ go mod edit -replace go.mau.fi/mautrix-signal=../mautrix-signal
 
 When the change is done, commit and tag the fork, then set the replace to the new tag.
 
-For the unpublished Phase 8.3–8.4 changes, use a temporary workspace instead of editing
-tracked module files. Run from the go-signal directory:
+The zkgroup integration test (Phases 8.3–8.4) runs signalmeow's group and profile code
+against both builds of the shim. It overlays test files into signalmeow's sources, which Go
+refuses for the module cache, so it needs a workspace with the mautrix-signal checkout at the
+pinned tag. Run from the go-signal directory:
 
 ```sh
-repo_dir=$PWD
 work_dir=$(mktemp -d)
-(cd "$work_dir" && go work init "$repo_dir" "$repo_dir/../libsignal-go" "$repo_dir/../mautrix-signal")
+(cd "$work_dir" && go work init "$OLDPWD" "$OLDPWD/../mautrix-signal")
 export GOWORK="$work_dir/go.work"
-just build-purego check-purego
-just fmt lint check-libsignal test fmt-check
 CGO_ENABLED=0 scripts/test-zkgroup-integration.sh -tags purego
-CGO_LDFLAGS="-L $repo_dir/third_party/lib" scripts/test-zkgroup-integration.sh
+CGO_LDFLAGS="-L $PWD/third_party/lib" scripts/test-zkgroup-integration.sh
 ```
 
 The integration script requires Python 3 to write Go's temporary overlay JSON. It
@@ -95,23 +94,8 @@ The WebSocket test currently detects an upstream shutdown race under `-race` in
 `web/signalwebsocket.go` (`incomingRequestChan` is cleared while the handler goroutine
 reads it); the ordinary CGO/purego integration runs and go-signal's race suite pass.
 
-`go mod tidy` resolves a single module and cannot find the unpublished `zkgroup`
-package through this workspace. Check tidiness using temporary local replacements:
-
-```sh
-cp go.mod "$work_dir/local.mod"
-cp go.sum "$work_dir/local.sum"
-GOWORK=off go mod edit -modfile="$work_dir/local.mod" \
-  -replace="github.com/cwbudde/libsignal-go=$repo_dir/../libsignal-go" \
-  -replace="go.mau.fi/mautrix-signal=$repo_dir/../mautrix-signal"
-GOWORK=off go mod tidy -modfile="$work_dir/local.mod"
-GOWORK=off go mod tidy -diff -modfile="$work_dir/local.mod"
-```
-
-The temporary sum file drops the checksums for the two locally replaced modules;
-tracked `go.mod` and `go.sum` stay unchanged. Keep this setup local until the two
-forks are released and their pins can move together. Live group-list/profile-fetch/group-send
-acceptance remains pending; the offline tests do not substitute for that check.
+Live group-list/profile-fetch/group-send acceptance remains pending; the offline tests do not
+substitute for that check.
 
 ### Upgrading signalmeow and libsignal
 
