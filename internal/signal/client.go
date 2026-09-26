@@ -106,6 +106,34 @@ type Client interface { //nolint:interfacebloat // the one facade over signalmeo
 	// ErrClosed), makes sure the acks of events read from Events reach the server, disconnects
 	// and releases the store.
 	Close() error
+
+	// Groups fetches the state of every group whose master key the store holds (from a sync or
+	// a group message) from the server, sorted by title (see SortGroups). A group the server
+	// doesn't show us (ErrNotAMember, e.g. we left or were removed) or doesn't know
+	// (ErrUnknownGroup) is still listed, with Group.Err set and its last known title; any other
+	// failure fails the whole list. Every group fetched updates the title cache (see
+	// GroupTitles). It needs Connect (ErrNotConnected; SendOnly is enough) and fails with
+	// ErrClosed after Close, and with the error of a connection lost for good (such as
+	// ErrDeviceUnlinked).
+	Groups(ctx context.Context) ([]Group, error)
+
+	// Group fetches the state of one group from the server, like Groups. ref is the group's ID
+	// or its master key, both 32 bytes in standard base64: it is looked up as an ID first, then
+	// as a master key. A group whose master key the store doesn't hold fails with
+	// ErrUnknownGroup; one the server doesn't show us with ErrNotAMember.
+	Group(ctx context.Context, ref string) (Group, error)
+
+	// LeaveGroup leaves the group ref (as for Group): it removes us as a member, declines an
+	// invitation or cancels a join request, and tells the other members. See Group.CheckLeave
+	// for when that is refused (ErrNotAMember, ErrLastAdmin, ErrInvalidPromotion); opts.Promote
+	// makes members admins in the same change. The group's master key stays in the store, and
+	// the title cache remembers that we left (Group.LeftAt). It needs Connect like Group.
+	LeaveGroup(ctx context.Context, ref string, opts LeaveOptions) (LeaveResult, error)
+
+	// GroupTitles returns the titles of the groups fetched before (by Groups, Group or
+	// LeaveGroup), by group ID, from the store: it needs no Connect. Groups never fetched are
+	// missing. It fails with ErrClosed after Close.
+	GroupTitles(ctx context.Context) (map[string]string, error)
 }
 
 // Options configures a Client.

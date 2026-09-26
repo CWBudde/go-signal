@@ -103,7 +103,7 @@ go-signal receive [--timeout 5s] [--max N] [--follow] [--download-attachments <d
 go-signal react <recipient>... --target <author>:<ts> --emoji 👍 [--remove] [--group <id>]
 go-signal delete <recipient>... --target <ts> [--group <id>]   # remote delete of our own message
 go-signal contacts list | show <recipient> | block | unblock
-go-signal groups list | show <id> | leave <id>
+go-signal groups list | show <group> | leave <group> --yes [--promote <member>]...   # <group>: ID, master key or title
 go-signal devices list
 go-signal account show | sync [--timeout 60s] | unlink   # unlink = remove local data
 go-signal mcp serve [--read-only] [--allow-recipient <r>]...   # MCP server on stdio
@@ -566,7 +566,7 @@ stories, admin deletes, and the MCP tools for react/delete (5.x).
 - [x] `link` waits for the initial sync (with progress on stderr and a timeout) (on the same
       client right after `Link`, which keeps the database and lock; `SyncOptions.Progress` reports
       the stages, printed as `Sync: <stage>...` lines on stderr, then `Synced N contacts and M
-    groups.` on stdout. `--sync-timeout` defaults to 60 s, 0 skips the sync. The timeout is the
+  groups.` on stdout. `--sync-timeout` defaults to 60 s, 0 skips the sync. The timeout is the
       context deadline: `Sync` then returns what it has with an error wrapping
       `signal.ErrSyncIncomplete` and the cause, which `app.Sync` turns into
       `SyncResult.Incomplete`; `link` and `account sync` print a warning on stderr and exit 0.
@@ -603,12 +603,60 @@ against the fake); `cmd/` only parses flags, calls `app` and renders via `intern
 
 #### 4.2 Groups
 
-- [ ] `groups list` (id, title, member count, our role)
-- [ ] `groups show <id>`: title, description, members with roles, pending members, timer
-- [ ] `groups leave <id>`
-- [ ] Group id parsing: accept base64 master key / group id, and title if unique
+- [x] `groups list` (id, title, member count, our role) (new `Client.Groups`: every group whose
+      master key the store holds (`store.GroupIdentifiers` from 3.9) is fetched with signalmeow's
+      `RetrieveGroupByID`, which needs group auth credentials over the authed websocket, so
+      `Connect` (`SendOnly` is enough). signalmeow reports the server's status only in the error
+      text: a 403 becomes `signal.ErrNotAMember` (left, removed, or a join request not approved)
+      and a 404 or missing master key `signal.ErrUnknownGroup`; such groups are still listed with
+      `Group.Err`, their last known title and `leftAt`, while any other error fails the list.
+      Sorted by title. Plain table ID/TITLE/MEMBERS/ROLE with the role `admin`, `member`,
+      `invited`, `requesting`, `left` or `not a member`; JSON `groups` document in `docs/json.md`)
+- [x] `groups show <id>`: title, description, members with roles, pending members, timer
+      (`Client.Group`; `signal.Group` carries ID, title, description, revision, disappearing
+      timer, announcements-only, members with role and joined-at revision, pending members with
+      role, inviter and time, requesting members with time, and our membership/role
+      (`Group.MembershipOf`). The master key stays in `Group.MasterKey` but is never printed.
+      Plain key/value lines plus Members/Invited/Requesting to join sections; JSON `group`
+      document; `output.GroupJSON`/`NewGroupJSON` are exported for MCP)
+- [x] `groups leave <id>` (`Client.LeaveGroup` builds a signalmeow `GroupChange` and calls
+      `UpdateGroup`, which patches the group (retrying on conflicts) and sends the change to the
+      members: a member deletes itself (`DeleteMembers`, as the mautrix bridge does), an invited
+      user its invitation (`DeletePendingMembers` with its ACI), a requesting user its request
+      (`DeleteRequestingMembers`). `Group.CheckLeave` refuses, like signal-cli's quitGroup, when we
+      are the only admin while other members remain (`signal.ErrLastAdmin`; the CLI error names
+      `--promote`); repeatable `--promote <member>` makes members admins in the same change
+      (`ModifyMemberRoles`, only for admins and only for other members:
+      `signal.ErrInvalidPromotion`). Needs `--yes` like `account unlink`. JSON `left` document)
+- [x] Group id parsing: accept base64 master key / group id, and title if unique
+      (`app.ResolveGroup`: `group:<id>` or a bare 32-byte value in standard or URL-safe base64 is
+      passed on, and the facade looks it up as an ID in signalmeow's group store first, then
+      derives the ID from it as a master key (`libsignalgo.GroupMasterKey.GroupIdentifier`); only
+      groups whose key is stored are known. Anything else is a title, matched case-insensitively
+      against the title cache (whole title, surrounding white space ignored) without connecting:
+      several matches fail with `app.ErrAmbiguousGroup` listing the `group:<id>`s, none with
+      `signal.ErrUnknownGroup`)
+- [x] Title cache for offline lookup (not in the original plan; our own `gosignal_groups` table,
+      migration `02-groups.sql`: title, revision, `left_at`, `updated_at` per group ID, written
+      after every successful fetch (which clears `left_at`) and by `LeaveGroup`. New
+      `Client.GroupTitles` reads it without `Connect`; 4.1's name resolution can use it for group
+      titles in `receive`)
 
-**Done when:** list/show/leave work against groups created on the phone.
+**Done when:** list/show/leave work against groups created on the phone. (Done with the fake and
+unit tests for the conversion, master key derivation, the leave change and the title cache; not
+yet verified against the live server.)
+
+Notes: every `groups` command fetches every group (one request per group, sequentially). Users
+invited by phone number (PNI) are missing from the pending members, and we can't see a group we
+were invited to by number: signalmeow skips PNI pending members when decrypting. A requesting
+user probably can't fetch the group at all (403), and `UpdateGroup` fetches it first, so
+cancelling a join request likely fails with `ErrNotAMember` despite the code path for it. For a
+group we are only invited to, the server sends no send endorsements; signalmeow's resulting cache
+errors are demoted to debug in the log bridge. After leaving, signalmeow's endorsement update for
+the new revision probably fails (only logged), its `signalmeow_groups` row stays (the group keeps
+being listed, as `left`), and a failure to tell the members is only logged by signalmeow. Groups
+can't be told apart as "left on another device" versus "removed" (both a 403). Avatars, access
+control, banned members, invite links and group changes (`groups update`, join) are open.
 
 #### 4.3 Identities and safety numbers
 

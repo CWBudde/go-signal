@@ -272,6 +272,113 @@ entry per chat given on the command line. The other fields describe the reaction
 A remote delete is a message of its own, too: `timestamp` and `results` are as in
 [`send`](#send). `targetTimestamp` (number) is the sent timestamp of our message that was deleted.
 
+## `groups list`
+
+```json
+{
+  "version": 1,
+  "groups": [
+    {
+      "id": "Z3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXA=",
+      "title": "Family",
+      "description": "All of us",
+      "revision": 12,
+      "membership": "member",
+      "role": "admin",
+      "timerSeconds": 604800,
+      "announcementsOnly": false,
+      "members": [
+        {
+          "aci": "11111111-1111-1111-1111-111111111111",
+          "role": "admin",
+          "joinedAtRevision": 0
+        },
+        {
+          "aci": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "role": "member",
+          "joinedAtRevision": 2
+        }
+      ],
+      "pending": [
+        {
+          "aci": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          "role": "member",
+          "addedBy": { "aci": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" },
+          "invitedAt": "2026-09-20T12:30:00Z"
+        }
+      ],
+      "requesting": []
+    },
+    {
+      "id": "Z29uZS1pZC1nb25lLWlkLWdvbmUtaWQtZ29uZS1pZC0=",
+      "title": "Old club",
+      "revision": 0,
+      "membership": "none",
+      "timerSeconds": 0,
+      "announcementsOnly": false,
+      "leftAt": "2026-09-26T10:00:00Z",
+      "error": "not a member of the group …"
+    }
+  ]
+}
+```
+
+`groups` has a **group** object for every group whose master key go-signal knows (from
+`account sync` or a message from the group), fetched from the server and sorted by title. A group
+the server no longer shows us (we left or were removed) or doesn't know is still listed, with
+`error` set, the last title go-signal saw, and no member lists. The master key is never printed.
+
+| Field               | Type    | Description                                                                                                                    |
+| ------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `id`                | string  | Group ID (base64)                                                                                                              |
+| `title`             | string  | Title; empty if unknown                                                                                                        |
+| `description`       | string  | Description; _optional_                                                                                                        |
+| `revision`          | number  | Number of changes to the group so far (`0` when `error` is set)                                                                |
+| `membership`        | string  | How we belong to it: `member`, `pending` (invited), `requesting` (asked to join) or `none`                                     |
+| `role`              | string  | Our role: `admin` or `member` (for `pending`: the role the invitation offers); _optional_                                      |
+| `timerSeconds`      | number  | Disappearing messages timer in seconds; `0` is off                                                                             |
+| `announcementsOnly` | boolean | `true` if only admins can send messages                                                                                        |
+| `members`           | array   | Members: recipient fields plus `role` (`admin`, `member`) and `joinedAtRevision`; _optional_ (missing when `error` is set)     |
+| `pending`           | array   | Invited users: recipient fields plus `role`, `addedBy` (recipient) and `invitedAt`; _optional_ (as `members`)                  |
+| `requesting`        | array   | Users asking to join: recipient fields plus `requestedAt`; _optional_ (as `members`)                                           |
+| `leftAt`            | string  | When we left the group with go-signal; _optional_                                                                              |
+| `error`             | string  | Why the group couldn't be fetched (e.g. we are not a member); _optional_. The other fields then only hold what go-signal knows |
+
+The recipient fields (`aci`, `pni`, `number`, `username`) are those of a
+[recipient](#common-objects). Users invited by phone number are missing from `pending` (signalmeow
+can't decrypt them yet).
+
+## `groups show`
+
+The document is `{"version": 1, "group": {…}}`, where `group` is one group object as in
+[`groups list`](#groups-list), always without `error`: a group that can't be fetched fails the
+command instead.
+
+## `groups leave`
+
+```json
+{
+  "version": 1,
+  "left": {
+    "id": "Z3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXA=",
+    "title": "Family",
+    "membership": "member",
+    "revision": 13,
+    "promoted": [{ "aci": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }],
+    "leftAt": "2026-09-26T10:00:00Z"
+  }
+}
+```
+
+| Field        | Type   | Description                                                                                            |
+| ------------ | ------ | ------------------------------------------------------------------------------------------------------ |
+| `id`         | string | Group ID (base64)                                                                                      |
+| `title`      | string | Title of the group                                                                                     |
+| `membership` | string | What we gave up: `member`, `pending` (declined the invitation) or `requesting` (cancelled the request) |
+| `revision`   | number | The group's revision after leaving                                                                     |
+| `promoted`   | array  | [Recipients](#common-objects) made admins in the same change (`--promote`); may be empty               |
+| `leftAt`     | string | When we left                                                                                           |
+
 ## `receive`
 
 `receive` writes one document per event and line ([NDJSON](https://github.com/ndjson/ndjson-spec))
