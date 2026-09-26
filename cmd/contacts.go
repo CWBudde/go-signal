@@ -10,10 +10,12 @@ const contactsBlockLong = `Block users: Signal then drops their direct messages,
 
 A user is an E.164 number, an ACI or @username. go-signal reads the current blocked list
 from the storage service, adds the users and sends the complete list to your other
-devices; the phone applies it and updates the storage service. This needs the storage
-service key (run "go-signal account sync" if it is unknown). Until the storage service
-shows the change, go-signal keeps it against storage syncs that say otherwise, for up to
-7 days. Incoming messages are left on the server for the next receive.`
+devices; the phone replaces its list with it and updates the storage service. This needs
+the storage service key (run "go-signal account sync" if it is unknown), and nothing is
+sent unless the storage service gives the complete list. Until the phone has written the
+storage service, go-signal keeps the change against storage syncs that say otherwise (for
+up to 7 days); from then on, the phone's state wins. Incoming messages are left on the
+server for the next receive.`
 
 const contactsUnblockLong = `Unblock users, like "contacts block" blocks them: the complete new blocked list goes to
 your other devices, and the phone updates the storage service.`

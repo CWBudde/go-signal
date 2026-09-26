@@ -85,9 +85,13 @@ func storedBlocked(t *testing.T, dataDir string, aci uuid.UUID) bool {
 	return blocked
 }
 
+// seededVersion is the storage service's manifest version the seeded block overrides were made
+// against.
+const seededVersion = 5
+
 // seedContacts stores ourselves, alice (named, accepted), bob (blocked, no name), carol (only a
-// nickname and a PNI) and dave (nothing), plus block overrides: alice blocked, eve (not in the
-// store) blocked, and an expired one for frank.
+// nickname and a PNI) and dave (nothing), plus block overrides made against seededVersion: alice
+// blocked, eve (not in the store) blocked, and an expired one for frank.
 func seedContacts(t *testing.T, dataDir string) {
 	t.Helper()
 
@@ -113,9 +117,12 @@ func seedContacts(t *testing.T, dataDir string) {
 		now := time.Now()
 
 		for _, override := range []store.BlockOverride{
-			{ACI: aliceUser, Blocked: true, SetAt: now},
-			{ACI: eveUser, Blocked: true, SetAt: now},
-			{ACI: frankUser, Blocked: true, SetAt: now.Add(-signal.BlockOverrideTTL - time.Hour)},
+			{ACI: aliceUser, Blocked: true, SetAt: now, StorageVersion: seededVersion},
+			{ACI: eveUser, Blocked: true, SetAt: now, StorageVersion: seededVersion},
+			{
+				ACI: frankUser, Blocked: true, SetAt: now.Add(-signal.BlockOverrideTTL - time.Hour),
+				StorageVersion: seededVersion,
+			},
 		} {
 			err := data.SetBlockOverride(ctx, override)
 			if err != nil {
@@ -225,6 +232,79 @@ func TestContactLookup(t *testing.T) {
 	}
 }
 
+var errStorageDown = errors.New("storage service unreachable")
+
+// unblockInStore clears the blocked flag of aci in the store, as signalmeow's storage sync does.
+func unblockInStore(t *testing.T, dataDir string, aci uuid.UUID) {
+	t.Helper()
+
+	withStore(t, dataDir, func(device *mstore.Device, _ *store.Store) {
+		_, err := device.RecipientStore.LoadAndUpdateRecipient(t.Context(), aci, uuid.Nil,
+			func(rcpt *types.Recipient) (bool, error) {
+				rcpt.Blocked = false
+
+				return true, nil
+			})
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
+}
+
+// wantStoredBlocked checks the blocked flag of each user in the store.
+func wantStoredBlocked(t *testing.T, dataDir string, want map[string]bool) {
+	t.Helper()
+
+	for aci, blocked := range want {
+		if got := storedBlocked(t, dataDir, uuid.MustParse(aci)); got != blocked {
+			t.Errorf("stored blocked state of %s = %v, want %v", aci, got, blocked)
+		}
+	}
+}
+
+// contactRecord is a storage service contact record of the user aci.
+func contactRecord(aci string, blocked bool) *signalmeow.DecryptedStorageRecord {
+	return &signalmeow.DecryptedStorageRecord{StorageRecord: &signalpb.StorageRecord{
+		Record: &signalpb.StorageRecord_Contact{Contact: &signalpb.ContactRecord{Aci: aci, Blocked: blocked}},
+	}}
+}
+
+// storageUpdate is a complete fetch of the storage service at the manifest version.
+func storageUpdate(version uint64, records ...*signalmeow.DecryptedStorageRecord) *signalmeow.StorageUpdate {
+	return &signalmeow.StorageUpdate{Version: version, NewRecords: records}
+}
+
+// fakeStorage answers the fetches of the storage service like the server: nothing (204) while
+// the manifest has the version asked about.
+type fakeStorage struct {
+	update *signalmeow.StorageUpdate
+	err    error
+	asked  []uint64
+}
+
+func (s *fakeStorage) fetch(_ context.Context, since uint64) (*signalmeow.StorageUpdate, error) {
+	s.asked = append(s.asked, since)
+
+	if s.err != nil {
+		return nil, s.err
+	}
+
+	if s.update.Version == since {
+		return nil, nil //nolint:nilnil // signalmeow's answer to the server's 204
+	}
+
+	return s.update, nil
+}
+
+// recordSends returns a send function for ApplyBlocked that records the messages in sent.
+func recordSends(sent *[]*signalpb.SyncMessage) func(*signalpb.SyncMessage) error {
+	return func(msg *signalpb.SyncMessage) error {
+		*sent = append(*sent, msg)
+
+		return nil
+	}
+}
+
 func TestBlockOverridesSettle(t *testing.T) {
 	t.Parallel()
 
@@ -232,38 +312,239 @@ func TestBlockOverridesSettle(t *testing.T) {
 	dataDir := seedAccount(t)
 	seedContacts(t, dataDir)
 	client := openSeeded(t, dataDir)
+	alice, eve := uuid.MustParse(aliceUser), uuid.MustParse(eveUser)
 
-	// As on connect: the storage state is unknown. The overrides are applied to the store,
-	// eve gets a row, and frank's expired override goes.
+	// As on connect: nothing fetched. The overrides are applied to the store, eve gets a row,
+	// and frank's expired override goes.
 	signal.SettleOverrides(ctx, client, nil)
-	wantOverrides(t, client, uuid.MustParse(aliceUser), uuid.MustParse(eveUser))
+	wantOverrides(t, client, alice, eve)
+	wantStoredBlocked(t, dataDir, map[string]bool{aliceUser: true, eveUser: true})
 
-	if !storedBlocked(t, dataDir, uuid.MustParse(aliceUser)) || !storedBlocked(t, dataDir, uuid.MustParse(eveUser)) {
-		t.Error("overrides not applied to the store")
-	}
+	// Our own storage sync finds the version the overrides were made against: the phone hasn't
+	// written our change yet, so the sync's undoing of eve's block is undone again.
+	unblockInStore(t, dataDir, eve)
+	signal.SettleOverrides(ctx, client, storageUpdate(seededVersion, contactRecord(aliceUser, false)))
+	wantOverrides(t, client, alice, eve)
+	wantStoredBlocked(t, dataDir, map[string]bool{aliceUser: true, eveUser: true})
 
-	// A storage sync that agrees on alice ends her override; eve's state is unknown.
-	signal.SettleOverrides(ctx, client, map[string]bool{aliceUser: true})
-	wantOverrides(t, client, uuid.MustParse(eveUser))
+	// An older version (from a fetch that overtook a later one) changes nothing either.
+	signal.SettleOverrides(ctx, client, storageUpdate(seededVersion-1))
+	wantOverrides(t, client, alice, eve)
 
-	// signalmeow stores eve as not blocked from the storage service: the override puts it back.
-	withStore(t, dataDir, func(device *mstore.Device, _ *store.Store) {
-		err := device.RecipientStore.StoreRecipient(ctx, &types.Recipient{ACI: uuid.MustParse(eveUser)})
-		if err != nil {
-			t.Fatal(err)
-		}
-	})
-
-	signal.StorageSynced(ctx, client, []*types.Recipient{{ACI: uuid.MustParse(eveUser), Blocked: false}})
-	wantOverrides(t, client, uuid.MustParse(eveUser))
-
-	if !storedBlocked(t, dataDir, uuid.MustParse(eveUser)) {
-		t.Error("eve's block was not re-applied")
-	}
-
-	// Once the storage service has it, the override ends.
-	signal.StorageSynced(ctx, client, []*types.Recipient{{ACI: uuid.MustParse(eveUser), Blocked: true}})
+	// A later version: the phone has written the storage service since, and it wins, whether it
+	// has our change (alice) or not (eve, unblocked on the phone again).
+	signal.SettleOverrides(ctx, client, storageUpdate(seededVersion+1,
+		contactRecord(aliceUser, true), contactRecord(eveUser, false)))
 	wantOverrides(t, client)
+	wantStoredBlocked(t, dataDir, map[string]bool{aliceUser: true, eveUser: false})
+}
+
+func TestBlockOverridesIncompleteFetch(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	dataDir := seedAccount(t)
+	seedContacts(t, dataDir)
+	client := openSeeded(t, dataDir)
+
+	signal.SettleOverrides(ctx, client, nil)
+
+	// A later version ends the overrides even if records are missing, but the store keeps the
+	// state it has for users whose record wasn't read.
+	signal.SettleOverrides(ctx, client, &signalmeow.StorageUpdate{
+		Version:        seededVersion + 1,
+		NewRecords:     []*signalmeow.DecryptedStorageRecord{contactRecord(aliceUser, false)},
+		MissingRecords: []string{"ZXZl"},
+	})
+	wantOverrides(t, client)
+	wantStoredBlocked(t, dataDir, map[string]bool{aliceUser: false, eveUser: true})
+}
+
+// TestBlockOverridesBackgroundSync follows a block through signalmeow's background storage syncs,
+// which report only the contacts whose record changed, not the manifest version.
+func TestBlockOverridesBackgroundSync(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	dataDir := seedAccount(t)
+	seedContacts(t, dataDir)
+	client := openSeeded(t, dataDir)
+	alice, eve := uuid.MustParse(aliceUser), uuid.MustParse(eveUser)
+
+	signal.SettleOverrides(ctx, client, nil)
+
+	storage := &fakeStorage{update: storageUpdate(seededVersion)}
+
+	// A sync that changed only dave leaves the overridden users alone: no need to ask.
+	signal.StorageSynced(ctx, client, []*types.Recipient{{ACI: uuid.MustParse(daveUser)}}, storage.fetch)
+
+	if len(storage.asked) != 0 {
+		t.Errorf("fetched the storage service since %v for an unrelated change", storage.asked)
+	}
+
+	// The sync stored eve as not blocked before the phone wrote our change: the storage service
+	// still has the overrides' version, so eve's block is re-applied.
+	unblockInStore(t, dataDir, eve)
+	signal.StorageSynced(ctx, client, []*types.Recipient{{ACI: eve}}, storage.fetch)
+
+	if want := []uint64{seededVersion}; !slices.Equal(storage.asked, want) {
+		t.Errorf("fetched since %v, want %v", storage.asked, want)
+	}
+
+	wantOverrides(t, client, alice, eve)
+	wantStoredBlocked(t, dataDir, map[string]bool{eveUser: true})
+
+	// If the storage service can't be asked, nothing later has been seen: the overrides stay.
+	storage.err = errStorageDown
+
+	unblockInStore(t, dataDir, eve)
+	signal.StorageSynced(ctx, client, []*types.Recipient{{ACI: eve}}, storage.fetch)
+	wantOverrides(t, client, alice, eve)
+	wantStoredBlocked(t, dataDir, map[string]bool{eveUser: true})
+
+	// The phone applied our list and wrote the storage service; eve is blocked there as here, so
+	// signalmeow reports no change. Then the user unblocks eve on the phone, and that sync
+	// changes her: the phone wins, and the overrides end.
+	storage.err = nil
+	storage.update = storageUpdate(seededVersion+2, contactRecord(aliceUser, true), contactRecord(eveUser, false))
+
+	unblockInStore(t, dataDir, eve)
+	signal.StorageSynced(ctx, client, []*types.Recipient{{ACI: eve}}, storage.fetch)
+	wantOverrides(t, client)
+	wantStoredBlocked(t, dataDir, map[string]bool{aliceUser: true, eveUser: false})
+
+	// The next block doesn't send eve's old block along.
+	var sent []*signalpb.SyncMessage
+
+	err := signal.ApplyBlocked(ctx, client, storage.update, []signal.Recipient{{ACI: carolUser}}, true,
+		recordSends(&sent))
+	if err != nil {
+		t.Fatalf("ApplyBlocked: %v", err)
+	}
+
+	if len(sent) != 1 {
+		t.Fatalf("sent %d messages, want 1", len(sent))
+	}
+
+	if got, want := sent[0].GetBlocked().GetAcis(), []string{aliceUser, carolUser}; !slices.Equal(got, want) {
+		t.Errorf("blocked acis = %v, want %v", got, want)
+	}
+}
+
+func TestApplyBlocked(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	dataDir := seedAccount(t)
+	seedContacts(t, dataDir)
+	client := openSeeded(t, dataDir)
+
+	blockedKey := bytes.Repeat([]byte{1}, libsignalgo.GroupMasterKeyLength)
+	otherKey := bytes.Repeat([]byte{2}, libsignalgo.GroupMasterKeyLength)
+
+	var sent []*signalpb.SyncMessage
+
+	// At the overrides' version, eve's pending block goes along (alice's is in the storage
+	// service by now). carol gets an override; bob is blocked there already.
+	err := signal.ApplyBlocked(ctx, client, blockedUpdate(seededVersion, blockedKey, otherKey),
+		[]signal.Recipient{{ACI: carolUser}, {ACI: bobUser}}, true, recordSends(&sent))
+	if err != nil {
+		t.Fatalf("ApplyBlocked: %v", err)
+	}
+
+	msg := sent[0].GetBlocked()
+	wantBlockedGroup(t, msg, blockedKey)
+
+	if want := []string{aliceUser, bobUser, carolUser, eveUser}; !slices.Equal(msg.GetAcis(), want) {
+		t.Errorf("blocked acis = %v, want %v", msg.GetAcis(), want)
+	}
+
+	wantOverrides(t, client, uuid.MustParse(aliceUser), uuid.MustParse(carolUser), uuid.MustParse(eveUser))
+	wantOverrideVersion(t, client, carolUser, seededVersion)
+	wantStoredBlocked(t, dataDir, map[string]bool{bobUser: true, carolUser: true, eveUser: true})
+
+	// The storage service has changed since: the phone wrote it, so what it says wins over the
+	// pending overrides, which neither go along nor survive.
+	err = signal.ApplyBlocked(ctx, client, storageUpdate(seededVersion+1, contactRecord(bobUser, true)),
+		[]signal.Recipient{{ACI: daveUser}}, true, recordSends(&sent))
+	if err != nil {
+		t.Fatalf("ApplyBlocked: %v", err)
+	}
+
+	if got, want := sent[1].GetBlocked().GetAcis(), []string{bobUser, daveUser}; !slices.Equal(got, want) {
+		t.Errorf("blocked acis = %v, want %v", got, want)
+	}
+
+	wantOverrides(t, client, uuid.MustParse(daveUser))
+	wantOverrideVersion(t, client, daveUser, seededVersion+1)
+	wantStoredBlocked(t, dataDir, map[string]bool{
+		aliceUser: false, bobUser: true, carolUser: false, daveUser: true, eveUser: false,
+	})
+}
+
+func TestApplyBlockedIncompleteList(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	dataDir := seedAccount(t)
+	seedContacts(t, dataDir)
+	client := openSeeded(t, dataDir)
+
+	record := func(r *signalpb.StorageRecord) *signalmeow.DecryptedStorageRecord {
+		return &signalmeow.DecryptedStorageRecord{StorageRecord: r}
+	}
+
+	tests := []struct {
+		name   string
+		update *signalmeow.StorageUpdate
+	}{
+		{"no manifest", nil},
+		{"missing records", &signalmeow.StorageUpdate{
+			Version:        seededVersion,
+			NewRecords:     []*signalmeow.DecryptedStorageRecord{contactRecord(bobUser, true)},
+			MissingRecords: []string{"ZXZl"},
+		}},
+		{"blocked contact with neither ACI nor number", storageUpdate(seededVersion, record(&signalpb.StorageRecord{
+			Record: &signalpb.StorageRecord_Contact{Contact: &signalpb.ContactRecord{Pni: carolPNI, Blocked: true}},
+		}))},
+		{"blocked group without a valid master key", storageUpdate(seededVersion, record(&signalpb.StorageRecord{
+			Record: &signalpb.StorageRecord_GroupV2{GroupV2: &signalpb.GroupV2Record{MasterKey: []byte{1, 2}, Blocked: true}},
+		}))},
+	}
+
+	for _, test := range tests {
+		var sent []*signalpb.SyncMessage
+
+		err := signal.ApplyBlocked(ctx, client, test.update, []signal.Recipient{{ACI: daveUser}}, true,
+			recordSends(&sent))
+		if !errors.Is(err, signal.ErrBlockedListIncomplete) {
+			t.Errorf("%s: error = %v, want ErrBlockedListIncomplete", test.name, err)
+		}
+
+		if len(sent) != 0 {
+			t.Errorf("%s: sent %v", test.name, sent)
+		}
+
+		// Nothing changed: no override for dave, and the store doesn't have him blocked.
+		wantOverrides(t, client, uuid.MustParse(aliceUser), uuid.MustParse(eveUser), uuid.MustParse(frankUser))
+		wantStoredBlocked(t, dataDir, map[string]bool{daveUser: false})
+	}
+}
+
+// wantOverrideVersion checks the storage service version of aci's override.
+func wantOverrideVersion(t *testing.T, client signal.Client, aci string, want uint64) {
+	t.Helper()
+
+	overrides, err := signal.BlockOverrides(t.Context(), client)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, override := range overrides {
+		if override.ACI == aci && override.StorageVersion != want {
+			t.Errorf("override of %s has storage version %d, want %d", aci, override.StorageVersion, want)
+		}
+	}
 }
 
 func wantOverrides(t *testing.T, client signal.Client, acis ...uuid.UUID) {
@@ -289,9 +570,10 @@ func wantOverrides(t *testing.T, client signal.Client, acis ...uuid.UUID) {
 	}
 }
 
-// blockedUpdate is a storage service update with alice (blocked, with number and time), bob
-// (blocked), carol (not blocked), a blocked number without ACI, and two groups (one blocked).
-func blockedUpdate(blockedKey, otherKey []byte) *signalmeow.StorageUpdate {
+// blockedUpdate is a storage service update at the manifest version with alice (blocked, with
+// number and time), bob (blocked), carol (not blocked), a blocked number without ACI, and two
+// groups (one blocked).
+func blockedUpdate(version uint64, blockedKey, otherKey []byte) *signalmeow.StorageUpdate {
 	alice := uuid.MustParse(aliceUser)
 
 	contact := func(c *signalpb.ContactRecord) *signalmeow.DecryptedStorageRecord {
@@ -305,14 +587,14 @@ func blockedUpdate(blockedKey, otherKey []byte) *signalmeow.StorageUpdate {
 		}}
 	}
 
-	return &signalmeow.StorageUpdate{NewRecords: []*signalmeow.DecryptedStorageRecord{
+	return storageUpdate(version,
 		contact(&signalpb.ContactRecord{AciBinary: alice[:], E164: aliceE164, Blocked: true, BlockedAtTimestamp: 1000}),
 		contact(&signalpb.ContactRecord{Aci: bobUser, Blocked: true}),
 		contact(&signalpb.ContactRecord{Aci: carolUser, E164: "+15550103"}),
 		contact(&signalpb.ContactRecord{E164: "+15550199", Blocked: true}),
 		group(blockedKey, true),
 		group(otherKey, false),
-	}}
+	)
 }
 
 func TestBlockedSyncMessage(t *testing.T) {
@@ -321,7 +603,7 @@ func TestBlockedSyncMessage(t *testing.T) {
 	blockedKey := bytes.Repeat([]byte{1}, libsignalgo.GroupMasterKeyLength)
 	otherKey := bytes.Repeat([]byte{2}, libsignalgo.GroupMasterKeyLength)
 
-	list, err := signal.BlockedFromStorage(blockedUpdate(blockedKey, otherKey))
+	list, err := signal.BlockedFromStorage(blockedUpdate(seededVersion, blockedKey, otherKey))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -370,15 +652,5 @@ func wantBlockedGroup(t *testing.T, msg *signalpb.SyncMessage_Blocked, key []byt
 	groups := msg.GetGroupIds()
 	if len(groups) != 1 || !bytes.Equal(groups[0], groupID[:]) || len(msg.GetBlockedGroups()) != 1 {
 		t.Errorf("groupIds = %x, want only %x", groups, groupID[:])
-	}
-}
-
-func TestBlockedSyncMessageEmpty(t *testing.T) {
-	t.Parallel()
-
-	// No manifest: nothing blocked.
-	empty, err := signal.BlockedFromStorage(nil)
-	if err != nil || len(empty.SyncMessage().GetBlocked().GetAcis()) != 0 {
-		t.Errorf("empty list: %v", err)
 	}
 }
