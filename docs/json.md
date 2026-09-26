@@ -561,6 +561,7 @@ The **identity** object (as in `identities list`) after trusting it.
         "status": "ok",
         "detail": "read-only: no tool sends"
       },
+      { "name": "hook", "status": "ok", "detail": "off" },
       { "name": "transport", "status": "ok", "detail": "stdin/stdout" },
       {
         "name": "account",

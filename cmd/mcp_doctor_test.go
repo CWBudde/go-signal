@@ -122,6 +122,13 @@ func doctorFindings(t *testing.T) []doctorFinding {
 		t.Fatal(err)
 	}
 
+	script := filepath.Join(t.TempDir(), "hook.sh")
+
+	err = os.WriteFile(script, []byte("#!/bin/sh\n"), 0o700) //nolint:gosec // a hook must be executable
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	return []doctorFinding{
 		{
 			name: "lock held",
@@ -182,6 +189,19 @@ func doctorFindings(t *testing.T) []doctorFinding {
 			fake: &signaltest.Fake{Linked: []signal.Account{*testAccount()}, Devices: testDevices()},
 			args: []string{mcpCmd, doctorCmd, readOnlyFlag, downloadDirFlag, missingDownloadDir},
 			want: []string{"ok    policy        read-only"},
+		},
+		{
+			name: "hook",
+			fake: &signaltest.Fake{Linked: []signal.Account{*testAccount()}, Devices: testDevices()},
+			args: doctorArgs("--on-message", script, "--hook-from", aliceNumber),
+			want: []string{"ok    hook          " + script + " for messages of 1 --hook-from entries, timeout 5m0s"},
+		},
+		{
+			name:    "hook without --hook-from",
+			fake:    &signaltest.Fake{Linked: []signal.Account{*testAccount()}, Devices: testDevices()},
+			args:    doctorArgs("--on-message", script),
+			want:    []string{"fail  hook          --on-message needs --hook-from"},
+			wantErr: true,
 		},
 		{
 			name:    "download dir is a file",

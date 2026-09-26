@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -122,6 +123,86 @@ func TestParseAllowlist(t *testing.T) {
 			t.Errorf("%q: all %v, empty %v, %v; want %v, %v",
 				test.entries, list.All(), list.Empty(), err, test.all, test.empty)
 		}
+	}
+}
+
+func TestChatAllowed(t *testing.T) {
+	t.Parallel()
+
+	client, err := groupFake().Factory(t.Context(), signal.Options{})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+
+	t.Cleanup(func() { _ = client.Close() })
+
+	// The hook runs while mcp serve receives, so the client is connected.
+	err = client.Connect(t.Context())
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+
+	a := app.New(client)
+	alice := signal.Chat{Recipient: signal.Recipient{ACI: aliceACI}}
+	group := signal.Chat{GroupID: groupID}
+	own := signal.Chat{Recipient: signal.Recipient{ACI: testAccount().ACI}}
+
+	tests := []struct {
+		name    string
+		entries []string
+		chat    signal.Chat
+		want    bool
+	}{
+		{"number", []string{aliceNumber}, alice, true},
+		{"aci", []string{aliceACI}, alice, true},
+		{"group chat", []string{app.GroupPrefix + groupID}, group, true},
+		{"everyone", []string{app.AllowAll}, group, true},
+		{"other user", []string{bobACI}, alice, false},
+		// A user entry doesn't allow the groups the user is in.
+		{"user in group", []string{aliceNumber}, group, false},
+		// self is note-to-self, whose messages all come from our own devices.
+		{app.SelfRecipient, []string{app.SelfRecipient}, own, false},
+		{"empty", nil, alice, false},
+		{"no chat", []string{app.AllowAll}, signal.Chat{}, true},
+		{"no chat, restricted", []string{aliceNumber}, signal.Chat{}, false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			list, err := app.ParseAllowlist(test.entries)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			got, err := a.ChatAllowed(t.Context(), list, test.chat)
+			if err != nil || got != test.want {
+				t.Errorf("got %v, %v; want %v", got, err, test.want)
+			}
+		})
+	}
+}
+
+func TestAllowlistMissing(t *testing.T) {
+	t.Parallel()
+
+	parse := func(entries ...string) *app.Allowlist {
+		list, err := app.ParseAllowlist(entries)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		return list
+	}
+
+	got := parse(aliceNumber, app.SelfRecipient).Missing(parse(aliceNumber, bobACI, app.AllowAll))
+	if want := []string{bobACI, app.AllowAll}; !slices.Equal(got, want) {
+		t.Errorf("missing %q, want %q", got, want)
+	}
+
+	if got := parse(app.AllowAll).Missing(parse(bobACI)); got != nil {
+		t.Errorf("all: missing %q, want none", got)
 	}
 }
 

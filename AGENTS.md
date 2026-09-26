@@ -41,7 +41,8 @@ Layering, top to bottom:
   Stdout carries only JSON-RPC; the SDK's logs are demoted to debug. While it runs, `app.Inbox`
   receives events into the account's inbox table, which the message tools and resources read.
   The write tools' safety policy lives in `internal/app` (`WithAllowlist`, `SendRequest.AttachDir`);
-  `--read-only` and `--confirm` are handled in `internal/mcp`. `mcp serve --listen` serves the
+  `--read-only` and `--confirm` are handled in `internal/mcp`, and so is `--on-message`, which runs a
+  program for incoming messages of the `--hook-from` chats (`hook.go`). `mcp serve --listen` serves the
   same server over streamable HTTP (`mcp.ServeHTTP`, bearer token, loopback only). User docs:
   `docs/mcp.md`.
 - `internal/output/`: plain/JSON renderers. The JSON schema is documented in `docs/json.md` and

@@ -87,6 +87,8 @@ type Fake struct {
 	// ContactsErr makes Contacts and Contact fail; SetBlockedErr makes SetBlocked fail.
 	ContactsErr   error
 	SetBlockedErr error
+	// ResolveHangs makes Resolve wait until its context ends, like a lookup that stalls.
+	ResolveHangs bool
 
 	// GroupInfo are the groups on the server with their full state, by ID: Groups lists them,
 	// and Group and LeaveGroup find them by ID (or master key, see GroupKeys). Membership and
@@ -423,7 +425,17 @@ func (c *client) Download(_ context.Context, att signal.Attachment) ([]byte, err
 	return slices.Clone(data), nil
 }
 
-func (c *client) Resolve(_ context.Context, recipients []signal.Recipient) ([]signal.Recipient, error) {
+func (c *client) Resolve(ctx context.Context, recipients []signal.Recipient) ([]signal.Recipient, error) {
+	c.fake.mu.Lock()
+	hangs := c.fake.ResolveHangs
+	c.fake.mu.Unlock()
+
+	if hangs {
+		<-ctx.Done()
+
+		return nil, fmt.Errorf("resolve: %w", ctx.Err())
+	}
+
 	c.fake.mu.Lock()
 	defer c.fake.mu.Unlock()
 
