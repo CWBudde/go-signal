@@ -39,8 +39,9 @@ was unlinked from the account.
 
 Plain output prints one line per event: "[time] <sender> → <dest>: <text>", with placeholders
 such as [attachment image/jpeg 12.3 KB photo.jpg] or [unsupported call] for content that can't
-be shown as text. "me" is this account. With -o json, every event (including connection
-changes) is one JSON document per line (NDJSON, see docs/json.md).
+be shown as text. "me" is this account; other users show by name (nickname, phone contact or
+profile name, as "contacts list" shows them), else by number or ACI. With -o json, every event
+(including connection changes) is one JSON document per line (NDJSON, see docs/json.md).
 
 --download-attachments <dir> saves the attachments of received messages (view-once ones too)
 to dir, which is created if missing, as "<timestamp>-<n>-<name>", where name is the sender's file
@@ -147,7 +148,7 @@ func receive(ctx context.Context, clients *clientOpener, printer *output.Printer
 		opts.receipts = app.New(client).ReadReceipts()
 	}
 
-	return receiveEvents(ctx, client.Events(), newEventPrinter(printer, client, opts.downloadDir), opts)
+	return receiveEvents(ctx, client.Events(), newEventPrinter(ctx, printer, client, opts.downloadDir), opts)
 }
 
 // receiveEvents prints events until opts says to stop, the connection is lost for good, or ctx
@@ -225,7 +226,7 @@ func handleEvent(ctx context.Context, printer eventPrinter, evt signal.Event, re
 }
 
 // hasContent reports whether evt counts toward --max: anything but connection changes and
-// queueEmpty.
+// queueEmpty (identity changes count).
 func hasContent(evt signal.Event) bool {
 	switch evt.(type) {
 	case *signal.Connection, *signal.QueueEmpty:

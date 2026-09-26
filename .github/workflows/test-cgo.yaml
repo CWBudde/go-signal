@@ -44,7 +44,7 @@ jobs:
         working-directory: third_party/libsignal
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends protobuf-compiler clang cmake
+          sudo apt-get install -y --no-install-recommends protobuf-compiler libprotobuf-dev clang cmake
           # Installs the toolchain pinned by the submodule's rust-toolchain file.
           rustup toolchain install --profile minimal
 

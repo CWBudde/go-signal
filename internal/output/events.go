@@ -17,7 +17,7 @@ import (
 // log. JSON output is one document per line (NDJSON) for every event, as docs/json.md describes.
 func (p *Printer) Event(evt signal.Event) error {
 	if p.format == JSON {
-		return p.writeJSON(eventDoc(evt))
+		return p.writeJSON(p.eventDoc(evt))
 	}
 
 	line := p.eventLine(evt)
@@ -33,7 +33,7 @@ func (p *Printer) Event(evt signal.Event) error {
 // download failed.
 func (p *Printer) SavedMessage(msg *signal.Message, saved []app.SavedAttachment) error {
 	if p.format == JSON {
-		return p.writeJSON(messageDocOf(msg, saved))
+		return p.writeJSON(p.messageDocOf(msg, saved))
 	}
 
 	return p.writeLine(p.envelopeLine(msg.Envelope, p.messageText(msg, saved)))
@@ -59,6 +59,7 @@ const (
 	typeReadSync          = "readSync"
 	typeUnsupported       = "unsupported"
 	typeDecryptionFailure = "decryptionFailure"
+	typeIdentityChanged   = "identityChanged"
 	typeQueueEmpty        = "queueEmpty"
 	typeConnection        = "connection"
 )
@@ -69,15 +70,23 @@ type recipientJSON struct {
 	PNI      string `json:"pni,omitempty"`
 	Number   string `json:"number,omitempty"`
 	Username string `json:"username,omitempty"`
+	Name     string `json:"name,omitempty"`
 }
 
-func recipient(r signal.Recipient) recipientJSON {
+// bareRecipient converts r without a name, for the exported converters.
+func bareRecipient(r signal.Recipient) recipientJSON {
 	return recipientJSON{ACI: r.ACI, PNI: r.PNI, Number: r.Number, Username: r.Username}
 }
 
+// recipient converts r, with its name if the printer knows it (see SetNames).
+func (p *Printer) recipient(r signal.Recipient) recipientJSON {
+	return recipientJSON{ACI: r.ACI, PNI: r.PNI, Number: r.Number, Username: r.Username, Name: p.names.Name(r)}
+}
+
 type chatJSON struct {
-	GroupID   string         `json:"groupId,omitempty"`
-	Recipient *recipientJSON `json:"recipient,omitempty"`
+	GroupID    string         `json:"groupId,omitempty"`
+	GroupTitle string         `json:"groupTitle,omitempty"`
+	Recipient  *recipientJSON `json:"recipient,omitempty"`
 }
 
 type eventHead struct {
@@ -99,9 +108,9 @@ type envelopeJSON struct {
 	Sync       bool          `json:"sync"`
 }
 
-func envelope(env signal.Envelope) envelopeJSON {
+func (p *Printer) envelope(env signal.Envelope) envelopeJSON {
 	out := envelopeJSON{
-		Sender:     recipient(env.Sender),
+		Sender:     p.recipient(env.Sender),
 		Timestamp:  env.Timestamp,
 		Time:       msTime(env.Timestamp),
 		ServerTime: msTime(env.ServerTimestamp),
@@ -111,8 +120,9 @@ func envelope(env signal.Envelope) envelopeJSON {
 	switch {
 	case env.Chat.IsGroup():
 		out.Chat.GroupID = env.Chat.GroupID
+		out.Chat.GroupTitle = p.names.GroupTitle(env.Chat.GroupID)
 	case !env.Chat.Recipient.IsZero():
-		rcpt := recipient(env.Chat.Recipient)
+		rcpt := p.recipient(env.Chat.Recipient)
 		out.Chat.Recipient = &rcpt
 	}
 
@@ -222,6 +232,15 @@ type decryptionFailureDoc struct {
 	Error     string        `json:"error,omitempty"`
 }
 
+type identityChangedDoc struct {
+	eventHead
+
+	Recipient      recipientJSON `json:"recipient"`
+	OldFingerprint string        `json:"oldFingerprint,omitempty"`
+	NewFingerprint string        `json:"newFingerprint"`
+	Time           time.Time     `json:"time,omitzero"`
+}
+
 type connectionDoc struct {
 	eventHead
 
@@ -230,27 +249,27 @@ type connectionDoc struct {
 }
 
 //nolint:cyclop // one case per event type
-func eventDoc(evt signal.Event) any {
+func (p *Printer) eventDoc(evt signal.Event) any {
 	switch evt := evt.(type) {
 	case *signal.Message:
-		return messageDocOf(evt, nil)
+		return p.messageDocOf(evt, nil)
 	case *signal.Edit:
 		return editDoc{
-			eventHead: head(typeEdit), envelopeJSON: envelope(evt.Envelope),
+			eventHead: head(typeEdit), envelopeJSON: p.envelope(evt.Envelope),
 			TargetTimestamp: evt.TargetTimestamp, Body: evt.Body,
 		}
 	case *signal.Delete:
 		return deleteDoc{
-			eventHead: head(typeDelete), envelopeJSON: envelope(evt.Envelope), TargetTimestamp: evt.TargetTimestamp,
+			eventHead: head(typeDelete), envelopeJSON: p.envelope(evt.Envelope), TargetTimestamp: evt.TargetTimestamp,
 		}
 	case *signal.Reaction:
 		return reactionDoc{
-			eventHead: head(typeReaction), envelopeJSON: envelope(evt.Envelope),
+			eventHead: head(typeReaction), envelopeJSON: p.envelope(evt.Envelope),
 			Emoji: evt.Emoji, Remove: evt.Remove,
-			TargetAuthor: recipient(evt.TargetAuthor), TargetTimestamp: evt.TargetTimestamp,
+			TargetAuthor: p.recipient(evt.TargetAuthor), TargetTimestamp: evt.TargetTimestamp,
 		}
 	case *signal.Typing:
-		return typingDoc{eventHead: head(typeTyping), envelopeJSON: envelope(evt.Envelope), Action: typingAction(evt)}
+		return typingDoc{eventHead: head(typeTyping), envelopeJSON: p.envelope(evt.Envelope), Action: typingAction(evt)}
 	case *signal.Receipt:
 		timestamps := evt.Timestamps
 		if timestamps == nil {
@@ -258,24 +277,29 @@ func eventDoc(evt signal.Event) any {
 		}
 
 		return receiptDoc{
-			eventHead: head(typeReceipt), Sender: recipient(evt.Sender),
+			eventHead: head(typeReceipt), Sender: p.recipient(evt.Sender),
 			ReceiptType: evt.Type.String(), Timestamps: timestamps,
 		}
 	case *signal.ReadSync:
 		marks := make([]readMarkJSON, 0, len(evt.Messages))
 		for _, mark := range evt.Messages {
-			marks = append(marks, readMarkJSON{Sender: recipient(mark.Sender), Timestamp: mark.Timestamp})
+			marks = append(marks, readMarkJSON{Sender: p.recipient(mark.Sender), Timestamp: mark.Timestamp})
 		}
 
 		return readSyncDoc{
 			eventHead: head(typeReadSync), Timestamp: evt.Timestamp, Time: msTime(evt.Timestamp), Messages: marks,
 		}
 	case *signal.Unsupported:
-		return unsupportedDoc{eventHead: head(typeUnsupported), envelopeJSON: envelope(evt.Envelope), Content: evt.Type}
+		return unsupportedDoc{eventHead: head(typeUnsupported), envelopeJSON: p.envelope(evt.Envelope), Content: evt.Type}
 	case *signal.DecryptionFailure:
 		return decryptionFailureDoc{
-			eventHead: head(typeDecryptionFailure), Sender: recipient(evt.Sender),
+			eventHead: head(typeDecryptionFailure), Sender: p.recipient(evt.Sender),
 			Timestamp: evt.Timestamp, Time: msTime(evt.Timestamp), Error: errorText(evt.Err),
+		}
+	case *signal.IdentityChanged:
+		return identityChangedDoc{
+			eventHead: head(typeIdentityChanged), Recipient: p.recipient(evt.Recipient),
+			OldFingerprint: evt.OldFingerprint, NewFingerprint: evt.NewFingerprint, Time: utc(evt.Time),
 		}
 	case *signal.QueueEmpty:
 		return head(typeQueueEmpty)
@@ -287,10 +311,10 @@ func eventDoc(evt signal.Event) any {
 }
 
 // messageDocOf renders msg; saved is nil or has one entry per attachment.
-func messageDocOf(msg *signal.Message, saved []app.SavedAttachment) messageDoc {
+func (p *Printer) messageDocOf(msg *signal.Message, saved []app.SavedAttachment) messageDoc {
 	doc := messageDoc{
 		eventHead:    head(typeMessage),
-		envelopeJSON: envelope(msg.Envelope),
+		envelopeJSON: p.envelope(msg.Envelope),
 		Body:         msg.Body,
 		ViewOnce:     msg.ViewOnce,
 		Unsupported:  msg.Unsupported,
@@ -313,7 +337,7 @@ func messageDocOf(msg *signal.Message, saved []app.SavedAttachment) messageDoc {
 
 	if msg.Quote != nil {
 		doc.Quote = &quoteJSON{
-			Author: recipient(msg.Quote.Author), Timestamp: msg.Quote.Timestamp, Text: msg.Quote.Text,
+			Author: p.recipient(msg.Quote.Author), Timestamp: msg.Quote.Timestamp, Text: msg.Quote.Text,
 		}
 	}
 
@@ -375,8 +399,10 @@ func (p *Printer) eventLine(evt signal.Event) string {
 	case *signal.Unsupported:
 		return p.envelopeLine(evt.Envelope, "[unsupported "+evt.Type+"]")
 	case *signal.DecryptionFailure:
-		return p.timePrefix(evt.Timestamp) + who(evt.Sender) + " → " + self + ": [decryption failed: " +
+		return p.timePrefix(evt.Timestamp) + p.who(evt.Sender) + " → " + self + ": [decryption failed: " +
 			oneLine(errorText(evt.Err)) + "]"
+	case *signal.IdentityChanged:
+		return p.identityChangedLine(evt)
 	case *signal.QueueEmpty, *signal.Connection:
 		return ""
 	default:
@@ -387,19 +413,19 @@ func (p *Printer) eventLine(evt signal.Event) string {
 // envelopeLine is `[time] <sender> → <dest>: text`. Sync transcripts are sent by us ("me") to
 // the chat; other 1:1 messages are sent to us. A sync event without a chat is `[time] me: text`.
 func (p *Printer) envelopeLine(env signal.Envelope, text string) string {
-	route := who(env.Sender) + " → " + self
+	route := p.who(env.Sender) + " → " + self
 
 	switch {
 	case env.Chat.IsGroup() && env.Sync:
-		route = self + " → group:" + env.Chat.GroupID
+		route = self + " → " + p.groupLabel(env.Chat.GroupID)
 	case env.Chat.IsGroup():
-		route = who(env.Sender) + " → group:" + env.Chat.GroupID
+		route = p.who(env.Sender) + " → " + p.groupLabel(env.Chat.GroupID)
 	case env.Sync && env.Chat.Recipient.IsZero():
 		route = self
 	case env.Sync && env.Chat.Recipient == env.Sender:
 		route = self + " → " + self
 	case env.Sync:
-		route = self + " → " + who(env.Chat.Recipient)
+		route = self + " → " + p.who(env.Chat.Recipient)
 	}
 
 	return p.timePrefix(env.Timestamp) + route + ": " + text
@@ -410,7 +436,7 @@ func (p *Printer) messageText(msg *signal.Message, saved []app.SavedAttachment) 
 	var parts []string
 
 	if msg.Quote != nil {
-		quote := "[quote " + who(msg.Quote.Author) + " " + p.msDateTime(msg.Quote.Timestamp)
+		quote := "[quote " + p.who(msg.Quote.Author) + " " + p.msDateTime(msg.Quote.Timestamp)
 		if msg.Quote.Text != "" {
 			quote += ": " + oneLine(truncate(msg.Quote.Text, quoteLength))
 		}
@@ -482,7 +508,7 @@ func attachmentText(att signal.Attachment, viewOnce bool, saved *app.SavedAttach
 }
 
 func (p *Printer) reactionText(evt *signal.Reaction) string {
-	target := "message of " + who(evt.TargetAuthor) + " sent " + p.msDateTime(evt.TargetTimestamp)
+	target := "message of " + p.who(evt.TargetAuthor) + " sent " + p.msDateTime(evt.TargetTimestamp)
 	if evt.Remove {
 		return "[removed reaction " + oneLine(evt.Emoji) + " from " + target + "]"
 	}
@@ -502,17 +528,29 @@ func (p *Printer) receiptLine(evt *signal.Receipt) string {
 		noun = "message"
 	}
 
-	return who(evt.Sender) + " → " + self + ": [" + evt.Type.String() + " receipt for " + noun + " sent " +
+	return p.who(evt.Sender) + " → " + self + ": [" + evt.Type.String() + " receipt for " + noun + " sent " +
 		strings.Join(sent, ", ") + "]"
 }
 
 func (p *Printer) readSyncLine(evt *signal.ReadSync) string {
 	marks := make([]string, 0, len(evt.Messages))
 	for _, mark := range evt.Messages {
-		marks = append(marks, who(mark.Sender)+" "+p.msDateTime(mark.Timestamp))
+		marks = append(marks, p.who(mark.Sender)+" "+p.msDateTime(mark.Timestamp))
 	}
 
 	return p.timePrefix(evt.Timestamp) + self + ": [read on another device: " + strings.Join(marks, ", ") + "]"
+}
+
+// identityChangedLine is `[time] <user>: [safety number changed …]`, with the command that
+// unblocks sending.
+func (p *Printer) identityChangedLine(evt *signal.IdentityChanged) string {
+	prefix := ""
+	if !evt.Time.IsZero() {
+		prefix = "[" + p.dateTime(evt.Time) + "] "
+	}
+
+	return prefix + p.who(evt.Recipient) + ": [safety number changed; sending to them is blocked until you run: " +
+		"go-signal identities trust " + evt.Recipient.String() + "]"
 }
 
 // timePrefix is "[time] " for a Signal timestamp, or "" when it is unknown.
@@ -530,13 +568,21 @@ func (p *Printer) msDateTime(ms uint64) string {
 	return p.dateTime(msTime(ms))
 }
 
-// who names a user in plain output (their ACI until names are resolved).
-func who(r signal.Recipient) string {
-	if r.IsZero() {
+// who names a user in plain output: "me" for the account, else the label from the names (see
+// SetNames), else their ACI (or number).
+func (p *Printer) who(rcpt signal.Recipient) string {
+	switch {
+	case rcpt.IsZero():
 		return "unknown"
+	case p.names.IsSelf(rcpt):
+		return self
 	}
 
-	return r.String()
+	if label := p.names.Label(rcpt); label != "" {
+		return oneLine(label)
+	}
+
+	return rcpt.String()
 }
 
 // Size units for humanSize.
@@ -568,6 +614,16 @@ func truncate(s string, n int) string {
 	}
 
 	return string(runes[:n-1]) + "…"
+}
+
+// groupLabel names a group in plain output: `group "<title>"` if the printer knows its title
+// (see SetNames), else `group:<id>`.
+func (p *Printer) groupLabel(groupID string) string {
+	if title := p.names.GroupTitle(groupID); title != "" {
+		return "group " + strconv.Quote(title)
+	}
+
+	return "group:" + groupID
 }
 
 // oneLine escapes line breaks and other control characters, so that an event stays on one line

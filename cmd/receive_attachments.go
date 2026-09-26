@@ -13,9 +13,10 @@ import (
 // eventPrinter prints received events. With a download dir (--download-attachments), it saves
 // the attachments of a message first, so that the output can show their paths.
 type eventPrinter struct {
-	out *output.Printer
-	app *app.App
-	dir string
+	out   *output.Printer
+	app   *app.App
+	dir   string
+	names *app.NameBook
 }
 
 // prepareDownloadDir checks (and creates) the --download-attachments dir, if one is given,
@@ -33,11 +34,31 @@ func prepareDownloadDir(dir string) error {
 	return nil
 }
 
-func newEventPrinter(out *output.Printer, client signal.Client, dir string) eventPrinter {
-	return eventPrinter{out: out, app: app.New(client), dir: dir}
+// newEventPrinter returns an eventPrinter that shows the names of the contacts in the store (see
+// app.NameBook), loaded now and reloaded as events name users without a name.
+func newEventPrinter(ctx context.Context, out *output.Printer, client signal.Client, dir string) eventPrinter {
+	use := app.New(client)
+
+	names, err := use.NameBook(ctx)
+	if err != nil {
+		slog.Debug("names not loaded", "error", err)
+	}
+
+	out.SetNames(names.Names())
+
+	return eventPrinter{out: out, app: use, dir: dir, names: names}
 }
 
 func (p eventPrinter) print(ctx context.Context, evt signal.Event) error {
+	reloaded, err := p.names.Refresh(ctx, evt)
+	if err != nil {
+		slog.Debug("names not reloaded", "error", err)
+	}
+
+	if reloaded {
+		p.out.SetNames(p.names.Names())
+	}
+
 	msg, ok := evt.(*signal.Message)
 	if !ok || p.dir == "" || len(msg.Attachments) == 0 {
 		return p.out.Event(evt) //nolint:wrapcheck // the caller wraps it

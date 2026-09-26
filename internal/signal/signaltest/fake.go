@@ -55,6 +55,15 @@ type Fake struct {
 	// DownloadErrs makes downloading the attachments with these CDN keys fail.
 	DownloadErrs map[string]error
 
+	// Identities are the stored identity keys of other users (Identities, SafetyNumber,
+	// TrustIdentity; see SafetyNumberOf). Sending to a user whose key is signal.TrustUntrusted
+	// fails with signal.UntrustedError. An *signal.IdentityChanged in Incoming changes the user's
+	// key to its NewFingerprint and makes it untrusted when Connect runs, also with SendOnly, as
+	// the real client does when it decrypts the message that carries the new key.
+	Identities []signal.Identity
+	// IdentitiesErr makes Identities, SafetyNumber and TrustIdentity fail.
+	IdentitiesErr error
+
 	// OpenErr, LinkErr, ConnectErr, UploadErr, SendErr and DevicesErr make the respective call
 	// fail.
 	OpenErr    error
@@ -67,6 +76,39 @@ type Fake struct {
 	UnlinkErr error
 	// ReceiptErr makes SendReceipt fail.
 	ReceiptErr error
+	// SyncResult and SyncErr are what Sync returns once connected, e.g. a partial result with an
+	// error wrapping signal.ErrSyncIncomplete.
+	SyncResult signal.SyncResult
+	SyncErr    error
+	// Contacts are the users in the store, for Contacts and Contact (our own account among them
+	// is left out of Contacts, like the real client does). SetBlocked sets their Blocked flag
+	// and adds the users it doesn't know.
+	Contacts []signal.Contact
+	// ContactsErr makes Contacts and Contact fail; SetBlockedErr makes SetBlocked fail.
+	ContactsErr   error
+	SetBlockedErr error
+
+	// GroupInfo are the groups on the server with their full state, by ID: Groups lists them,
+	// and Group and LeaveGroup find them by ID (or master key, see GroupKeys). Membership and
+	// Role are filled in for the connected account like the real client does. Send knows their
+	// members too, unless Groups has an entry for the same ID.
+	GroupInfo map[string]signal.Group
+	// GroupTitleCache is the title cache that GroupTitles returns, by group ID. Like the real
+	// client, Groups, Group and LeaveGroup record the groups they fetch in it (a fetch without a
+	// title keeps the cached one); seed it for groups fetched in an earlier run.
+	GroupTitleCache map[string]signal.CachedGroup
+	// GroupTitlesErr makes GroupTitles fail.
+	GroupTitlesErr error
+	// GroupKeys maps base64 master keys to group IDs, as deriving the ID from a master key does.
+	GroupKeys map[string]string
+	// GroupErrs makes fetching these groups (by ID) fail. Groups lists a group failing with
+	// signal.ErrNotAMember or signal.ErrUnknownGroup with Err set (also IDs missing from
+	// GroupInfo); other errors fail the whole list.
+	GroupErrs map[string]error
+	// LeaveErr makes LeaveGroup fail after its checks.
+	LeaveErr error
+	// LeaveTime is what LeaveGroup records as Group.LeftAt; zero means now.
+	LeaveTime time.Time
 
 	mu        sync.Mutex
 	opened    []signal.Options
@@ -75,9 +117,13 @@ type Fake struct {
 	connects  []string
 	unlinks   []UnlinkCall
 	receipts  []ReceiptCall
+	syncs     []string
 	delivered int
 	nextTS    uint64
 	clients   []*client
+	blocks    []BlockCall
+	leaves    []LeaveCall
+	left      map[string]time.Time // groups left with LeaveGroup, by ID
 }
 
 // Factory is a signal.Factory that opens clients on f.
@@ -150,6 +196,14 @@ func (f *Fake) Receipts() []ReceiptCall {
 	defer f.mu.Unlock()
 
 	return append([]ReceiptCall(nil), f.receipts...)
+}
+
+// Syncs returns the ACI of the account each Sync that got past the connection checks used.
+func (f *Fake) Syncs() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	return append([]string(nil), f.syncs...)
 }
 
 // UnlinkCall records a successful Unlink.
@@ -291,6 +345,10 @@ func (c *client) Connect(_ context.Context, opts ...signal.ConnectOption) error 
 			evt = &signal.Connection{State: signal.StateLoggedOut, Err: c.fake.markUnlinked(acc)}
 		}
 
+		if changed, ok := evt.(*signal.IdentityChanged); ok {
+			c.fake.changeIdentity(changed)
+		}
+
 		incoming = append(incoming, evt)
 	}
 
@@ -422,6 +480,10 @@ func (c *client) Send(_ context.Context, req signal.SendRequest) (signal.SendRes
 
 	for _, rcpt := range recipients {
 		result := signal.RecipientResult{Recipient: rcpt, Err: c.fake.SendFailures[rcpt.ACI]}
+		if result.Err == nil && c.fake.untrusted(rcpt.ACI) {
+			result.Err = signal.UntrustedError(rcpt)
+		}
+
 		// Sealed sender, except for the sync transcript of a note-to-self.
 		result.Unidentified = result.Err == nil && rcpt.ACI != c.connected
 		res.Results = append(res.Results, result)
@@ -456,6 +518,39 @@ func (c *client) SendReceipt(
 	})
 
 	return nil
+}
+
+func (c *client) Sync(_ context.Context, opts signal.SyncOptions) (signal.SyncResult, error) {
+	c.fake.mu.Lock()
+
+	switch {
+	case c.closed:
+		c.fake.mu.Unlock()
+
+		return signal.SyncResult{}, signal.ErrClosed
+	case c.connected == "":
+		c.fake.mu.Unlock()
+
+		return signal.SyncResult{}, signal.ErrNotConnected
+	case c.lost != nil:
+		c.fake.mu.Unlock()
+
+		return signal.SyncResult{}, fmt.Errorf("sync: %w", c.lost)
+	}
+
+	c.fake.syncs = append(c.fake.syncs, c.connected)
+	res, err := c.fake.SyncResult, c.fake.SyncErr
+	c.fake.mu.Unlock()
+
+	// Outside the lock, in case Progress calls back into the fake. The storage key is always
+	// known.
+	for _, stage := range []signal.SyncStage{
+		signal.SyncRequestingContacts, signal.SyncFetchingStorage, signal.SyncWaitingForContacts, signal.SyncDone,
+	} {
+		opts.Report(stage)
+	}
+
+	return res, err
 }
 
 // lostError returns the error of the first event in incoming that ends the connection for good.
@@ -623,6 +718,10 @@ func (c *client) sendTo(req signal.SendRequest) ([]signal.Recipient, error) {
 	}
 
 	members, ok := c.fake.Groups[req.GroupID]
+	if !ok {
+		members, ok = c.fake.groupMembers(req.GroupID)
+	}
+
 	if !ok {
 		return nil, fmt.Errorf("%w %s (fake)", signal.ErrUnknownGroup, req.GroupID)
 	}

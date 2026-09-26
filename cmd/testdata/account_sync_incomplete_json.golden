@@ -1,0 +1,1 @@
+{"version":1,"sync":{"contacts":5,"groups":3,"masterKey":true,"storage":true,"contactList":false,"complete":false,"missing":["contact list"],"error":"sync incomplete (missing contact list): wait for contact list: context deadline exceeded"}}

@@ -50,6 +50,11 @@ func TestOpenWithoutAccount(t *testing.T) {
 		t.Errorf("Send: got %v, want ErrNotConnected", err)
 	}
 
+	_, err = client.Sync(ctx, signal.SyncOptions{})
+	if !errors.Is(err, signal.ErrNotConnected) {
+		t.Errorf("Sync: got %v, want ErrNotConnected", err)
+	}
+
 	err = client.Close()
 	if err != nil {
 		t.Fatalf("close: %v", err)
@@ -185,6 +190,56 @@ func TestAccountDetailsFromAccountsJSON(t *testing.T) {
 	acc, err := client.Account(t.Context())
 	if err != nil || acc.DeviceName != deviceName || !acc.LinkedAt.Equal(linkedAt) || acc.PNI == "" {
 		t.Errorf("got %+v, %v", acc, err)
+	}
+}
+
+// TestCloseWaitsForOperations checks that Close keeps the store open until every running
+// operation has returned, also past the drain timeout.
+func TestCloseWaitsForOperations(t *testing.T) {
+	t.Parallel()
+
+	client, err := signal.Open(t.Context(), signal.Options{DataDir: seedAccount(t)})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Opens the store.
+	_, err = client.GroupTitles(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	signal.SetDrainTimeout(client, time.Millisecond)
+
+	read, end, ok := signal.BeginOperation(client)
+	if !ok {
+		t.Fatal("operation refused before Close")
+	}
+
+	closed := make(chan error, 1)
+
+	go func() { closed <- client.Close() }()
+
+	select {
+	case err := <-closed:
+		t.Fatalf("Close returned while an operation was running: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	err = read(t.Context())
+	if err != nil {
+		t.Errorf("store closed under a running operation: %v", err)
+	}
+
+	if _, _, ok := signal.BeginOperation(client); ok {
+		t.Error("operation started during Close")
+	}
+
+	end()
+
+	err = <-closed
+	if err != nil {
+		t.Errorf("close: %v", err)
 	}
 }
 

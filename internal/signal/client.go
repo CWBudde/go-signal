@@ -76,6 +76,19 @@ type Client interface { //nolint:interfacebloat // the one facade over signalmeo
 	// unknown type or no timestamps.
 	SendReceipt(ctx context.Context, sender Recipient, typ ReceiptType, timestamps []uint64) error
 
+	// Sync fetches the account's contacts and groups from the phone and the storage service
+	// into the store, as right after Link: it asks the phone for its contact list, makes sure
+	// the storage service key is known (asking the phone for it if not), fetches the storage
+	// service (contacts with names, numbers, profile keys and blocked state; group master keys;
+	// the account record), and waits for the contact list. It needs Connect (ErrNotConnected;
+	// SendOnly is enough) and fails with ErrClosed after Close.
+	//
+	// ctx bounds the whole sync. When it ends first, or a part fails (e.g. the storage service),
+	// Sync returns the result so far with an error wrapping ErrSyncIncomplete and the cause;
+	// what did arrive is stored. Other errors (such as a connection lost for good, e.g.
+	// ErrDeviceUnlinked) mean that nothing was synced. opts.Progress reports the stages.
+	Sync(ctx context.Context, opts SyncOptions) (SyncResult, error)
+
 	// Devices lists all devices of the selected account as the server knows them. It needs
 	// neither Connect nor the account lock. Like Connect, it fails with ErrDeviceUnlinked on an
 	// account marked as unlinked, and marks the account when the server rejects the device.
@@ -89,10 +102,93 @@ type Client interface { //nolint:interfacebloat // the one facade over signalmeo
 	// accounts.json.
 	Unlink(ctx context.Context, opts UnlinkOptions) (Account, error)
 
-	// Close shuts down gracefully: it waits for in-flight sends (later ones fail with
-	// ErrClosed), makes sure the acks of events read from Events reach the server, disconnects
-	// and releases the store.
+	// Close shuts down gracefully: it waits for in-flight sends (later ones and every other
+	// method that fails with ErrClosed are refused), makes sure the acks of events read from
+	// Events reach the server, disconnects and releases the store. Sends get a few seconds before
+	// it disconnects; the store is only released once every running method has returned.
 	Close() error
+
+	// Contacts returns the users the store knows with a name or number, and those we blocked,
+	// without the account itself, in no particular order. It reads only the store (filled by
+	// Sync, the storage service and received messages) and needs no Connect. A pending block or
+	// unblock made with SetBlocked shows even while the store is still being overridden by
+	// the storage service (see BlockOverrideTTL). It fails with ErrClosed after Close.
+	Contacts(ctx context.Context) ([]Contact, error)
+
+	// Contact returns what the store knows about one user, looked up by ACI, else PNI, else
+	// number (a username alone is not stored; Resolve it first). Our own account can be looked
+	// up, too. It reads only the store and needs no Connect. A user the store doesn't know fails
+	// with ErrUnknownContact.
+	Contact(ctx context.Context, rcpt Recipient) (Contact, error)
+
+	// SetBlocked blocks (or unblocks) the recipients, which need their ACI (see Resolve;
+	// ErrUnresolvable otherwise). It reads the current blocked list (users and groups) from the
+	// storage service (ErrStorageKeyUnknown if its key is unknown), applies the change and sends
+	// the complete list to our other devices as a blocked-list sync message: the phone replaces
+	// its list with it and updates the storage service itself. So the list must be complete: if
+	// the storage service has no manifest, records couldn't be read, or a blocked entry can't be
+	// put in the message, it fails with ErrBlockedListIncomplete. Once the list went out, the
+	// store is updated and the change is kept against storage syncs that still say otherwise
+	// until the storage service has changed since (the phone wrote it, so its state wins), or for
+	// BlockOverrideTTL. It needs Connect (ErrNotConnected; SendOnly is enough) and fails with
+	// ErrClosed after Close. An error such as a sync message that didn't go out or a connection
+	// lost for good means that nothing changed; only an error from the store after the list went
+	// out (it says so) leaves the store behind the phone.
+	SetBlocked(ctx context.Context, recipients []Recipient, blocked bool) error
+
+	// Identities lists the identity keys stored for other users, by ACI, with their trust level
+	// (see TrustLevel). With rcpt (which needs its ACI, see Resolve) only that user's key is
+	// listed, or none. It works on the local store, without Connect or the account lock.
+	//
+	// Trust is on first use: the first key seen for a user is trusted without verification. A
+	// key that changes later, while receiving from or sending to them, is untrusted: go-signal
+	// logs a warning, reports an *IdentityChanged event on Events, and fails every send to them
+	// with ErrUntrustedIdentity (see UntrustedError) until TrustIdentity. Receiving keeps working.
+	Identities(ctx context.Context, rcpt *Recipient) ([]Identity, error)
+
+	// SafetyNumber returns the safety number of our account and rcpt (which needs its ACI) for
+	// their current identity key, as the Signal apps show it, with the key's Identity. It fails
+	// with ErrUnknownIdentity when no key is stored for them. Like Identities it only reads the
+	// local store.
+	SafetyNumber(ctx context.Context, rcpt Recipient) (SafetyNumber, error)
+
+	// TrustIdentity trusts rcpt's current identity key, so that sending to them works again after
+	// a change. Without safetyNumber the key becomes TrustUnverified (a key that is already
+	// verified stays so); with it, the key becomes TrustVerified if safetyNumber (60 digits, white
+	// space ignored) is the current one, and otherwise nothing changes and it fails with
+	// ErrSafetyNumberMismatch (or ErrInvalidSafetyNumber). It fails with ErrUnknownIdentity when
+	// no key is stored for them. It works on the local store, also while another process is
+	// connected; that process sees the new trust level with its next send.
+	TrustIdentity(ctx context.Context, rcpt Recipient, safetyNumber string) (Identity, error)
+
+	// Groups fetches the state of every group whose master key the store holds (from a sync or
+	// a group message) from the server, sorted by title (see SortGroups). A group the server
+	// doesn't show us (ErrNotAMember, e.g. we left or were removed) or doesn't know
+	// (ErrUnknownGroup) is still listed, with Group.Err set and its last known title; any other
+	// failure fails the whole list. Every group fetched updates the title cache (see
+	// GroupTitles). It needs Connect (ErrNotConnected; SendOnly is enough) and fails with
+	// ErrClosed after Close, and with the error of a connection lost for good (such as
+	// ErrDeviceUnlinked).
+	Groups(ctx context.Context) ([]Group, error)
+
+	// Group fetches the state of one group from the server, like Groups. ref is the group's ID
+	// or its master key, both 32 bytes in standard base64: it is looked up as an ID first, then
+	// as a master key. A group whose master key the store doesn't hold fails with
+	// ErrUnknownGroup; one the server doesn't show us with ErrNotAMember.
+	Group(ctx context.Context, ref string) (Group, error)
+
+	// LeaveGroup leaves the group ref (as for Group): it removes us as a member, declines an
+	// invitation or cancels a join request, and tells the other members. See Group.CheckLeave
+	// for when that is refused (ErrNotAMember, ErrLastAdmin, ErrInvalidPromotion); opts.Promote
+	// makes members admins in the same change. The group's master key stays in the store, and
+	// the title cache remembers that we left (Group.LeftAt). A change that conflicts with one made
+	// meanwhile fails with ErrGroupChanged. It needs Connect like Group.
+	LeaveGroup(ctx context.Context, ref string, opts LeaveOptions) (LeaveResult, error)
+
+	// GroupTitles returns what the title cache knows about the groups fetched before (by Groups,
+	// Group or LeaveGroup), by group ID, from the store: it needs no Connect. Groups never fetched
+	// are missing. It fails with ErrClosed after Close.
+	GroupTitles(ctx context.Context) (map[string]CachedGroup, error)
 }
 
 // Options configures a Client.

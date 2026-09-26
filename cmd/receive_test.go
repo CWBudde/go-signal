@@ -36,6 +36,15 @@ func run(t *testing.T, fake *signaltest.Fake, args ...string) (string, error) {
 func runContext(t *testing.T, ctx context.Context, fake *signaltest.Fake, args ...string) (string, error) {
 	t.Helper()
 
+	out, _, err := runStderr(t, ctx, fake, args...)
+
+	return out, err
+}
+
+// runStderr is runContext that also returns what the command wrote to stderr.
+func runStderr(t *testing.T, ctx context.Context, fake *signaltest.Fake, args ...string) (string, string, error) {
+	t.Helper()
+
 	cfgFile := filepath.Join(t.TempDir(), "config.yaml")
 
 	err := os.WriteFile(cfgFile, nil, 0o600)
@@ -43,11 +52,12 @@ func runContext(t *testing.T, ctx context.Context, fake *signaltest.Fake, args .
 		t.Fatal(err)
 	}
 
-	var out bytes.Buffer
+	var out, stderr bytes.Buffer
 
 	//nolint:contextcheck // the command gets ctx through ExecuteContext
 	root := cmd.NewRootCmd(cmd.WithClientFactory(fake.Factory), cmd.WithLocation(time.UTC))
 	root.SetOut(&out)
+	root.SetErr(&stderr)
 	root.SetArgs(append([]string{"--config", cfgFile, "--data-dir", t.TempDir()}, args...))
 
 	err = root.ExecuteContext(ctx)
@@ -56,7 +66,7 @@ func runContext(t *testing.T, ctx context.Context, fake *signaltest.Fake, args .
 		t.Error("client was not closed")
 	}
 
-	return out.String(), err
+	return out.String(), stderr.String(), err
 }
 
 func TestLink(t *testing.T) {
@@ -73,9 +83,8 @@ func TestLink(t *testing.T) {
 		t.Errorf("output does not start with the link URI: %q", out)
 	}
 
-	want := "Linked +15550100 (ACI 11111111-1111-1111-1111-111111111111, device 2)\n"
-	if !strings.HasSuffix(out, want) {
-		t.Errorf("output does not end with %q: %q", want, out)
+	if !strings.Contains(out, linkedLine) {
+		t.Errorf("output does not contain %q: %q", linkedLine, out)
 	}
 
 	if len(fake.Linked) != 1 || fake.Linked[0] != *testAccount() {

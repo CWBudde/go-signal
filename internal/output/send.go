@@ -29,6 +29,7 @@ type sendResultJSON struct {
 	Number       string       `json:"number,omitempty"`
 	Username     string       `json:"username,omitempty"`
 	ACI          string       `json:"aci,omitempty"`
+	Name         string       `json:"name,omitempty"`
 	GroupID      string       `json:"groupId,omitempty"`
 	Timestamp    uint64       `json:"timestamp"`
 	Success      bool         `json:"success"`
@@ -41,6 +42,7 @@ type sendResultJSON struct {
 type memberJSON struct {
 	ACI          string `json:"aci,omitempty"`
 	PNI          string `json:"pni,omitempty"`
+	Name         string `json:"name,omitempty"`
 	Success      bool   `json:"success"`
 	Unidentified bool   `json:"unidentified"`
 	Error        string `json:"error,omitempty"`
@@ -59,16 +61,16 @@ type sendDoc struct {
 // Send prints the outcome of `send`, one line (or JSON entry) per recipient.
 func (p *Printer) Send(res app.SendResult) error {
 	if p.format == JSON {
-		return p.writeJSON(sendDoc{Version: SchemaVersion, Send: sendToJSON(res)})
+		return p.writeJSON(sendDoc{Version: SchemaVersion, Send: p.sendToJSON(res)})
 	}
 
 	return p.sendTable(res)
 }
 
-func sendToJSON(res app.SendResult) sendJSON {
+func (p *Printer) sendToJSON(res app.SendResult) sendJSON {
 	out := sendJSON{Timestamp: res.Timestamp, Results: make([]sendResultJSON, 0, len(res.Results))}
 	for _, result := range res.Results {
-		out.Results = append(out.Results, sendResultToJSON(res.Timestamp, result))
+		out.Results = append(out.Results, p.sendResultToJSON(res.Timestamp, result))
 	}
 
 	return out
@@ -80,14 +82,14 @@ func (p *Printer) sendTable(res app.SendResult) error {
 	fmt.Fprintln(table, "RECIPIENT\tTIMESTAMP\tSTATUS\tDETAILS")
 
 	for _, result := range res.Results {
-		status, details := sendStatus(result)
-		fmt.Fprintf(table, "%s\t%d\t%s\t%s\n", recipientLabel(result.Target), res.Timestamp, status, details)
+		status, details := p.sendStatus(result)
+		fmt.Fprintf(table, "%s\t%d\t%s\t%s\n", p.recipientLabel(result.Target), res.Timestamp, status, details)
 	}
 
 	return flush(table)
 }
 
-func sendResultToJSON(timestamp uint64, result app.TargetResult) sendResultJSON {
+func (p *Printer) sendResultToJSON(timestamp uint64, result app.TargetResult) sendResultJSON {
 	target := result.Target
 	out := sendResultJSON{Timestamp: timestamp, Success: result.OK(), Error: errText(result.Err)}
 
@@ -99,6 +101,7 @@ func sendResultToJSON(timestamp uint64, result app.TargetResult) sendResultJSON 
 			out.Members = append(out.Members, memberJSON{
 				ACI:          member.Recipient.ACI,
 				PNI:          member.Recipient.PNI,
+				Name:         p.names.Name(member.Recipient),
 				Success:      member.Err == nil,
 				Unidentified: member.Unidentified,
 				Error:        errText(member.Err),
@@ -111,6 +114,7 @@ func sendResultToJSON(timestamp uint64, result app.TargetResult) sendResultJSON 
 		}
 
 		out.Number, out.Username, out.ACI = target.Recipient.Number, target.Recipient.Username, target.Recipient.ACI
+		out.Name = p.names.Name(target.Recipient)
 		unidentified := result.Unidentified
 		out.Unidentified = &unidentified
 	}
@@ -118,15 +122,18 @@ func sendResultToJSON(timestamp uint64, result app.TargetResult) sendResultJSON 
 	return out
 }
 
-// recipientLabel names a target the way the user is likely to have written it.
-func recipientLabel(target app.Target) string {
+// recipientLabel names a target: by name if the printer knows it (see SetNames), else the way
+// the user is likely to have written it.
+func (p *Printer) recipientLabel(target app.Target) string {
 	rcpt := target.Recipient
 
 	switch {
 	case target.IsGroup():
-		return app.GroupPrefix + target.GroupID
+		return p.groupLabel(target.GroupID)
 	case target.Self:
 		return app.SelfRecipient
+	case p.names.Name(rcpt) != "":
+		return oneLine(p.names.Label(rcpt))
 	case rcpt.Number != "":
 		return rcpt.Number
 	case rcpt.Username != "":
@@ -137,12 +144,12 @@ func recipientLabel(target app.Target) string {
 }
 
 // sendStatus returns the STATUS and DETAILS columns of a plain send result.
-func sendStatus(result app.TargetResult) (string, string) {
+func (p *Printer) sendStatus(result app.TargetResult) (string, string) {
 	switch {
 	case result.Err != nil:
 		return statusFailed, result.Err.Error()
 	case result.Target.IsGroup():
-		return groupStatus(result)
+		return p.groupStatus(result)
 	case result.Target.Self:
 		return statusSent, "note to self"
 	case result.Unidentified:
@@ -152,7 +159,7 @@ func sendStatus(result app.TargetResult) (string, string) {
 	}
 }
 
-func groupStatus(result app.TargetResult) (string, string) {
+func (p *Printer) groupStatus(result app.TargetResult) (string, string) {
 	total := len(result.Members)
 
 	failed := result.FailedMembers()
@@ -164,7 +171,7 @@ func groupStatus(result app.TargetResult) (string, string) {
 
 	for _, member := range result.Members {
 		if member.Err != nil {
-			errs = append(errs, fmt.Sprintf("%s: %v", memberLabel(member.Recipient), member.Err))
+			errs = append(errs, fmt.Sprintf("%s: %v", p.memberLabel(member.Recipient), member.Err))
 		}
 	}
 
@@ -176,7 +183,11 @@ func groupStatus(result app.TargetResult) (string, string) {
 	return status, fmt.Sprintf("%d of %d members failed: %s", failed, total, strings.Join(errs, "; "))
 }
 
-func memberLabel(rcpt signal.Recipient) string {
+func (p *Printer) memberLabel(rcpt signal.Recipient) string {
+	if label := p.names.Label(rcpt); label != "" {
+		return oneLine(label)
+	}
+
 	if rcpt.ACI != "" {
 		return rcpt.ACI
 	}

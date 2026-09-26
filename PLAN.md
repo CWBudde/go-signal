@@ -15,16 +15,18 @@ Legend: `[x]` done · `[ ]` open
 
 ## 1. Decisions
 
-| Date       | Decision                                                                                                                                                      |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-09-25 | Crypto and protocol come from `go.mau.fi/mautrix-signal/pkg/signalmeow` + `libsignalgo` (CGO → `libsignal_ffi.a`). See §1.1.                                  |
-| 2026-09-25 | License: **AGPL-3.0** (required by signalmeow).                                                                                                               |
-| 2026-09-25 | **No strict drop-in compatibility.** Idiomatic CLI (noun-verb subcommands, kebab-case), with our own documented JSON output.                                  |
-| 2026-09-25 | Priority: **plain CLI send/receive** first. The daemon/JSON-RPC is deferred.                                                                                  |
-| 2026-09-25 | **Linked device only.** Primary registration (`register`/`verify`) is deferred indefinitely.                                                                  |
-| 2026-09-25 | Pinned `go.mau.fi/mautrix-signal v0.2609.0`, which expects **libsignal `v0.102.2`**; `third_party/libsignal` is pinned to that tag.                           |
-| 2026-09-25 | **MCP server** (`go-signal mcp serve`) in the same binary, after contacts/groups and before release. See Phase 5.                                             |
-| 2026-09-25 | Later stage: **pure-Go backend** from a fork of `GoCodeAlone/libsignal-go` plus zkgroup/attestation/HPKE ports, behind a `purego` build tag. See Phases 7–10. |
+| Date       | Decision                                                                                                                                                                 |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 2026-09-25 | Crypto and protocol come from `go.mau.fi/mautrix-signal/pkg/signalmeow` + `libsignalgo` (CGO → `libsignal_ffi.a`). See §1.1.                                             |
+| 2026-09-25 | License: **AGPL-3.0** (required by signalmeow).                                                                                                                          |
+| 2026-09-25 | **No strict drop-in compatibility.** Idiomatic CLI (noun-verb subcommands, kebab-case), with our own documented JSON output.                                             |
+| 2026-09-25 | Priority: **plain CLI send/receive** first. The daemon/JSON-RPC is deferred.                                                                                             |
+| 2026-09-25 | **Linked device only.** Primary registration (`register`/`verify`) is deferred indefinitely.                                                                             |
+| 2026-09-25 | Pinned `go.mau.fi/mautrix-signal v0.2609.0`, which expects **libsignal `v0.102.2`**; `third_party/libsignal` is pinned to that tag.                                      |
+| 2026-09-25 | **MCP server** (`go-signal mcp serve`) in the same binary, after contacts/groups and before release. See Phase 5.                                                        |
+| 2026-09-25 | Later stage: **pure-Go backend** from a fork of `GoCodeAlone/libsignal-go` plus zkgroup/attestation/HPKE ports, behind a `purego` build tag. See Phases 7–10.            |
+| 2026-09-26 | **Blocking** goes out as a complete `SyncMessage.Blocked` to our own devices; the phone applies it and writes the storage service. No storage-service writes of our own. |
+| 2026-09-26 | **Identity trust is TOFU**: a changed key blocks sending to that user until `identities trust`; receiving keeps working.                                                 |
 
 ### 1.1 Why signalmeow
 
@@ -62,7 +64,7 @@ Consequences:
   `link`), so a real facade needs to filter those.
 - **Prekeys.** Linking uploads only signed and last-resort Kyber prekeys; one-time prekeys are
   generated and uploaded by `keyCheckLoop` on the first connect. The bridge connects right after
-  linking; we don't yet.
+  linking; we do too since 3.9 (for the initial sync, unless `--sync-timeout 0`).
 - **Acks.** The handler's return value decides whether the envelope is acked, and acks go out
   asynchronously, so closing right after the handler returns can lose the ack. The spike sleeps
   1 s; Phase 3.1 needs a proper drain. (Done in 3.1: a keepalive round trip flushes the acks.)
@@ -96,16 +98,17 @@ Noun-verb subcommands with kebab-case names. Global flags: `-a/--account`, `-o/-
 `-v/--verbose`, `--data-dir`, `--config`, `--log-format`.
 
 ```
-go-signal link [--name <device-name>]          # print sgnl:// URI + terminal QR, wait for scan
+go-signal link [--name <device-name>] [--sync-timeout 60s]   # print sgnl:// URI + terminal QR, wait for scan, sync
 go-signal send <recipient>... -m <text> [--attach <file>]... [--group <id>] [--quote <ts>]
 go-signal send --stdin <recipient>             # message body from stdin
 go-signal receive [--timeout 5s] [--max N] [--follow] [--download-attachments <dir>] [--send-read-receipts]
 go-signal react <recipient>... --target <author>:<ts> --emoji 👍 [--remove] [--group <id>]
 go-signal delete <recipient>... --target <ts> [--group <id>]   # remote delete of our own message
-go-signal contacts list | show <recipient> | block | unblock
-go-signal groups list | show <id> | leave <id>
+go-signal contacts list [--blocked] [--query <q>] | show <recipient> | block <recipient>... | unblock <recipient>...
+go-signal groups list | show <group> | leave <group> --yes [--promote <member>]...   # <group>: ID, master key or title
 go-signal devices list
-go-signal account show | unlink                 # unlink = remove local data
+go-signal identities list [<recipient>] | show <recipient> | trust <recipient> [--safety-number <n>]
+go-signal account show | sync [--timeout 60s] | unlink   # unlink = remove local data
 go-signal mcp serve [--read-only] [--allow-recipient <r>]...   # MCP server on stdio
 go-signal version
 ```
@@ -324,7 +327,9 @@ against the fake); `cmd/` only parses flags, calls `app` and renders via `intern
       (`Close` refuses new sends (`ErrClosed`) and waits up to 5 s for running ones, stops handing
       out events, flushes the acks with a `GET /v1/keepalive` round trip, then closes the
       websockets and only then the database. The loops run on a context detached from the
-      command's, so Ctrl-C no longer cuts them mid-ack)
+      command's, so Ctrl-C no longer cuts them mid-ack. Since the Phase 4 review, the database is
+      only closed once every running method that uses it has returned, also past the 5 s: sends
+      still running then fail fast on the closed websockets)
 - [x] `-v` logs connection state transitions via slog (`connection state` / `reconnecting` at
       debug level)
 
@@ -540,11 +545,64 @@ stories, admin deletes, and the MCP tools for react/delete (5.x).
 
 #### 3.9 Initial sync after linking
 
-- [ ] Request/receive contacts, groups and the storage-service master key after `link`
-- [ ] Fetch the storage service manifest and persist contacts/groups/blocked list
-- [ ] `link` waits for the initial sync (with progress on stderr and a timeout)
+- [x] Request/receive contacts, groups and the storage-service master key after `link`
+      (new `Client.Sync`, needs `Connect`, `SendOnly` is enough: signalmeow's
+      `SendContactSyncRequest` asks the phone for its contact list; signalmeow stores the reply
+      (`SyncMessage.Contacts`) before it calls our handler with `events.ContactList`, which
+      `handle` now passes to a waiter (unless `IsFromDB`, i.e. contacts changed by a storage
+      sync) and still drops and acks, in send-only mode too. Provisioning already derives the
+      master key from the account entropy pool the phone sends; if it is missing, Sync sends
+      `SendStorageMasterKeyRequest` and polls the device table every 500 ms until the phone's
+      `SyncMessage.Keys` arrives (signalmeow stores it without calling our handler). There is no
+      group sync request: the protocol's GROUPS request is reserved, so groups come from the
+      storage service's GroupV2 records (and from incoming group messages))
+- [x] Fetch the storage service manifest and persist contacts/groups/blocked list (signalmeow's
+      `SyncStorage` stores contact records (profile, system and nick names, number, profile key,
+      blocked, whitelisted), group master keys and the account record. It returns no error, so
+      Sync first calls `FetchStorage` only to learn whether the fetch works and then lets
+      `SyncStorage` fetch and store it again (the manifest and records are downloaded twice).
+      Since `SyncStorage` also swallows the failure of its own fetch or database update, Sync
+      then checks that the store holds what the first fetch has (a recipient row for each
+      contact record with an ACI, found without creating rows, and the master key of each GroupV2
+      record with a valid key; what signalmeow skips or stores by PNI isn't checked); anything
+      missing fails the storage stage with `signal.ErrStorageNotStored` ("N contacts, M groups
+      missing"), so the sync is reported incomplete. A 204 (no manifest) skips `SyncStorage`,
+      which would dereference its nil update, and counts as synced.
+      `SyncResult` has the numbers of contacts (users with a name or number, without us) and
+      groups in the store afterwards, from `LoadAllContacts` and the new
+      `store.(*Store).GroupIdentifiers` (signalmeow's `GroupStore` can't list; 4.2 reuses it), and
+      whether the master key is known, the storage service synced and the contact list arrived.
+      A complete sync records its time as `last_sync` in `gosignal_meta`. New
+      `account sync [--timeout 60s]` runs it for an existing account (`app.Sync`: connects with
+      `SendOnly`; plain and JSON `sync` document in `docs/json.md`))
+- [x] `link` waits for the initial sync (with progress on stderr and a timeout) (on the same
+      client right after `Link`, which keeps the database and lock; `SyncOptions.Progress` reports
+      the stages, printed as `Sync: <stage>...` lines on stderr, then `Synced N contacts and M
+groups.` on stdout. `--sync-timeout` defaults to 60 s, 0 skips the sync. The timeout is the
+      context deadline: `Sync` then returns what it has with an error wrapping
+      `signal.ErrSyncIncomplete` and the cause, which `app.Sync` turns into
+      `SyncResult.Incomplete`; `link` and `account sync` print a warning on stderr and exit 0.
+      Any other sync error is only a warning for `link` (the device is linked) but fails
+      `account sync`, with exit 3 for an unlinked device)
 
-**Done when:** right after linking, contacts and groups from the phone are in the store.
+**Done when:** right after linking, contacts and groups from the phone are in the store. (Done with
+the fake and unit tests for the contact list hook, the counts and the group query; not yet
+verified against the live server.)
+
+Notes: other incoming envelopes that arrive during the sync are left on the server as with every
+send-only command, so the next `receive` gets them; the contact list itself is acked because
+nothing is left to deliver (a redelivered one would only be stored again). The storage service is
+always fetched in full (signalmeow tracks no manifest version), and nothing re-syncs it later
+except signalmeow itself on a `FetchLatest` or `Keys` sync message while connected; `account
+sync` is the manual way. signalmeow only skips a second contact request within a minute of the
+first one on the same client. The counts include users that only messaged us, and the contact
+list and storage records don't say which groups we left. Contact avatars, the storage service's
+blocked groups and story distribution lists aren't handled. `last_sync` isn't shown anywhere yet.
+`SyncResult.ContactList` is also true when signalmeow failed to download or parse the contacts
+blob: it logs the error and still reports an (empty) `ContactList`, which we can't tell apart from
+a phone without contacts. signalmeow's `SyncStorage` reads `Store.MasterKey` without
+synchronising with the receive loop, which may update it from a `Keys` sync message meanwhile;
+that is benign (either key is the account's current one).
 
 ### Phase 4 — Contacts, groups, identities
 
@@ -553,31 +611,204 @@ against the fake); `cmd/` only parses flags, calls `app` and renders via `intern
 
 #### 4.1 Contacts
 
-- [ ] `contacts list` (name, number, ACI, username, blocked), filters `--blocked`, `--query`
-- [ ] `contacts show <recipient>`
-- [ ] `contacts block|unblock <recipient>` (updates storage service so the phone sees it)
-- [ ] Name resolution (contact name → profile name → number → ACI) used by all plain renderers
+- [x] `contacts list` (name, number, ACI, username, blocked), filters `--blocked`, `--query`
+      (new `Client.Contacts`, store only: signalmeow's `LoadAllContacts` (users with a contact
+      name, profile name or number) plus the blocked users (new `store.(*Store).BlockedACIs`),
+      without us. `app.ContactsList` filters (`--query`/`-q`: case-insensitive substring of any
+      name, the number, ACI or PNI) and sorts by display name. Plain table NAME/NUMBER/ACI/BLOCKED,
+      JSON `contacts` document with `output.ContactJSON` objects. No USERNAME column: signalmeow
+      stores no usernames)
+- [x] `contacts show <recipient>` (new `Client.Contact`, store only, by ACI, else PNI, else number,
+      through signalmeow's concrete `LoadRecipientBy{ACI,PNI}`, which, unlike
+      `LoadAndUpdateRecipient`, don't create rows; `signal.ErrUnknownContact` otherwise.
+      `app.ContactsShow` resolves `@username` first (no connection needed), allows `self` and
+      rejects groups (`app.ErrNotAUser`). Key/value view with names, number, ACI, PNI, blocked and
+      message request state; JSON `contact` document)
+- [x] `contacts block|unblock <recipient>` (updates storage service so the phone sees it)
+      (not through a storage service write: new `Client.SetBlocked` reads the current blocked list
+      (users and groups) from the storage service, applies the change and sends the complete list
+      as a `SyncMessage.Blocked` to our own ACI, both the current fields (with the storage
+      service's block times) and the deprecated ones; the phone applies it and writes the storage
+      service itself. Then the store is updated. The storage service key is required
+      (`signal.ErrStorageKeyUnknown`), since a list without the blocked groups would unblock them
+      on the phone. For the same reason nothing is sent (`signal.ErrBlockedListIncomplete`) when
+      the fetch isn't the complete list: no manifest yet (signalmeow's `nil` update on a 204),
+      `MissingRecords` (records that couldn't be fetched, decrypted or parsed), or a blocked
+      contact with neither ACI nor number or a blocked group without a valid master key, which a
+      `SyncMessage.Blocked` can't carry. `app.ContactsBlock`/`ContactsUnblock` connect `SendOnly`, resolve like `send`,
+      reject groups and self, and report per user whether it changed; plain table
+      NAME/NUMBER/ACI/STATUS, JSON `block` document. Exit 3 for an unlinked device)
+- [x] Name resolution (contact name → profile name → number → ACI) used by all plain renderers
+      (nickname first, as the Signal apps do: nickname → contact name → profile name → number →
+      ACI (`signal.Contact.Name`/`DisplayName`). `app.Names` is built from `Client.Contacts`; a
+      display name shared by several contacts gets the number (or the first 8 characters of the
+      ACI) added. `output.(*Printer).SetNames` makes plain output show names (and `me` for our own
+      ACI, e.g. as a quote author) in `receive`, `send`, `react` and `delete`; JSON recipient
+      objects and send results gain an optional `name` (no schema bump). `receive` loads the names
+      once and reloads them (`app.NameBook`) when an event names a user without a name, at most
+      every 30 s, since profiles and contacts arrive while receiving)
 
-**Done when:** `receive` plain output shows names instead of UUIDs.
+**Done when:** `receive` plain output shows names instead of UUIDs. (Done: golden
+`receive_events_names` with the fake's contacts, plus cgo tests for the store reads, the override
+handling and the blocked-list message. Not yet verified against the live server.)
+
+Notes: signalmeow's storage sync always overwrites the blocked flag with the storage service's,
+and it runs on `account sync`, on an incoming `Keys` or `FetchLatest` sync message and whenever
+signalmeow feels like it; until the phone has written our change to the storage service, that
+would undo it. So `SetBlocked` records an override (`gosignal_block_overrides`, migration
+`03-contacts.sql`) wherever the storage service still disagrees, tied to the manifest version of
+the fetch it built the list from (`storage_version`, migration `05-block-override-version.sql`).
+Once any later manifest version is seen, the phone has written the storage service since (with our
+change, or with a newer one made there), so the override is dropped and the store takes the state
+of that fetch; the phone always wins from then on. That needs the fetch to know the user's state
+(it read their record, or every record): if a later version was only partly readable and the
+user's record is among the missing ones, the override stays, but isn't re-applied (the phone may
+have changed it), until a fetch that knows or expiry. Earlier the override ended only when a sync
+reported the contact as changed and agreeing, but signalmeow reports only contacts whose local row
+changed, so an agreeing storage service went unnoticed, the override lived for 7 days, and an
+unblock made on the phone in that time was undone locally and re-sent as a block by the next
+`contacts block`. Versions are seen by `SetBlocked`'s own fetch (older overrides neither go into
+the list nor survive), by `Client.Sync`'s fetch, and, since signalmeow's background storage sync
+exposes no version, by a fetch of our own when that sync (`ContactList` with `IsFromDB`) changed
+an overridden user: `FetchStorage` with the overrides' version gets a 204 (no records fetched)
+while the phone hasn't written; then the override is re-applied. If that fetch fails, the overrides
+are re-applied as before (none has been seen superseded). Overrides are also re-applied on
+`Connect`; `Contacts`/`Contact` show them even before that. After `signal.BlockOverrideTTL` (7
+days) the storage service wins anyway, e.g. if the phone never applied our list: the store takes
+the state of the fetch at hand if it knows it; otherwise the override just ends and signalmeow's
+next storage sync, which fetches every record and sets the blocked flag from each contact record
+whether it changed or not, rewrites it (a user without any contact record there keeps the
+overridden flag); overrides from before migration 5 (version 0) end at the next version seen.
+Between a background sync and the re-apply, signalmeow may briefly see the old state (a message from a freshly blocked user could
+get through then). The phone writing the storage service for another reason before it processed
+our list also ends the override early (the store then shows the old state until the phone's next
+write). Blocking needs an ACI (users not on Signal can't be blocked) and doesn't cover
+groups. The phone's handling of our blocked list (the official apps replace their whole list with
+it) is untested. Users that only have a nickname in the store are missing from `contacts list`
+(signalmeow's `LoadAllContacts` skips them); `contacts show` finds them. With names loaded, our own
+ACI as a quote author now shows as `me` (one line of the `receive_events` golden changed).
 
 #### 4.2 Groups
 
-- [ ] `groups list` (id, title, member count, our role)
-- [ ] `groups show <id>`: title, description, members with roles, pending members, timer
-- [ ] `groups leave <id>`
-- [ ] Group id parsing: accept base64 master key / group id, and title if unique
+- [x] `groups list` (id, title, member count, our role) (new `Client.Groups`: every group whose
+      master key the store holds (`store.GroupIdentifiers` from 3.9) is fetched with signalmeow's
+      `RetrieveGroupByID`, which needs group auth credentials over the authed websocket, so
+      `Connect` (`SendOnly` is enough). signalmeow reports the server's status only in the error
+      text: a 403 becomes `signal.ErrNotAMember` (left, removed, or a join request not approved)
+      and a 404 or missing master key `signal.ErrUnknownGroup`; such groups are still listed with
+      `Group.Err`, their last known title and `leftAt`, while any other error fails the list.
+      Sorted by title. Plain table ID/TITLE/MEMBERS/ROLE with the role `admin`, `member`,
+      `invited`, `requesting`, `left` or `not a member`; JSON `groups` document in `docs/json.md`)
+- [x] `groups show <id>`: title, description, members with roles, pending members, timer
+      (`Client.Group`; `signal.Group` carries ID, title, description, revision, disappearing
+      timer, announcements-only, members with role and joined-at revision, pending members with
+      role, inviter and time, requesting members with time, and our membership/role
+      (`Group.MembershipOf`). The master key stays in `Group.MasterKey` but is never printed.
+      Plain key/value lines plus Members/Invited/Requesting to join sections; JSON `group`
+      document; `output.GroupJSON`/`NewGroupJSON` are exported for MCP)
+- [x] `groups leave <id>` (`Client.LeaveGroup` builds a signalmeow `GroupChange` and calls
+      `UpdateGroup`, which patches the group and sends the change to the members (a conflict
+      with a change made meanwhile, 409, is not retried: signalmeow takes the reply for a
+      `ContactManifestMismatchError`, which we map to `signal.ErrGroupChanged`, "try again"): a member deletes itself (`DeleteMembers`, as the mautrix bridge does), an invited
+      user its invitation (`DeletePendingMembers` with its ACI), a requesting user its request
+      (`DeleteRequestingMembers`). `Group.CheckLeave` refuses, like signal-cli's quitGroup, when we
+      are the only admin while other members remain (`signal.ErrLastAdmin`; the CLI error names
+      `--promote`); repeatable `--promote <member>` makes members admins in the same change
+      (`ModifyMemberRoles`, only for admins and only for other members:
+      `signal.ErrInvalidPromotion`). Needs `--yes` like `account unlink`. JSON `left` document)
+- [x] Group id parsing: accept base64 master key / group id, and title if unique
+      (`app.ResolveGroup`: `group:<id>` or a bare 32-byte value in standard or URL-safe base64 is
+      passed on, and the facade looks it up as an ID in signalmeow's group store first, then
+      derives the ID from it as a master key (`libsignalgo.GroupMasterKey.GroupIdentifier`); only
+      groups whose key is stored are known. Anything else is a title, matched case-insensitively
+      against the title cache (whole title, surrounding white space ignored) without connecting:
+      several matches fail with `app.ErrAmbiguousGroup` listing the `group:<id>`s, none with
+      `signal.ErrUnknownGroup`. Groups we left only count when no current group has the title)
+- [x] Title cache for offline lookup (not in the original plan; our own `gosignal_groups` table,
+      migration `04-groups.sql`: title, revision, `left_at`, `updated_at` per group ID, written
+      after every successful fetch (which clears `left_at`; an empty title keeps the cached one)
+      and by `LeaveGroup` (with the revision after leaving). New `Client.GroupTitles` returns
+      title and `leftAt` per group without `Connect`; `app.Names` includes the titles (best
+      effort: names load without them if the cache can't be read), so
+      `receive` shows `group "<title>"` in plain lines and `groupTitle` in the JSON chat, and
+      `send`/`react`/`delete` label groups the same way)
 
-**Done when:** list/show/leave work against groups created on the phone.
+**Done when:** list/show/leave work against groups created on the phone. (Done with the fake and
+unit tests for the conversion, master key derivation, the leave change and the title cache; not
+yet verified against the live server.)
+
+Notes: every `groups` command fetches every group (one request per group, sequentially). Users
+invited by phone number (PNI) are missing from the pending members, and we can't see a group we
+were invited to by number: signalmeow skips PNI pending members when decrypting. A requesting
+user probably can't fetch the group at all (403), and `UpdateGroup` fetches it first, so
+cancelling a join request likely fails with `ErrNotAMember` despite the code path for it. For a
+group we are only invited to, the server sends no send endorsements; signalmeow's resulting cache
+errors are demoted to debug in the log bridge (only that case, recognised by the error text; libsignal
+also prints its caught panic about the empty endorsements to stderr, which we can't catch). After leaving, signalmeow's endorsement update for
+the new revision probably fails (only logged), its `signalmeow_groups` row stays (the group keeps
+being listed, as `left`), and a failure to tell the members is only logged by signalmeow. Groups
+can't be told apart as "left on another device" versus "removed" (both a 403). Avatars, access
+control, banned members, invite links and group changes (`groups update`, join) are open.
 
 #### 4.3 Identities and safety numbers
 
-- [ ] `identities list [<recipient>]`: identity key fingerprint, trust level, first seen
-- [ ] `identities show <recipient>`: safety number (numeric + QR)
-- [ ] `identities trust <recipient> [--safety-number <n>]`
-- [ ] Policy: TOFU; on identity change, warn on stderr and emit an `identity-changed` event;
-      sending to an untrusted changed identity requires explicit trust
+- [x] `identities list [<recipient>]`: identity key fingerprint, trust level, first seen
+      (`Client.Identities` → `app.IdentitiesList`; the fingerprint is the hex of the 33-byte
+      public key, as signal-cli shows it; trust levels `untrusted`, `trusted-unverified`,
+      `trusted-verified`; plain table RECIPIENT/FINGERPRINT/TRUST/FIRST SEEN/CHANGED, JSON
+      `identities` document. Keys signalmeow stored before go-signal tracked trust count as
+      trusted on first use, with an unknown first-seen date; our own ACI/PNI keys and PNI
+      identities are left out)
+- [x] `identities show <recipient>`: safety number (numeric + QR) (`Client.SafetyNumber`:
+      libsignal's numeric fingerprint, version 2 over both ACIs with 5200 iterations, as the apps
+      compute it; plain shows 12 blocks of 5 digits and the scannable encoding as a QR code via
+      qrterminal, JSON has `safetyNumber` and base64 `scannable`)
+- [x] `identities trust <recipient> [--safety-number <n>]` (`Client.TrustIdentity`: without a
+      number the current key becomes `trusted-unverified` (a verified key stays verified); with
+      one, white space ignored, it becomes `trusted-verified` if it matches, otherwise
+      `signal.ErrSafetyNumberMismatch` and nothing changes)
+- [x] Policy: TOFU; on identity change, warn on stderr and emit an `identity-changed` event;
+      sending to an untrusted changed identity requires explicit trust (a wrapper around
+      signalmeow's ACI/PNI identity stores (`meow_identity.go`, installed on the device in
+      `Connect`) keeps our state in `gosignal_identities` (migration v2) through the context of
+      the callbacks, so inside signalmeow's decryption transaction. A different key, seen when
+      decrypting (`SaveIdentityKey`) or when setting up a session to send (`IsTrustedIdentity`),
+      becomes `untrusted`, is logged as a warning and marked for an `identityChanged` event (JSON
+      type in camelCase like the others), which `receive` gets right before the event of the
+      envelope that carried the key, or with the next event if it was seen while sending. libsignal
+      then refuses to encrypt for it; `Send` maps that per recipient to
+      `signal.ErrUntrustedIdentity` with the `identities trust` hint. Receiving is never refused)
 
 **Done when:** an identity change is detected, reported, and blocked for sending until trusted.
+(Done with the fake, cgo unit tests of the wrapper against a real account database, and
+libsignal's session setup refusing a changed prekey bundle until it is trusted; not yet verified
+against the live server.)
+
+Notes: only the current key can be trusted. The first version also accepted the last trusted key
+before a change, for the sessions of the user's "other devices"; but all devices of an account
+share one identity key, and after the user trusted or verified the new key, a prekey bundle signed
+with the old one (lost phone, malicious server) was accepted silently. Since the Phase 4 review
+every key other than the current one is a change, the previous key included (a delayed message
+with it flips the key back and must be trusted again; the event's `oldFingerprint` then equals
+`newFingerprint` if the change in between wasn't trusted). A change, and `identities trust`,
+remove the user's sessions whose identity key (read from the serialized session record, which
+libsignalgo has no accessor for) isn't the current key; the next send fetches new prekey bundles.
+A message that still arrives on a removed session can't be decrypted (a `decryptionFailure`
+event); where its content hint allows, signalmeow sends a retry receipt and the sender resends it
+on a new session. Before, such messages were decrypted; only messages sent before the key
+change and still queued are affected (the sender's old sessions ended with its old key). A change is reported until a `receive`
+has handed its event out (`pending_event`), so it isn't lost when receive stops before reading
+it; a change in a rolled-back decryption is neither stored nor reported. Gaps: libsignal's
+multi-recipient (sender key) encryption doesn't ask whether a key is trusted, so group members
+who already have our sender key still get group messages after their key changed (a member
+whose devices changed gets a new sender key distribution message, which is blocked); PNI
+identities can't be listed or trusted, so the wrapper leaves them to signalmeow, which trusts
+every key (trust on first use without change detection); signalmeow bypasses the wrapper
+for the PNI identity key of sync messages, PNI signatures and provisioning; the storage
+service's `ContactRecord` identity state/verified flag isn't read or written, and
+`SyncMessage.Verified` is neither sent nor handled, so verification doesn't sync with the phone;
+the identities commands don't connect, so a number must already be cached (the ACI always
+works).
 
 ### Phase 5 — MCP server
 
@@ -597,8 +828,11 @@ lacks something we need).
       `DevicesList`; the Phase 3/4 commands land there directly)
 - [x] `cmd/` becomes flag parsing + `internal/app` call + `internal/output` rendering (`account`
       and `devices`; `link` and `receive` stay in `cmd/` since MCP doesn't expose them as tools)
-- [ ] Recipient resolution, name resolution and trust checks live only in `internal/app` (lands
-      with 3.2, 4.1 and 4.3; recipient resolution is in since 3.2: `app.ResolveRecipients`)
+- [x] Recipient resolution, name resolution and trust checks live only in `internal/app` (lands
+      with 3.2, 4.1 and 4.3; recipient resolution is in since 3.2: `app.ResolveRecipients`, name
+      resolution since 4.1: `app.Names`/`app.NameBook`, which `output` only renders. The trust
+      policy of 4.3 is enforced in the facade, because libsignal asks the identity store while
+      encrypting; `internal/app` has the `identities` use cases)
 
 **Done when:** the CLI behaves as before (golden files unchanged), and `internal/app` has unit
 tests against the fake facade.

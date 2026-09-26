@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"regexp"
@@ -90,20 +89,13 @@ func ParseRecipient(arg string) (Target, error) {
 }
 
 func parseGroup(arg string) (Target, error) {
-	encoded := strings.TrimPrefix(arg, GroupPrefix)
-
-	raw, err := base64.StdEncoding.DecodeString(encoded)
-	if err != nil {
-		// Also accept the URL-safe alphabet, as in group links.
-		raw, err = base64.RawURLEncoding.DecodeString(strings.TrimRight(encoded, "="))
-	}
-
-	if err != nil || len(raw) != groupIDLen {
+	groupKey, ok := decodeGroupKey(strings.TrimPrefix(arg, GroupPrefix))
+	if !ok {
 		return Target{}, fmt.Errorf("%w %q: want %s and a base64 group ID of %d bytes",
 			ErrInvalidRecipient, arg, GroupPrefix, groupIDLen)
 	}
 
-	return Target{GroupID: base64.StdEncoding.EncodeToString(raw)}, nil
+	return Target{GroupID: groupKey}, nil
 }
 
 // ResolveRecipients parses args (see ParseRecipient) and resolves every user to an ACI: self and

@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"time"
+
+	"github.com/cwbudde/go-signal/internal/app"
 )
 
 // SchemaVersion is the version of the JSON schema in docs/json.md. It changes only when a field
@@ -41,6 +43,7 @@ type Printer struct {
 	w      io.Writer
 	format Format
 	loc    *time.Location
+	names  app.Names
 }
 
 // New returns a Printer writing to w. Plain output shows times in loc (nil means time.Local);
@@ -51,6 +54,13 @@ func New(w io.Writer, format Format, loc *time.Location) *Printer {
 	}
 
 	return &Printer{w: w, format: format, loc: loc}
+}
+
+// SetNames makes the printer name users: plain output shows their name (see app.Names.Label)
+// instead of the ACI, and JSON recipient objects get a "name". Without names, users show as
+// they are identified.
+func (p *Printer) SetNames(names app.Names) {
+	p.names = names
 }
 
 // Format returns the printer's format.

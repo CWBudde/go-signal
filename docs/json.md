@@ -93,6 +93,136 @@ fields they don't know.
 | `localOnly`  | boolean | `true` if only local data was deleted (`--local-only`), without the server        |
 | `unlinkedAt` | string  | When go-signal found the device unlinked; _optional_ (then `localOnly` is `true`) |
 
+## `account sync`
+
+```json
+{
+  "version": 1,
+  "sync": {
+    "contacts": 5,
+    "groups": 3,
+    "masterKey": true,
+    "storage": true,
+    "contactList": false,
+    "complete": false,
+    "missing": ["contact list"],
+    "error": "sync incomplete (missing contact list): wait for contact list: context deadline exceeded"
+  }
+}
+```
+
+An incomplete sync (e.g. `--timeout` ran out before the phone answered) is not an error: the
+document shows what is missing, a warning goes to stderr and the exit code is 0. The counts are
+what the store holds afterwards, including what earlier syncs and received messages stored.
+
+| Field         | Type     | Description                                                                      |
+| ------------- | -------- | -------------------------------------------------------------------------------- |
+| `contacts`    | number   | Known users with a name or number, not counting the account itself               |
+| `groups`      | number   | Groups whose master key is known                                                 |
+| `masterKey`   | boolean  | `true` if the storage service key is known                                       |
+| `storage`     | boolean  | `true` if the storage service (contacts, groups, blocked list) was fetched       |
+| `contactList` | boolean  | `true` if the phone's contact list arrived                                       |
+| `complete`    | boolean  | `true` if every part succeeded                                                   |
+| `missing`     | string[] | What didn't arrive: `storage key`, `storage service`, `contact list`; _optional_ |
+| `error`       | string   | Why the sync is incomplete; _optional_ (only when `complete` is `false`)         |
+
+## `contacts list`
+
+```json
+{
+  "version": 1,
+  "contacts": [
+    {
+      "aci": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "number": "+15550102",
+      "blocked": true,
+      "messageRequestAccepted": false
+    },
+    {
+      "aci": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "pni": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+      "number": "+15550101",
+      "name": "Alice Smith",
+      "contactName": "Alice Smith",
+      "profileName": "Ali",
+      "blocked": false,
+      "messageRequestAccepted": true
+    }
+  ]
+}
+```
+
+`contacts` lists the users go-signal knows with a name or number, and the blocked ones, without the
+account itself, sorted by display name (`name`, else `number`, else `aci`). `--blocked` and
+`--query` filter the list. Each entry is a **contact**:
+
+| Field                    | Type    | Description                                                                           |
+| ------------------------ | ------- | ------------------------------------------------------------------------------------- |
+| `aci`                    | string  | Account identity (ACI); _optional_                                                    |
+| `pni`                    | string  | Phone number identity (PNI); _optional_                                               |
+| `number`                 | string  | Phone number (E.164); _optional_                                                      |
+| `name`                   | string  | The name Signal shows: `nickname`, else `contactName`, else `profileName`; _optional_ |
+| `nickname`               | string  | The nickname we gave the user in Signal; _optional_                                   |
+| `contactName`            | string  | The name in the phone's address book; _optional_                                      |
+| `profileName`            | string  | The name the user set in their Signal profile; _optional_                             |
+| `blocked`                | boolean | `true` if we blocked the user (including a block not yet confirmed by the phone)      |
+| `messageRequestAccepted` | boolean | Whether we accepted the user's message request; _optional_ (unknown)                  |
+
+go-signal stores no usernames, so contacts have no `username`.
+
+## `contacts show`
+
+```json
+{
+  "version": 1,
+  "contact": {
+    "aci": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    "number": "+15550101",
+    "name": "Alice Smith",
+    "contactName": "Alice Smith",
+    "profileName": "Ali",
+    "blocked": false,
+    "messageRequestAccepted": true
+  }
+}
+```
+
+`contact` is a contact as in [`contacts list`](#contacts-list). An unknown user is an error (no
+document).
+
+## `contacts block` and `contacts unblock`
+
+```json
+{
+  "version": 1,
+  "block": {
+    "blocked": true,
+    "results": [
+      {
+        "aci": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "number": "+15550101",
+        "name": "Alice Smith",
+        "contactName": "Alice Smith",
+        "blocked": true,
+        "changed": true
+      },
+      {
+        "aci": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "number": "+15550102",
+        "blocked": true,
+        "changed": false
+      }
+    ]
+  }
+}
+```
+
+Both commands print a `block` document. `blocked` is `true` for `contacts block` and `false` for
+`contacts unblock`. `results` has one entry per user, in the order given on the command line,
+without duplicates: the contact afterwards (as in [`contacts list`](#contacts-list)) plus `changed`
+(boolean), which is `false` if the user already was blocked (or unblocked). When the command fails,
+nothing was changed and no document is printed.
+
 ## `send`
 
 ```json
@@ -154,6 +284,7 @@ unknown recipients) print no document.
 | `number`       | string  | Phone number of a user; _optional_                                                 |
 | `username`     | string  | Username of a user, as given; _optional_                                           |
 | `aci`          | string  | ACI of a user; _optional_ (always set for `user` and `self`)                       |
+| `name`         | string  | Name of a user (see [`contacts list`](#contacts-list)); _optional_                 |
 | `groupId`      | string  | Base64 group ID; _optional_ (only for `group`)                                     |
 | `timestamp`    | number  | Sent timestamp of the message                                                      |
 | `success`      | boolean | `true` if the recipient (for a group: every member) got the message                |
@@ -167,6 +298,7 @@ Each entry of `members`:
 | -------------- | ------- | ------------------------------------------------------------- |
 | `aci`          | string  | ACI of the member; _optional_ (members can also have a `pni`) |
 | `pni`          | string  | PNI of a member known only by phone number; _optional_        |
+| `name`         | string  | Name of the member (see `contacts list`); _optional_          |
 | `success`      | boolean | `true` if the member got the message                          |
 | `unidentified` | boolean | `true` if sent with sealed sender                             |
 | `error`        | string  | Why sending to the member failed; _optional_                  |
@@ -239,6 +371,183 @@ entry per chat given on the command line. The other fields describe the reaction
 A remote delete is a message of its own, too: `timestamp` and `results` are as in
 [`send`](#send). `targetTimestamp` (number) is the sent timestamp of our message that was deleted.
 
+## `groups list`
+
+```json
+{
+  "version": 1,
+  "groups": [
+    {
+      "id": "Z3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXA=",
+      "title": "Family",
+      "description": "All of us",
+      "revision": 12,
+      "membership": "member",
+      "role": "admin",
+      "timerSeconds": 604800,
+      "announcementsOnly": false,
+      "members": [
+        {
+          "aci": "11111111-1111-1111-1111-111111111111",
+          "role": "admin",
+          "joinedAtRevision": 0
+        },
+        {
+          "aci": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "role": "member",
+          "joinedAtRevision": 2
+        }
+      ],
+      "pending": [
+        {
+          "aci": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          "role": "member",
+          "addedBy": { "aci": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" },
+          "invitedAt": "2026-09-20T12:30:00Z"
+        }
+      ],
+      "requesting": []
+    },
+    {
+      "id": "Z29uZS1pZC1nb25lLWlkLWdvbmUtaWQtZ29uZS1pZC0=",
+      "title": "Old club",
+      "revision": 0,
+      "membership": "none",
+      "timerSeconds": 0,
+      "announcementsOnly": false,
+      "leftAt": "2026-09-26T10:00:00Z",
+      "error": "not a member of the group …"
+    }
+  ]
+}
+```
+
+`groups` has a **group** object for every group whose master key go-signal knows (from
+`account sync` or a message from the group), fetched from the server and sorted by title. A group
+the server no longer shows us (we left or were removed) or doesn't know is still listed, with
+`error` set, the last title go-signal saw, and no member lists. The master key is never printed.
+
+| Field               | Type    | Description                                                                                                                    |
+| ------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `id`                | string  | Group ID (base64)                                                                                                              |
+| `title`             | string  | Title; empty if unknown                                                                                                        |
+| `description`       | string  | Description; _optional_                                                                                                        |
+| `revision`          | number  | Number of changes to the group so far (`0` when `error` is set)                                                                |
+| `membership`        | string  | How we belong to it: `member`, `pending` (invited), `requesting` (asked to join) or `none`                                     |
+| `role`              | string  | Our role: `admin` or `member` (for `pending`: the role the invitation offers); _optional_                                      |
+| `timerSeconds`      | number  | Disappearing messages timer in seconds; `0` is off                                                                             |
+| `announcementsOnly` | boolean | `true` if only admins can send messages                                                                                        |
+| `members`           | array   | Members: recipient fields plus `role` (`admin`, `member`) and `joinedAtRevision`; _optional_ (missing when `error` is set)     |
+| `pending`           | array   | Invited users: recipient fields plus `role`, `addedBy` (recipient) and `invitedAt`; _optional_ (as `members`)                  |
+| `requesting`        | array   | Users asking to join: recipient fields plus `requestedAt`; _optional_ (as `members`)                                           |
+| `leftAt`            | string  | When we left the group with go-signal; _optional_                                                                              |
+| `error`             | string  | Why the group couldn't be fetched (e.g. we are not a member); _optional_. The other fields then only hold what go-signal knows |
+
+The recipient fields (`aci`, `pni`, `number`, `username`) are those of a
+[recipient](#common-objects). Users invited by phone number are missing from `pending` (signalmeow
+can't decrypt them yet).
+
+## `groups show`
+
+The document is `{"version": 1, "group": {…}}`, where `group` is one group object as in
+[`groups list`](#groups-list), always without `error`: a group that can't be fetched fails the
+command instead.
+
+## `groups leave`
+
+```json
+{
+  "version": 1,
+  "left": {
+    "id": "Z3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXA=",
+    "title": "Family",
+    "membership": "member",
+    "revision": 13,
+    "promoted": [{ "aci": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }],
+    "leftAt": "2026-09-26T10:00:00Z"
+  }
+}
+```
+
+| Field        | Type   | Description                                                                                            |
+| ------------ | ------ | ------------------------------------------------------------------------------------------------------ |
+| `id`         | string | Group ID (base64)                                                                                      |
+| `title`      | string | Title of the group                                                                                     |
+| `membership` | string | What we gave up: `member`, `pending` (declined the invitation) or `requesting` (cancelled the request) |
+| `revision`   | number | The group's revision after leaving                                                                     |
+| `promoted`   | array  | [Recipients](#common-objects) made admins in the same change (`--promote`); may be empty               |
+| `leftAt`     | string | When we left                                                                                           |
+
+## `identities list`
+
+```json
+{
+  "version": 1,
+  "identities": [
+    {
+      "aci": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "fingerprint": "05ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100",
+      "trust": "untrusted",
+      "firstSeen": "2026-09-20T12:30:00Z",
+      "changedAt": "2026-09-21T08:15:00Z"
+    }
+  ]
+}
+```
+
+One **identity** object per user whose identity key go-signal has stored, ordered by ACI (with a
+recipient argument, only theirs; `[]` if none is known):
+
+| Field         | Type   | Description                                                                                                                                         |
+| ------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `aci`         | string | The user's ACI                                                                                                                                      |
+| `number`      | string | Phone number, if given as the recipient argument; _optional_                                                                                        |
+| `username`    | string | Username, if given as the recipient argument; _optional_                                                                                            |
+| `fingerprint` | string | The identity (public) key in hex: 33 bytes, starting with the key type `05`                                                                         |
+| `trust`       | string | `trusted-unverified` (first key seen, or trusted by hand), `trusted-verified` (safety number compared) or `untrusted` (changed; sending is blocked) |
+| `firstSeen`   | string | When go-signal first stored a key of this user; _optional_ (unknown for keys stored before go-signal tracked them)                                  |
+| `changedAt`   | string | When the key last changed; _optional_                                                                                                               |
+
+## `identities show`
+
+```json
+{
+  "version": 1,
+  "identity": {
+    "aci": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    "fingerprint": "05a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90",
+    "trust": "trusted-unverified",
+    "firstSeen": "2026-09-20T12:30:00Z",
+    "safetyNumber": "847411542415762535671764553031165774357252933441622828935299",
+    "scannable": "CAISIgog…"
+  }
+}
+```
+
+The **identity** object as in `identities list`, plus:
+
+| Field          | Type   | Description                                                                              |
+| -------------- | ------ | ---------------------------------------------------------------------------------------- |
+| `safetyNumber` | string | The 60-digit safety number of this account and the user; the apps show it in blocks of 5 |
+| `scannable`    | string | Base64 of what the apps' safety number QR code contains                                  |
+
+## `identities trust`
+
+```json
+{
+  "version": 1,
+  "identity": {
+    "aci": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    "fingerprint": "05ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100",
+    "trust": "trusted-verified",
+    "firstSeen": "2026-09-20T12:30:00Z",
+    "changedAt": "2026-09-21T08:15:00Z"
+  }
+}
+```
+
+The **identity** object (as in `identities list`) after trusting it.
+
 ## `receive`
 
 `receive` writes one document per event and line ([NDJSON](https://github.com/ndjson/ndjson-spec))
@@ -261,30 +570,34 @@ any release, so scripts should skip types they don't know.
 | `readSync`          | Another of our devices marked messages as read                   |
 | `unsupported`       | Content go-signal can't show yet, named in `content`             |
 | `decryptionFailure` | An incoming message could not be decrypted                       |
+| `identityChanged`   | A user's identity key (safety number) changed                    |
 | `queueEmpty`        | The server has delivered all messages that were queued for us    |
 | `connection`        | The connection state changed                                     |
 
 Plain output prints the same events, one line each (`[time] <sender> → <dest>: <text>`, where
-`me` is this account), except `queueEmpty` and `connection`, which only go to the log (`-v`).
+`me` is this account and other users show by name, else by number or ACI), except `queueEmpty` and `connection`, which only go to the log (`-v`).
 
 ### Common objects
 
-A **recipient** identifies a user. At least one field is set; names are not resolved yet.
+A **recipient** identifies a user. At least one of `aci`, `pni`, `number` and `username` is set;
+they are what the event said. `name` comes from go-signal's store.
 
-| Field      | Type   | Description                                   |
-| ---------- | ------ | --------------------------------------------- |
-| `aci`      | string | Account identity (ACI); _optional_            |
-| `pni`      | string | Phone number identity (PNI); _optional_       |
-| `number`   | string | Phone number (E.164); _optional_              |
-| `username` | string | Username, without the leading `@`; _optional_ |
+| Field      | Type   | Description                                                                          |
+| ---------- | ------ | ------------------------------------------------------------------------------------ |
+| `aci`      | string | Account identity (ACI); _optional_                                                   |
+| `pni`      | string | Phone number identity (PNI); _optional_                                              |
+| `number`   | string | Phone number (E.164); _optional_                                                     |
+| `username` | string | Username, without the leading `@`; _optional_                                        |
+| `name`     | string | The user's name (see [`contacts list`](#contacts-list)); _optional_ (unknown, or us) |
 
 A **chat** is the conversation an event belongs to. It has one of these fields, or none (`{}`)
 when the event isn't about a single conversation.
 
-| Field       | Type      | Description                                            |
-| ----------- | --------- | ------------------------------------------------------ |
-| `groupId`   | string    | Group ID (base64); _optional_                          |
-| `recipient` | recipient | The other party of a 1:1 chat (see `sync`); _optional_ |
+| Field        | Type      | Description                                                                         |
+| ------------ | --------- | ----------------------------------------------------------------------------------- |
+| `groupId`    | string    | Group ID (base64); _optional_                                                       |
+| `groupTitle` | string    | The group's title, if go-signal has fetched the group before (`groups`); _optional_ |
+| `recipient`  | recipient | The other party of a 1:1 chat (see `sync`); _optional_                              |
 
 The **envelope fields** appear at the top level of `message`, `edit`, `delete`, `reaction`,
 `typing` and `unsupported`:
@@ -411,6 +724,20 @@ New names can be added, and some may become event types of their own, in any rel
 | `timestamp` | number    | The message's timestamp           |
 | `time`      | string    | `timestamp` as a time; _optional_ |
 | `error`     | string    | Why decryption failed; _optional_ |
+
+### `identityChanged`
+
+| Field            | Type      | Description                                                        |
+| ---------------- | --------- | ------------------------------------------------------------------ |
+| `recipient`      | recipient | The user whose key changed                                         |
+| `oldFingerprint` | string    | The key trusted before, in hex (see `identities list`); _optional_ |
+| `newFingerprint` | string    | The new key, which is `untrusted`                                  |
+| `time`           | string    | When go-signal noticed the change; _optional_                      |
+
+Sending to the user fails (`error` in the `send` results) until `go-signal identities trust` is
+run for them; receiving from them keeps working. The event comes right before the message that
+carried the new key. A change noticed while sending, or while `receive` wasn't reading, is
+reported by the next `receive`.
 
 ### `queueEmpty`
 
