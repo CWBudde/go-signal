@@ -59,6 +59,7 @@ const (
 	typeReadSync          = "readSync"
 	typeUnsupported       = "unsupported"
 	typeDecryptionFailure = "decryptionFailure"
+	typeIdentityChanged   = "identityChanged"
 	typeQueueEmpty        = "queueEmpty"
 	typeConnection        = "connection"
 )
@@ -224,6 +225,15 @@ type decryptionFailureDoc struct {
 	Error     string        `json:"error,omitempty"`
 }
 
+type identityChangedDoc struct {
+	eventHead
+
+	Recipient      recipientJSON `json:"recipient"`
+	OldFingerprint string        `json:"oldFingerprint,omitempty"`
+	NewFingerprint string        `json:"newFingerprint"`
+	Time           time.Time     `json:"time,omitzero"`
+}
+
 type connectionDoc struct {
 	eventHead
 
@@ -278,6 +288,11 @@ func (p *Printer) eventDoc(evt signal.Event) any {
 		return decryptionFailureDoc{
 			eventHead: head(typeDecryptionFailure), Sender: p.recipient(evt.Sender),
 			Timestamp: evt.Timestamp, Time: msTime(evt.Timestamp), Error: errorText(evt.Err),
+		}
+	case *signal.IdentityChanged:
+		return identityChangedDoc{
+			eventHead: head(typeIdentityChanged), Recipient: p.recipient(evt.Recipient),
+			OldFingerprint: evt.OldFingerprint, NewFingerprint: evt.NewFingerprint, Time: utc(evt.Time),
 		}
 	case *signal.QueueEmpty:
 		return head(typeQueueEmpty)
@@ -379,6 +394,8 @@ func (p *Printer) eventLine(evt signal.Event) string {
 	case *signal.DecryptionFailure:
 		return p.timePrefix(evt.Timestamp) + p.who(evt.Sender) + " → " + self + ": [decryption failed: " +
 			oneLine(errorText(evt.Err)) + "]"
+	case *signal.IdentityChanged:
+		return p.identityChangedLine(evt)
 	case *signal.QueueEmpty, *signal.Connection:
 		return ""
 	default:
@@ -515,6 +532,18 @@ func (p *Printer) readSyncLine(evt *signal.ReadSync) string {
 	}
 
 	return p.timePrefix(evt.Timestamp) + self + ": [read on another device: " + strings.Join(marks, ", ") + "]"
+}
+
+// identityChangedLine is `[time] <user>: [safety number changed …]`, with the command that
+// unblocks sending.
+func (p *Printer) identityChangedLine(evt *signal.IdentityChanged) string {
+	prefix := ""
+	if !evt.Time.IsZero() {
+		prefix = "[" + p.dateTime(evt.Time) + "] "
+	}
+
+	return prefix + p.who(evt.Recipient) + ": [safety number changed; sending to them is blocked until you run: " +
+		"go-signal identities trust " + evt.Recipient.String() + "]"
 }
 
 // timePrefix is "[time] " for a Signal timestamp, or "" when it is unknown.

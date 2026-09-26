@@ -73,6 +73,8 @@ type meowClient struct {
 	connDevice *mstore.Device
 	ownACI     string
 	account    Account
+	// trust decides which identity keys connDevice may send to (see installTrust).
+	trust *identityTrust
 
 	// cli runs the current receive loops; the supervisor replaces it on a restart.
 	cliMu sync.Mutex
@@ -197,6 +199,7 @@ func (c *meowClient) Connect(ctx context.Context, opts ...ConnectOption) error {
 	}
 
 	c.connDevice = device
+	c.trust = installTrust(device, c.data, c.log, time.Now)
 	c.ownACI = device.ACI.String()
 	c.account = acc
 	c.sendOnly = NewConnectOptions(opts...).SendOnly
@@ -522,26 +525,16 @@ func (c *meowClient) selectAccount() (Account, error) {
 
 // handle is signalmeow's event handler. Its return value decides whether the envelope is acked,
 // so it only returns true once the event has been handed to the consumer. Once Close has
-// started, and always in send-only mode, it leaves every envelope for the next run.
+// started, and always in send-only mode, it leaves every envelope for the next run. Identity
+// changes are reported before the event (see reportIdentityChanges).
 func (c *meowClient) handle(raw events.SignalEvent) bool {
 	if !c.begin(&c.handling) {
 		return false
 	}
 	defer c.handling.Done()
 
-	// signalmeow has stored the phone's contact list by now (IsFromDB marks contacts changed by
-	// a storage sync instead). The event itself is dropped below and acked, in send-only mode
-	// too: there is nothing left to deliver.
-	if list, ok := raw.(*events.ContactList); ok && !list.IsFromDB {
-		c.contactListArrived(len(list.Contacts))
-	}
-
-	// signalmeow stored contacts from the storage service, which may have undone a pending
-	// block or unblock.
-	if list, ok := raw.(*events.ContactList); ok && list.IsFromDB {
-		ctx, cancel := context.WithTimeout(c.zlog.WithContext(context.Background()), overrideSettleTimeout)
-		c.storageSynced(ctx, c.connDevice, list.Contacts)
-		cancel()
+	if list, ok := raw.(*events.ContactList); ok {
+		c.contactsStored(list)
 	}
 
 	evt := c.checkLoggedOut(convertEvent(raw, c.ownACI))
@@ -557,13 +550,30 @@ func (c *meowClient) handle(raw events.SignalEvent) bool {
 		return false
 	}
 
-	if !c.emit(evt) {
+	if !c.reportIdentityChanges(evt) || !c.emit(evt) {
 		return false
 	}
 
 	c.acked.Store(true)
 
 	return true
+}
+
+// contactsStored follows up on contacts signalmeow has stored. Without IsFromDB they are the
+// phone's contact list, which a running Sync waits for; with it they come from a storage sync,
+// which may have undone a pending block or unblock. The event itself is dropped by handle and
+// acked, in send-only mode too: there is nothing left to deliver.
+func (c *meowClient) contactsStored(list *events.ContactList) {
+	if !list.IsFromDB {
+		c.contactListArrived(len(list.Contacts))
+
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.zlog.WithContext(context.Background()), overrideSettleTimeout)
+	defer cancel()
+
+	c.storageSynced(ctx, c.connDevice, list.Contacts)
 }
 
 // checkLoggedOut marks the connected account as unlinked when evt says the server logged the
