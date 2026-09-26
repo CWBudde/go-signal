@@ -20,13 +20,19 @@ const (
 // SignalmeowVersion returns the version of the mautrix-signal module (which provides signalmeow)
 // that this binary was built with, or "unknown" when the build info doesn't record it.
 func SignalmeowVersion() string {
+	return moduleVersion(signalmeowModule)
+}
+
+// moduleVersion returns the version of the dependency path from the build info, noting a
+// replacement, or "unknown".
+func moduleVersion(path string) string {
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
 		return unknownVersion
 	}
 
 	for _, dep := range info.Deps {
-		if dep.Path != signalmeowModule {
+		if dep.Path != path {
 			continue
 		}
 

@@ -29,6 +29,11 @@ func newVersionCmd() *cobra.Command {
 			fmt.Fprintf(out, "Build date: %s\n", BuildDate)
 			fmt.Fprintf(out, "signalmeow: %s\n", signal.SignalmeowVersion())
 			fmt.Fprintf(out, "libsignal: %s\n", signal.LibsignalVersion)
+
+			if version := signal.LibsignalGoVersion(); version != "" {
+				fmt.Fprintf(out, "libsignal-go: %s\n", version)
+			}
+
 			fmt.Fprintf(out, "Go version: %s\n", runtime.Version())
 			fmt.Fprintf(out, "OS/Arch: %s/%s\n", runtime.GOOS, runtime.GOARCH)
 		},

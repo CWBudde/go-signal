@@ -35,6 +35,15 @@ func TestVersionCommand(t *testing.T) {
 	if !strings.Contains(out.String(), "signalmeow: "+signal.SignalmeowVersion()+"\n") {
 		t.Errorf("missing signalmeow version: %q", out.String())
 	}
+
+	// Only the purego build runs on libsignal-go and reports its version.
+	if version := signal.LibsignalGoVersion(); version != "" {
+		if !strings.Contains(out.String(), "libsignal-go: "+version+"\n") {
+			t.Errorf("missing libsignal-go version: %q", out.String())
+		}
+	} else if strings.Contains(out.String(), "libsignal-go:") {
+		t.Errorf("libsignal-go version in a cgo build: %q", out.String())
+	}
 }
 
 func TestInvalidLogFormat(t *testing.T) {
