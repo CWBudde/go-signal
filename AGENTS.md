@@ -12,6 +12,11 @@ commands are idiomatic noun-verb subcommands in kebab-case (see PLAN.md §3). Th
 - `cmd/` holds the Cobra commands. `NewRootCmd()` builds the tree, with no package globals and no
   `init()`. Each command (group) gets its own file and a `newXxxCmd()` constructor.
 - `internal/` holds the implementation packages (see PLAN.md §2).
+- `scripts/` holds build and release helpers: `build-static.sh` (musl build in Alpine),
+  `package.sh`, `render-packaging.sh` and `gendocs/` (man pages and completions).
+  `packaging/` has the Homebrew/AUR templates, `contrib/systemd/` the receive timer, and the
+  root `Dockerfile` the scratch image. Releases: release-please plus `.github/workflows/release.yaml`
+  (docs/dev.md, "Releases").
 - `reference/signal-cli/` is the upstream Java source (submodule, read-only). Consult it for
   protocol behaviour and features. Never edit it.
 
@@ -59,6 +64,8 @@ event counts as acked once it is read from the channel; unread events are redeli
 ## Commands
 
 - `just build` / `just test` / `just lint` / `just fmt` / `just check`
+- `just build-static` / `just smoke-static` / `just package <os> <arch>` for release builds
+  (Docker needed)
 - Run `just fmt` and `just lint` before committing.
 - `just check` = fmt-check, lint, check-libsignal, test, go mod tidy check. golangci-lint runs with
   `default = 'all'` (see `.golangci.toml` for the few disabled linters).

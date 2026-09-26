@@ -32,3 +32,7 @@ go.work.sum
 
 # libsignal_ffi.a built by `just libsignal`
 /third_party/lib/
+
+# Static (musl) build: libsignal_ffi.a per arch and the Rust/Go caches of `just build-static`
+/third_party/lib-musl/
+/third_party/.musl/

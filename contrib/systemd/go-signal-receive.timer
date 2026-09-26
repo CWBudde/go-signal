@@ -1,0 +1,12 @@
+# Runs go-signal-receive.service daily; see there.
+
+[Unit]
+Description=Receive pending Signal messages daily (go-signal)
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

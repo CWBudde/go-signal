@@ -10,6 +10,9 @@ excludes = [
   # gitignore
   "**/.gitignore",
   ".gitmodules",
+  # written by release-please
+  "CHANGELOG.md",
+  ".release-please-manifest.json",
 ]
 
 ### Misc

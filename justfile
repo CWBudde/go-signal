@@ -11,16 +11,61 @@ export CGO_LDFLAGS := "-L" + libsignal_lib + " " + env("CGO_LDFLAGS", "-g -O2")
 # Default target
 default: build
 
+# Version info for the -X ldflags. Release builds set VERSION to the tag.
+
+version := env("VERSION", `git describe --tags --always --dirty 2>/dev/null || echo dev`)
+commit := env("COMMIT", `git rev-parse --short HEAD 2>/dev/null || echo unknown`)
+build_date := `date -u +%Y-%m-%dT%H:%M:%SZ`
+version_ldflags := "-X github.com/cwbudde/go-signal/cmd.Version=" + version + " -X github.com/cwbudde/go-signal/cmd.GitCommit=" + commit + " -X github.com/cwbudde/go-signal/cmd.BuildDate=" + build_date
+
+# Go image for the static build, matching the go directive in go.mod
+
+go_image := "golang:" + `sed -n 's/^go \([0-9]*\.[0-9]*\).*/\1/p' go.mod` + "-alpine"
+
 # Build the binary with version info
 build:
+    go build -ldflags "{{ version_ldflags }}" -o bin/go-signal .
+
+# Release build for this OS/arch (glibc/macOS, dynamic) to dist/<os>_<arch>/go-signal
+build-release:
     #!/usr/bin/env bash
-    VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
-    COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-    BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-    PKG=github.com/cwbudde/go-signal/cmd
-    go build \
-        -ldflags "-X ${PKG}.Version=${VERSION} -X ${PKG}.GitCommit=${COMMIT} -X ${PKG}.BuildDate=${BUILD_DATE}" \
-        -o bin/go-signal .
+    set -euo pipefail
+    out=dist/$(go env GOOS)_$(go env GOARCH)
+    go build -trimpath -ldflags "-s -w {{ version_ldflags }}" -o "$out/go-signal" .
+    "$out/go-signal" version
+
+# Fully static linux binary for this machine's arch (musl, in an Alpine container) to dist/linux_<arch>/
+build-static:
+    git submodule update --init --depth 1 third_party/libsignal
+    docker run --rm -v "$PWD:/src" \
+        -e VERSION="{{ version }}" -e COMMIT="{{ commit }}" -e BUILD_DATE="{{ build_date }}" \
+        -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
+        {{ go_image }} /src/scripts/build-static.sh
+
+# Run the static binary in a scratch container (the release image) as a smoke test
+smoke-static:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    arch=$(go env GOARCH)
+    # ldd exits non-zero for a static binary.
+    ldd_out=$(LC_ALL=C ldd dist/linux_$arch/go-signal 2>&1 || true)
+    grep -q "not a dynamic executable" <<<"$ldd_out" || { echo "$ldd_out" >&2; exit 1; }
+    docker build --build-arg TARGETARCH=$arch -t go-signal:smoke .
+    docker run --rm go-signal:smoke version
+    # No account: must fail cleanly with "not linked", not crash.
+    if out=$(docker run --rm go-signal:smoke account show 2>&1); then
+        echo "account show succeeded without an account" >&2; exit 1
+    fi
+    echo "$out" | grep -q "no linked account" || { echo "$out" >&2; exit 1; }
+
+# Man pages and shell completions to dist/docs
+docs-gen:
+    rm -rf dist/docs
+    SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) CGO_ENABLED=0 go run ./scripts/gendocs dist/docs
+
+# Pack dist/<os>_<arch>/go-signal with docs into dist/go-signal_<version>_<os>_<arch>.tar.gz
+package os arch: docs-gen
+    ./scripts/package.sh "{{ version }}" {{ os }} {{ arch }}
 
 # Build the binary without version info (faster for development)
 build-dev:
@@ -99,6 +144,8 @@ check-libsignal:
     #!/usr/bin/env bash
     set -euo pipefail
     git submodule update --init --depth 1 third_party/libsignal
+    # .Dir is empty until the module is in the module cache (e.g. on a fresh CI runner).
+    go mod download go.mau.fi/mautrix-signal
     dir=$(go list -m -f '{{{{.Dir}}' go.mau.fi/mautrix-signal)
     want=$(grep -o 'v[0-9][0-9.]*' "$dir/pkg/libsignalgo/signalversion/version.go")
     lib="git -C third_party/libsignal"
@@ -113,6 +160,10 @@ check-libsignal:
 # Clean build artifacts
 clean:
     rm -rf bin/ dist/ coverage.out coverage.html coverage-results.md
+
+# Remove the static build's caches and libraries (third_party/.musl, third_party/lib-musl)
+clean-static:
+    rm -rf third_party/.musl third_party/lib-musl
 
 # Show help
 help:

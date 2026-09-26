@@ -1,0 +1,26 @@
+# Receives pending Signal messages once; started daily by go-signal-receive.timer.
+#
+# Signal unlinks a linked device that hasn't connected for about 30 days. Running receive
+# regularly keeps go-signal linked. Install as a user unit:
+#
+#   cp go-signal-receive.{service,timer} ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now go-signal-receive.timer
+#
+# The received messages are printed to the journal (journalctl --user -u go-signal-receive) and
+# acknowledged to the server, so they won't show up in a later receive. Add
+# --download-attachments <dir> to keep attachments, or -o json and a redirect to keep the
+# messages somewhere else. When `mcp serve` or `receive --follow` is running for the account,
+# this run fails on the account lock; the running process already keeps the device linked.
+#
+# systemd looks up a bare "go-signal" in /usr/local/bin and /usr/bin. If it is installed
+# elsewhere (e.g. ~/.local/bin), use the full path, such as %h/.local/bin/go-signal.
+
+[Unit]
+Description=Receive pending Signal messages (go-signal)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=go-signal receive --timeout 30s
