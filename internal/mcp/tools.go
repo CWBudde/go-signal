@@ -46,8 +46,11 @@ type identitiesListOutput struct {
 
 // tools holds what the tool handlers need.
 type tools struct {
-	app    *app.App
-	loc    *time.Location
+	app   *app.App
+	inbox *app.Inbox
+	loc   *time.Location
+	// dir is where attachment_get saves attachments.
+	dir    string
 	logger *slog.Logger
 }
 

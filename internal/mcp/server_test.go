@@ -1,7 +1,9 @@
 package mcp_test
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"slices"
 	"strings"
@@ -34,8 +36,18 @@ func testAccount() signal.Account {
 
 // connect starts a server on a client of fake and returns an MCP client session connected to it
 // through the SDK's in-memory transport. Both end with the test. Like `mcp serve`, it connects
-// the client in send-only mode first, if fake has an account.
+// the client first, if fake has an account, and receives its events into the inbox.
 func connect(t *testing.T, fake *signaltest.Fake) *sdk.ClientSession {
+	t.Helper()
+
+	return connectWith(t, fake, mcp.Options{}, nil)
+}
+
+// connectWith is connect with server options (Version, Location and a DownloadDir are filled
+// in) and client options.
+func connectWith(
+	t *testing.T, fake *signaltest.Fake, opts mcp.Options, clientOpts *sdk.ClientOptions,
+) *sdk.ClientSession {
 	t.Helper()
 
 	client, err := fake.Factory(t.Context(), signal.Options{})
@@ -50,14 +62,17 @@ func connect(t *testing.T, fake *signaltest.Fake) *sdk.ClientSession {
 		}
 	})
 
-	if len(fake.Linked) > 0 {
-		err = client.Connect(t.Context(), signal.SendOnly())
-		if err != nil {
-			t.Fatalf("connect: %v", err)
-		}
+	opts.Version, opts.Location = testVersion, time.UTC
+	if opts.DownloadDir == "" {
+		opts.DownloadDir = t.TempDir()
 	}
 
-	server := mcp.NewServer(app.New(client), mcp.Options{Version: testVersion, Location: time.UTC})
+	server := mcp.NewServer(app.New(client), opts)
+
+	if len(fake.Linked) > 0 {
+		receive(t, server, client)
+	}
+
 	serverTransport, clientTransport := sdk.NewInMemoryTransports()
 
 	serverSession, err := server.Connect(t.Context(), serverTransport, nil)
@@ -67,7 +82,7 @@ func connect(t *testing.T, fake *signaltest.Fake) *sdk.ClientSession {
 
 	t.Cleanup(func() { _ = serverSession.Close() })
 
-	mcpClient := sdk.NewClient(&sdk.Implementation{Name: "test", Version: "0"}, nil)
+	mcpClient := sdk.NewClient(&sdk.Implementation{Name: "test", Version: "0"}, clientOpts)
 
 	session, err := mcpClient.Connect(t.Context(), clientTransport, nil)
 	if err != nil {
@@ -77,6 +92,30 @@ func connect(t *testing.T, fake *signaltest.Fake) *sdk.ClientSession {
 	t.Cleanup(func() { _ = session.Close() })
 
 	return session
+}
+
+// receive connects client and receives its events into the server's inbox until the test ends.
+func receive(t *testing.T, server *mcp.Server, client signal.Client) {
+	t.Helper()
+
+	err := client.Connect(t.Context())
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	received := make(chan error, 1)
+
+	go func() { received <- server.Receive(ctx, client.Events()) }()
+
+	t.Cleanup(func() {
+		cancel()
+
+		err := <-received
+		if err != nil && !errors.Is(err, context.Canceled) {
+			t.Errorf("receive: %v", err)
+		}
+	})
 }
 
 func TestInitialize(t *testing.T) {
@@ -108,12 +147,19 @@ func TestListTools(t *testing.T) {
 		t.Fatalf("list tools: %v", err)
 	}
 
+	// The tools that change something: attachment_get writes a file, mark_read sends receipts.
+	writes := map[string]bool{"attachment_get": true, "mark_read": true}
+
 	names := make([]string, 0, len(res.Tools))
 	for _, tool := range res.Tools {
 		names = append(names, tool.Name)
 
-		if tool.Annotations == nil || !tool.Annotations.ReadOnlyHint {
-			t.Errorf("%s: not annotated as read-only", tool.Name)
+		if tool.Annotations == nil || tool.Annotations.ReadOnlyHint == writes[tool.Name] {
+			t.Errorf("%s: annotations %+v, want readOnlyHint %v", tool.Name, tool.Annotations, !writes[tool.Name])
+		}
+
+		if writes[tool.Name] && (tool.Annotations.DestructiveHint == nil || *tool.Annotations.DestructiveHint) {
+			t.Errorf("%s: not annotated as non-destructive", tool.Name)
 		}
 
 		if tool.OutputSchema == nil {
@@ -122,7 +168,8 @@ func TestListTools(t *testing.T) {
 	}
 
 	want := []string{
-		accountShowTool, "contacts_list", "contacts_show", "groups_list", "groups_show", "identities_list",
+		accountShowTool, "attachment_get", "contacts_list", "contacts_show", "groups_list", "groups_show",
+		"identities_list", "mark_read", "messages_list", "messages_wait",
 	}
 	if !slices.Equal(names, want) {
 		t.Errorf("tools %v, want %v", names, want)
@@ -190,7 +237,7 @@ func TestServeEOF(t *testing.T) {
 	defer client.Close()
 
 	// A client that closes stdin right away ends the server without an error.
-	err = mcp.Serve(t.Context(), app.New(client), mcp.Options{}, strings.NewReader(""), io.Discard)
+	err = mcp.Serve(t.Context(), app.New(client), nil, mcp.Options{}, strings.NewReader(""), io.Discard)
 	if err != nil {
 		t.Fatalf("serve: %v", err)
 	}

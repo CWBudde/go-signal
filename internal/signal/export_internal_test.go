@@ -28,3 +28,13 @@ func Supervise(
 func (p ReconnectPolicy) Backoff(n int) time.Duration {
 	return p.backoff(n)
 }
+
+// MarshalEvent exposes marshalEvent to the signal_test package.
+func MarshalEvent(evt Event, chat Chat) ([]byte, error) {
+	return marshalEvent(evt, chat)
+}
+
+// UnmarshalEvent exposes unmarshalEvent to the signal_test package.
+func UnmarshalEvent(data []byte) (Event, Chat) {
+	return unmarshalEvent(data)
+}

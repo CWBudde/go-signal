@@ -236,38 +236,10 @@ func hasContent(evt signal.Event) bool {
 	}
 }
 
-// lastEvent reports whether receive ends with evt, a connection that is lost for good, and
-// returns its error.
+// lastEvent reports whether receive ends with evt, a connection that is lost for good (see
+// app.LostConnection), and returns its error.
 func lastEvent(evt signal.Event) (bool, error) {
-	conn, ok := evt.(*signal.Connection)
-	if !ok {
-		return false, nil
-	}
+	err := app.LostConnection(evt)
 
-	switch conn.State {
-	case signal.StateLoggedOut:
-		return true, loggedOutError(conn.Err)
-	case signal.StateFailed:
-		if conn.Err == nil {
-			return true, signal.ErrConnectionFailed
-		}
-
-		return true, conn.Err
-	case signal.StateConnected, signal.StateDisconnected, signal.StateError:
-	}
-
-	return false, nil
-}
-
-// loggedOutError returns the error of a StateLoggedOut event. The client already reports
-// signal.UnlinkedError; anything else is wrapped so that it still maps to ExitUnlinked.
-func loggedOutError(cause error) error {
-	switch {
-	case errors.Is(cause, signal.ErrDeviceUnlinked):
-		return cause
-	case cause == nil:
-		return signal.ErrDeviceUnlinked
-	default:
-		return fmt.Errorf("%w: %w", signal.ErrDeviceUnlinked, cause)
-	}
+	return err != nil, err //nolint:wrapcheck // the connection's error, e.g. signal.ErrDeviceUnlinked
 }

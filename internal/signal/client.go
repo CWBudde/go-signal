@@ -3,6 +3,7 @@ package signal
 import (
 	"context"
 	"log/slog"
+	"time"
 )
 
 // Client is the facade that cmd/ (and later internal/app) talks to. The signalmeow-backed
@@ -190,6 +191,27 @@ type Client interface { //nolint:interfacebloat // the one facade over signalmeo
 	// Group or LeaveGroup), by group ID, from the store: it needs no Connect. Groups never fetched
 	// are missing. It fails with ErrClosed after Close.
 	GroupTitles(ctx context.Context) (map[string]CachedGroup, error)
+
+	// InboxAdd stores entry in the account's inbox, where `mcp serve` keeps the events it
+	// received, and returns it with its new ID. Every event type but *Connection and *QueueEmpty
+	// can be stored (ErrNotStorable). Like the other inbox methods, it works on the local store
+	// and needs no Connect; it fails with ErrClosed after Close.
+	InboxAdd(ctx context.Context, entry InboxEntry) (InboxEntry, error)
+
+	// InboxList returns the inbox entries that q selects, sorted by ID.
+	InboxList(ctx context.Context, q InboxQuery) ([]InboxEntry, error)
+
+	// InboxChats summarizes the inbox by chat, newest chat first; entries without a chat are left
+	// out.
+	InboxChats(ctx context.Context) ([]InboxChat, error)
+
+	// InboxMarkRead marks the unread entries of the messages with these senders (by ACI) and
+	// timestamps as read and returns how many there were.
+	InboxMarkRead(ctx context.Context, marks []ReadMark) (int, error)
+
+	// InboxPrune deletes the entries received earlier than before (unless it is zero) and all
+	// but the newest keep entries (unless keep is zero), and returns how many it deleted.
+	InboxPrune(ctx context.Context, before time.Time, keep int) (int, error)
 }
 
 // Options configures a Client.

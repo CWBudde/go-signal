@@ -83,10 +83,27 @@ func (p *Printer) recipient(r signal.Recipient) recipientJSON {
 	return newRecipientJSON(r, p.names)
 }
 
-type chatJSON struct {
+// ChatJSON is the "chat" object of docs/json.md: a group or, for 1:1 chats, the other party.
+type ChatJSON struct {
 	GroupID    string         `json:"groupId,omitempty"`
 	GroupTitle string         `json:"groupTitle,omitempty"`
 	Recipient  *recipientJSON `json:"recipient,omitempty"`
+}
+
+// NewChatJSON converts chat, with the group's title or the user's name if names knows it.
+func NewChatJSON(chat signal.Chat, names app.Names) ChatJSON {
+	var out ChatJSON
+
+	switch {
+	case chat.IsGroup():
+		out.GroupID = chat.GroupID
+		out.GroupTitle = names.GroupTitle(chat.GroupID)
+	case !chat.Recipient.IsZero():
+		rcpt := newRecipientJSON(chat.Recipient, names)
+		out.Recipient = &rcpt
+	}
+
+	return out
 }
 
 type eventHead struct {
@@ -101,7 +118,7 @@ func head(typ string) eventHead {
 // envelopeJSON holds the fields shared by events that come from a message.
 type envelopeJSON struct {
 	Sender     recipientJSON `json:"sender"`
-	Chat       chatJSON      `json:"chat"`
+	Chat       ChatJSON      `json:"chat"`
 	Timestamp  uint64        `json:"timestamp"`
 	Time       time.Time     `json:"time,omitzero"`
 	ServerTime time.Time     `json:"serverTime,omitzero"`
@@ -115,15 +132,7 @@ func (p *Printer) envelope(env signal.Envelope) envelopeJSON {
 		Time:       msTime(env.Timestamp),
 		ServerTime: msTime(env.ServerTimestamp),
 		Sync:       env.Sync,
-	}
-
-	switch {
-	case env.Chat.IsGroup():
-		out.Chat.GroupID = env.Chat.GroupID
-		out.Chat.GroupTitle = p.names.GroupTitle(env.Chat.GroupID)
-	case !env.Chat.Recipient.IsZero():
-		rcpt := p.recipient(env.Chat.Recipient)
-		out.Chat.Recipient = &rcpt
+		Chat:       NewChatJSON(env.Chat, p.names),
 	}
 
 	return out
