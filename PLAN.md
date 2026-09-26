@@ -1230,12 +1230,24 @@ is needed for this standalone milestone.)
 
 #### 8.2 zkgroup crypto layer
 
-- [ ] `uid_struct`/`uid_encryption`, `profile_key_struct`/`profile_key_encryption`,
+- [x] `uid_struct`/`uid_encryption`, `profile_key_struct`/`profile_key_encryption`,
       `profile_key_commitment`, `timestamp_struct`
+      (Implemented in the sibling `libsignal-go` fork's `zkgroup/zkcrypto` package.
+      Includes ACI/PNI binding, reversible Lizard/Elligator encoding, authenticated
+      decryption, canonical serialization, commitments with secret nonces, and timestamp
+      scalar derivation. `compat/vectors/zkgroup-crypto.json` contains 40 pinned Rust cases
+      and all three system-parameter sets. Live interop checks fresh inputs, mutual
+      decryption, wrong UUID/group-key rejection and malformed ciphertexts. Degenerate
+      profile keys that map to the identity retain upstream's decryption rejection.)
 - [ ] `credentials` (KVAC), `signature`, `proofs`, `profile_key_credential_request`
 - [ ] `zkcredential`: attributes, credentials, issuance, presentation, endorsements
 
 **Done when:** crypto-layer vectors match byte for byte.
+(Attribute/encryption milestone verified: vectors and two regenerations are byte-identical;
+full fork pure-Go tests/build, race tests, vet, lint and Rust interop pass. Lizard and
+encoding fuzzers completed 245,400 and 743,523 executions, respectively.
+`zkgroup/zkcrypto/CONSTANT_TIME.md` records the source-level review. Credential/proof and
+zkcredential work above remains open; no fork release or dependency bump is needed yet.)
 
 #### 8.3 zkgroup API: groups and profiles
 
