@@ -1494,6 +1494,21 @@ the fork's main, no tag. The shim wiring is 9.3.)
       directions (`TestDiffHPKE`) and against a committed libsignal ciphertext.)
 - [ ] Sweep: any `libsignalgo` symbol still returning `ErrNotImplemented` gets implemented or
       listed as a known gap in the fork's scope matrix
+      (2026-09-27 — partial: the fork side is done, the shim is not. Three purego stubs are left:
+      `sgxclient` (9.3), `hsmenclave` and `devicetransfer`; signalmeow calls only the first. The
+      other two are now ported in the libsignal-go fork on `feat/cdsi` (unpublished), with scope
+      matrix rows:
+      - `attest/hsmenclave` (`981059a87`) ports `hsm_enclave.rs` and the bridge's
+        `HsmEnclaveClient`: an NK handshake carrying the trusted code hashes, and a reply that must
+        name one of them. It was checked live against a snow NK responder, and its reply errors
+        against upstream's `complete`.
+      - `devicetransfer` (`07f8c1ccd`) makes the 4096-bit PKCS#8 RSA key and upstream's
+        self-signed v1 certificate. RSA certificates are byte-identical to upstream's for the same
+        key and second, and BoringSSL reads Go's keys and certificates. Key formats, name length,
+        validity limit and time encodings follow upstream.
+
+      Remaining: after 8.4 is committed, publish the fork branches and tag, replace the three
+      `_purego.go` stubs in mautrix-signal `pkg/libsignalgo`, and bump go.mod.)
 
 **Done when:** `grep ErrNotImplemented` in the shim finds nothing, and `devices list` shows
 creation times in a purego build.
