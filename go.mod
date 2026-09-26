@@ -66,4 +66,4 @@ require (
 	rsc.io/qr v0.2.0 // indirect
 )
 
-replace go.mau.fi/mautrix-signal => github.com/cwbudde/mautrix-signal v0.2609.0-purego.4
+replace go.mau.fi/mautrix-signal => github.com/cwbudde/mautrix-signal v0.2609.0-purego.5
