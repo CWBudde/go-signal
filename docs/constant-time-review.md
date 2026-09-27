@@ -5,6 +5,17 @@ not.** The current backend does not support an unconditional constant-time or
 secure-erasure claim. CT-01 and CT-02 need fixing before the default switch.
 CT-03 is defense in depth.
 
+## Remediation status
+
+| Finding | Status                                                                                                                                      |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| CT-01   | Fixed in libsignal-go `v0.7.1-cw.5` (`478422d0e`), pinned through mautrix-signal `v0.2609.0-purego.6`.                                      |
+| CT-02   | Open. Only the GCM-SIV package comment is corrected (`e3aa3bf3e`, in `cw.5`); the backend tag, CPU policy and release builds are unchanged. |
+| CT-03   | Fixed in `cw.5` (`d6f6f7409`, `8e218f057`), pinned through `purego.6`.                                                                      |
+
+The findings below describe the reviewed `cw.4` baseline. The fork's
+`docs/constant-time.md` records each fix, its tests and the disassembly check.
+
 ## Scope and method
 
 The shipped baseline is go-signal `2e3b89e96a0a0455eb2d91e318057f37fbe267ba`,

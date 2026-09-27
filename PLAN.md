@@ -1601,17 +1601,35 @@ main, as on pushes.)
       not an independent audit or a blanket constant-time claim. No comprehensive zeroization:
       many shim Destroy methods are no-ops, and key/state/DB copies remain. Findings below
       are still open; completing this review does not clear the default-switch gate.)
-- [ ] CT-01: fix secret-dependent SPQR encapsulation-state endianness detection and balanced
+- [x] CT-01: fix secret-dependent SPQR encapsulation-state endianness detection and balanced
       coefficient conversion in libsignal-go, preserve byte compatibility, test the edge cases
       listed in the review, inspect amd64/arm64 output, release and update the dependency pin.
+      (2026-09-27 — libsignal-go `478422d0e`, released in `v0.7.1-cw.5`; mautrix-signal
+      `v0.2609.0-purego.6` pins it, and so does go.mod. `FixEncapsStateEndianness` classifies all
+      256 e₂ coefficients with `subtle` masks and always returns a copy swapped under a mask;
+      `toBalanced` uses a sign mask, `fromBalanced` adds 10q and uses the Barrett reduction.
+      `ct_test.go` pins them to the old branching code: every decisive position × 11 value
+      classes, the all-ambiguous state, input and trailing message unchanged, all 3329 and 65536
+      conversion inputs. The libcrux oracle, ACVP, fuzz targets, fork CI (`go`, `fuzz`, `compat`
+      runs 36329631511/…472/…542) and `just test-diff` (backend switch both ways) pass. Optimized
+      amd64 (`GOAMD64=v1`) and arm64 output: no division, coefficients only through
+      SETcc/CMOV/CSET/CSEL/SAR, jumps only on length, loop counters and bounds.)
 - [ ] CT-02: replace the backend-selection `purego` tag with a distinct tag across go-signal
       and the mautrix fork: it currently disables Go's hardware AES even on capable CPUs.
       Verify release build-file selection, define/enforce supported CPU conditions or supply
       a reviewed constant-time fallback, and correct the fork's AES-GCM-SIV timing claim.
-- [ ] CT-03: remove the CBC padding check's secret-dependent early return in libsignal-go;
+      (2026-09-27 — partial: the GCM-SIV comment is corrected in libsignal-go `e3aa3bf3e`
+      (`cw.5`). The tag rename, CPU policy / fallback and the release-build check remain.)
+- [x] CT-03: remove the CBC padding check's secret-dependent early return in libsignal-go;
       test all padding values/positions and preserve authentication before decryption.
       Current callers authenticate first, so this is defense in depth, not a demonstrated
       unauthenticated padding oracle.
+      (2026-09-27 — libsignal-go `d6f6f7409` and `8e218f057`, in `v0.7.1-cw.5` / `purego.6`.
+      The 1..16 range check joins the constant-time mask, the whole final block is scanned
+      and the result branched on once; `DecryptCBC` clears the plaintext on rejection.
+      `TestPKCS7UnpadMatchesReference` covers all 256 final bytes, correct and with each padding
+      position corrupted. Callers are unchanged, so they still authenticate first. Optimized amd64
+      and arm64 output uses only SETcc/CMOV/CSEL on the pad byte.)
 - [ ] Opt-in staging integration suite (`-tags integration,purego`): link, 1:1, group send,
       profile fetch, CDSI
 - [ ] Consider an external review of the zkgroup and attestation ports before flipping the default
