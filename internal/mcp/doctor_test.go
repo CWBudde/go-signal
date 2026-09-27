@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/cwbudde/go-signal/internal/app"
+	"github.com/cwbudde/go-signal/internal/cpu"
 	"github.com/cwbudde/go-signal/internal/mcp"
 	"github.com/cwbudde/go-signal/internal/output"
 	"github.com/cwbudde/go-signal/internal/signal"
@@ -60,7 +61,9 @@ func TestDoctor(t *testing.T) {
 		names = append(names, check.Name+"="+check.Status)
 	}
 
-	want := "mcp=ok account=ok inbox=ok connection=ok download dir=ok policy=ok"
+	cpuStatus := string(app.CPUCheck(cpu.HasAESHardware()).Status)
+
+	want := "mcp=ok account=ok inbox=ok connection=ok download dir=ok cpu=" + cpuStatus + " policy=ok"
 	if got := strings.Join(names, " "); got != want {
 		t.Errorf("checks = %s, want %s", got, want)
 	}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/cwbudde/go-signal/internal/app"
+	"github.com/cwbudde/go-signal/internal/cpu"
 	"github.com/cwbudde/go-signal/internal/mcp"
 	"github.com/cwbudde/go-signal/internal/signal"
 	"github.com/spf13/cobra"
@@ -15,10 +16,11 @@ const mcpDoctorLong = `Check whether "mcp serve" with the same flags and config 
 
   go-signal mcp doctor --allow-recipient +4915112345678
 
-It checks the safety settings and --listen, that the account is linked, that no other process
-holds it (a warning: that is expected while your MCP client runs the server), that Signal's server
-still lists this device (unless --offline), that the inbox can be read, and that attachments can
-be saved to the download dir. Each check prints ok, warn or fail, with a hint what to do.
+It checks the safety settings and --listen, that the CPU has AES instructions (a warning
+otherwise), that the account is linked, that no other process holds it (a warning: that is
+expected while your MCP client runs the server), that Signal's server still lists this device
+(unless --offline), that the inbox can be read, and that attachments can be saved to the
+download dir. Each check prints ok, warn or fail, with a hint what to do.
 
 The exit code is 0 when no check failed (warnings are fine), 3 when this device was unlinked, and
 1 for other failures. A running server answers the same questions through its doctor tool.`
@@ -87,7 +89,7 @@ func doctorConfig(clients *clientOpener) []app.Check {
 		})
 	}
 
-	return checks
+	return append(checks, app.CPUCheck(cpu.HasAESHardware()))
 }
 
 // hookCheckName names the check of --on-message.

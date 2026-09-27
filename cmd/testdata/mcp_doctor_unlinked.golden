@@ -1,5 +1,6 @@
 ok    policy     sends to 1 allowed recipient; no attachments
 ok    hook       off
 ok    transport  stdin/stdout
+ok    cpu        AES instructions available
 fail  account    +15550100: this device was unlinked (noticed 2026-09-21 08:00:00 UTC)
                  hint: link again with `go-signal link`; `go-signal account unlink` deletes the old data

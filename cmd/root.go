@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/cwbudde/go-signal/internal/app"
+	"github.com/cwbudde/go-signal/internal/cpu"
 	"github.com/cwbudde/go-signal/internal/output"
 	"github.com/cwbudde/go-signal/internal/signal"
 	"github.com/cwbudde/go-signal/internal/store"
@@ -174,17 +175,7 @@ messages, manage contacts and groups, and serve your account to AI assistants ov
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
-			err := loadConfig(cfg, cfgFile)
-			if err != nil {
-				return err
-			}
-
-			_, err = output.ParseFormat(cfg.GetString("output"))
-			if err != nil {
-				return fmt.Errorf("output: %w", err)
-			}
-
-			return setupLogging(cfg)
+			return setup(cfg, cfgFile)
 		},
 	}
 
@@ -290,6 +281,32 @@ func loadConfig(cfg *viper.Viper, cfgFile string) error {
 		if cfgFile != "" || !errors.As(err, &notFound) {
 			return fmt.Errorf("read config: %w", err)
 		}
+	}
+
+	return nil
+}
+
+// setup loads the config, checks --output and sets up logging, and warns when the CPU has no AES
+// instructions (Go's AES is then variable-time, docs/constant-time-review.md CT-02).
+func setup(cfg *viper.Viper, cfgFile string) error {
+	err := loadConfig(cfg, cfgFile)
+	if err != nil {
+		return err
+	}
+
+	_, err = output.ParseFormat(cfg.GetString("output"))
+	if err != nil {
+		return fmt.Errorf("output: %w", err)
+	}
+
+	err = setupLogging(cfg)
+	if err != nil {
+		return err
+	}
+
+	if !cpu.HasAESHardware() {
+		slog.Warn("this CPU has no AES instructions: AES runs as a variable-time table implementation",
+			"see", "docs/constant-time-review.md (CT-02)")
 	}
 
 	return nil

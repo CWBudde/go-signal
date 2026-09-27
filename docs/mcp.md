@@ -436,6 +436,7 @@ go-signal mcp doctor --allow-recipient +4915112345678 --attach-dir ~/signal-out
 ok    policy        sends to 1 allowed recipient; attachments from /home/me/signal-out
 ok    hook          off
 ok    transport     stdin/stdout
+ok    cpu           AES instructions available
 ok    account       +4915112345678 (ACI 11111111-1111-1111-1111-111111111111, device 2)
 warn  lock          account in use by another go-signal process (pid 4242): +4915112345678
                     hint: fine if this is your running MCP server; a second `mcp serve` (or `receive`) for this account fails until it stops
@@ -444,7 +445,8 @@ ok    inbox         120 entries in 7 chats, 3 unread
 ok    download dir  /home/me/.local/share/go-signal/11111111-1111-1111-1111-111111111111/attachments
 ```
 
-It checks the settings (the hook's too), that the account is linked, whether another process holds it, that
+It checks the settings (the hook's too), that the CPU has AES instructions (a warning otherwise:
+Go then uses a variable-time AES, see [the timing review](constant-time-review.md)), that the account is linked, whether another process holds it, that
 Signal's server still lists this device (skip with `--offline`), the inbox and the download
 directory. It exits with 0 when no check failed (warnings are fine), 3 when this device was
 unlinked, and 1 otherwise; `-o json` prints the [report](json.md#mcp-doctor). While the server

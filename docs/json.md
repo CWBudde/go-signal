@@ -563,6 +563,7 @@ The **identity** object (as in `identities list`) after trusting it.
       },
       { "name": "hook", "status": "ok", "detail": "off" },
       { "name": "transport", "status": "ok", "detail": "stdin/stdout" },
+      { "name": "cpu", "status": "ok", "detail": "AES instructions available" },
       {
         "name": "account",
         "status": "fail",

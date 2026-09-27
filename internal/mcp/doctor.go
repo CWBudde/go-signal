@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/cwbudde/go-signal/internal/app"
+	"github.com/cwbudde/go-signal/internal/cpu"
 	"github.com/cwbudde/go-signal/internal/output"
 	"github.com/cwbudde/go-signal/internal/signal"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -21,9 +22,10 @@ func addDoctor(server *sdk.Server, handlers *tools) {
 		Name:  "doctor",
 		Title: "Check health",
 		Description: "Check whether this server works: its version and uptime, the account, the connection to " +
-			"Signal (reconnecting or not), the inbox, the download directory and which recipients the tools may " +
-			"send to. Each check is ok, warn or fail, with a hint what to do. Call it when tools fail or no messages " +
-			"arrive; with checkServer it also asks Signal's server whether this device is still linked.",
+			"Signal (reconnecting or not), the inbox, the download directory, the CPU's AES support and which " +
+			"recipients the tools may send to. Each check is ok, warn or fail, with a hint what to do. Call it " +
+			"when tools fail or no messages arrive; with checkServer it also asks Signal's server whether this " +
+			"device is still linked.",
 		Annotations: readOnly(),
 	}, handlers.doctor)
 }
@@ -40,6 +42,7 @@ func (t *tools) doctor(
 	checks = append(checks,
 		t.connectionCheck(),
 		app.DownloadDirCheck(t.dir),
+		app.CPUCheck(cpu.HasAESHardware()),
 		app.PolicyCheck(t.readOnly, t.app.Allowlist(), t.attachDir, t.confirmer != nil),
 	)
 

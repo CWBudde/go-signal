@@ -191,6 +191,25 @@ func TestDoctorLockHeldByOwnClient(t *testing.T) {
 	}
 }
 
+func TestCPUCheck(t *testing.T) {
+	t.Parallel()
+
+	ok := app.CPUCheck(true)
+	if ok.Name != "cpu" || ok.Status != app.CheckOK {
+		t.Errorf("with AES: got %s %s, want cpu ok", ok.Name, ok.Status)
+	}
+
+	warn := app.CPUCheck(false)
+	if warn.Status != app.CheckWarn || warn.Hint == "" {
+		t.Errorf("without AES: got %s with hint %q, want a warning with a hint", warn.Status, warn.Hint)
+	}
+
+	err := app.DoctorError([]app.Check{warn})
+	if err != nil {
+		t.Errorf("without AES: DoctorError = %v, want nil (a warning)", err)
+	}
+}
+
 func TestPolicyCheck(t *testing.T) {
 	t.Parallel()
 

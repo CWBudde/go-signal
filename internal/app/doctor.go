@@ -246,6 +246,21 @@ func (a *App) checkInbox(ctx context.Context) Check {
 // errNotADir means that a path that should be a directory is none.
 var errNotADir = errors.New("not a directory")
 
+// CPUCheck reports whether Go's AES runs on the CPU's AES instructions (see
+// cpu.HasAESHardware). Without them it warns: AES then uses a table implementation whose timing
+// depends on the key and data. It never fails, since go-signal still works.
+func CPUCheck(hasAES bool) Check {
+	if hasAES {
+		return Check{Name: "cpu", Status: CheckOK, Detail: "AES instructions available"}
+	}
+
+	return Check{
+		Name: "cpu", Status: CheckWarn,
+		Detail: "no AES instructions: AES runs as a variable-time table implementation",
+		Hint:   "prefer a CPU with AES instructions (see docs/constant-time-review.md, CT-02)",
+	}
+}
+
 // DownloadDirCheck checks that attachments can be saved to dir (see Download), which is created
 // on the first download if needed.
 func DownloadDirCheck(dir string) Check {
