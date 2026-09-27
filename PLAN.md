@@ -1594,12 +1594,31 @@ main, as on pushes.)
       header or ct2. Both sites now return `ErrInvalidState`, and the input is a regression seed
       that fails without the fix. Also fixed: gofmt on `sealedsender/known_certs.go` had turned the
       fork's `go` workflow red since the `feat/cdsi` merge; run `36300130885` is green.)
-- [ ] Constant-time review of secret-dependent code paths. Document the zeroization posture.
+- [x] Constant-time review of secret-dependent code paths. Document the zeroization posture.
+      (2026-09-27 — [review](docs/constant-time-review.md) covers the pinned libsignal-go
+      `v0.7.1-cw.4`, mautrix `purego.5`, Go 1.26.0 and relevant dependency paths; also checked
+      against fork main `b29cd1175`. Source review plus targeted optimized amd64 disassembly,
+      not an independent audit or a blanket constant-time claim. No comprehensive zeroization:
+      many shim Destroy methods are no-ops, and key/state/DB copies remain. Findings below
+      are still open; completing this review does not clear the default-switch gate.)
+- [ ] CT-01: fix secret-dependent SPQR encapsulation-state endianness detection and balanced
+      coefficient conversion in libsignal-go, preserve byte compatibility, test the edge cases
+      listed in the review, inspect amd64/arm64 output, release and update the dependency pin.
+- [ ] CT-02: replace the backend-selection `purego` tag with a distinct tag across go-signal
+      and the mautrix fork: it currently disables Go's hardware AES even on capable CPUs.
+      Verify release build-file selection, define/enforce supported CPU conditions or supply
+      a reviewed constant-time fallback, and correct the fork's AES-GCM-SIV timing claim.
+- [ ] CT-03: remove the CBC padding check's secret-dependent early return in libsignal-go;
+      test all padding values/positions and preserve authentication before decryption.
+      Current callers authenticate first, so this is defense in depth, not a demonstrated
+      unauthenticated padding oracle.
 - [ ] Opt-in staging integration suite (`-tags integration,purego`): link, 1:1, group send,
       profile fetch, CDSI
 - [ ] Consider an external review of the zkgroup and attestation ports before flipping the default
 
-**Done when:** fuzzers run in CI (short budget) and the integration suite passes on staging.
+**Done when:** fuzzers run in CI (short budget), the integration suite passes on staging,
+and the CT-01/CT-02 default-switch blockers above are resolved in the shipped dependencies
+and build configuration.
 
 #### 10.3 Default flip
 

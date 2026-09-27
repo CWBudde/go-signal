@@ -31,6 +31,12 @@ The `purego` build tag builds go-signal without cgo, Rust or `libsignal_ffi.a` (
 7–10). Every libsignalgo API is implemented in pure Go; what is still open is live acceptance
 against Signal's servers and the hardening of Phase 10. The cgo build stays the default.
 
+The [Phase 10.2 timing and secret-lifetime review](constant-time-review.md) records open
+SPQR and CBC findings and the zeroization posture. It also confirms that the current
+`purego` tag disables Go's hardware AES and selects a variable-time table implementation,
+even on CPUs with AES acceleration. The tag migration and CPU support policy must be
+resolved before switching the default. Shim `Destroy` methods do not guarantee erasure.
+
 ```sh
 just build-purego    # CGO_ENABLED=0 go build -tags purego -> bin/go-signal-purego
 just check-purego    # vet, golangci-lint and tests of the purego build
