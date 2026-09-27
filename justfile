@@ -76,6 +76,24 @@ check-purego:
     CGO_ENABLED=0 go vet -tags libsignal_go ./...
     CGO_ENABLED=0 golangci-lint run --timeout 5m --build-tags libsignal_go
     CGO_ENABLED=0 go test -tags libsignal_go -count=1 ./...
+    just check-aes-asm
+
+# Assert that the purego release targets use the stdlib's AES assembly (CT-02): it must be
+
+# selected with the libsignal_go tag, and dropped with purego (which proves the check can fail).
+check-aes-asm:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
+        export GOOS=${target%/*} GOARCH=${target#*/}
+        with=$(CGO_ENABLED=0 go list -tags libsignal_go -f '{{ "{{" }}.SFiles{{ "}}" }}' crypto/internal/fips140/aes)
+        without=$(CGO_ENABLED=0 go list -tags purego -f '{{ "{{" }}.SFiles{{ "}}" }}' crypto/internal/fips140/aes)
+        if [[ $with == "[]" || $without != "[]" ]]; then
+            echo "$target: AES assembly with libsignal_go: $with, with purego: $without" >&2
+            exit 1
+        fi
+        echo "$target: $with"
+    done
 
 # Test the pinned forks: libsignal-go (committed vectors, unit tests) and the purego libsignalgo shim
 test-fork:

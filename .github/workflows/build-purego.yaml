@@ -34,6 +34,9 @@ jobs:
       - name: Set up just
         uses: extractions/setup-just@v2
 
+      - name: Release targets use the AES assembly
+        run: just check-aes-asm
+
       - name: Build and package
         env:
           TAG: ${{ inputs.tag }}
@@ -44,7 +47,10 @@ jobs:
           done
 
       - name: Smoke test
-        run: dist/purego/linux_amd64/go-signal version
+        run: |
+          dist/purego/linux_amd64/go-signal version
+          # Built with the backend tag, never with purego (which drops the AES assembly, CT-02).
+          go version -m dist/purego/linux_amd64/go-signal | tee /dev/stderr | grep -q -- '-tags=libsignal_go$'
 
       - uses: actions/upload-artifact@v4
         with:
