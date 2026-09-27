@@ -1528,15 +1528,43 @@ shows creation times in a purego build. (The definition in `notimplemented.go` s
 
 ### Phase 10 — Hardening and switch-over
 
-#### 10.1 CI
+#### 10.1 CI — ✅ DONE (2026-09-27)
 
-- [ ] `test-purego` job: `CGO_ENABLED=0` build and tests (no `-race`, which needs cgo), plus the
+- [x] `test-purego` job: `CGO_ENABLED=0` build and tests (no `-race`, which needs cgo), plus the
       fork's vectors
-- [ ] Differential job (CGO): Phase 7.3 differential tests, extended to zkgroup and HPKE
-- [ ] Release matrix builds purego binaries for linux/darwin/windows × amd64/arm64 without
+      (2026-09-27 — `693573b`. `.github/workflows/test-purego.yaml`: `go build -tags purego`,
+      `just check-purego` (vet, golangci-lint with `--build-tags purego`, tests), and the new
+      `just test-fork`: the pinned libsignal-go's full suite with its committed vectors, the
+      shim's purego tests, and `scripts/test-zkgroup-integration.sh -tags purego`. The script now
+      tests a writable copy of the pinned fork when there is no workspace, since Go refuses
+      overlays in the module cache. `test-unit` drops its purego step.)
+- [x] Differential job (CGO): Phase 7.3 differential tests, extended to zkgroup and HPKE
+      (2026-09-27 — `693573b`. Job `differential` in `test-cgo.yaml`, `needs: cgo`, restores the
+      same `libsignal_ffi.a` cache (fails on a miss) and runs `just test-diff`: `TestDiff*` with
+      `-race` (including `TestDiffHPKE` and `TestDiffZKGroup`), the shim's cgo tests
+      (`TestCrossBackend`, `TestZKGroupAPI`, `TestGroupSendEndorsementShim`) and the zkgroup
+      integration script on libsignal. The script runs without `-race`: upstream signalmeow's
+      `SignalWebsocket.connectLoop` has a data race.)
+- [x] Release matrix builds purego binaries for linux/darwin/windows × amd64/arm64 without
       per-OS runners
+      (2026-09-27 — `2f3f17b`. `build-purego.yaml` cross-compiles all six on one ubuntu runner
+      (`just build-purego-release <os> <arch>`, `.exe` and `.zip` for windows), smoke-runs the
+      linux/amd64 binary and uploads the `purego` artifact. It runs in `tests.yaml` and as the
+      `purego` job of `release.yaml`. Build only: the archives are not attached to releases until
+      10.3.)
+- [x] Deflake the tests that failed CI at random (found in this batch)
+      (2026-09-27 — `f0f23bc`. `TestMCPServeHTTP` waited 5s, as long as the server's shutdown
+      grace period; it now closes its client's idle connections before cancelling and waits 10s.
+      The cause is inferred: it didn't reproduce locally. `TestSupervisorCancelDuringBackoff`
+      cancelled after a fixed 10ms, which under load came before the stopped status was read; it
+      now cancels once the disconnect is emitted. Stress runs: 100× and 300× with `-race`, green.)
 
 **Done when:** both backends are green on every PR.
+(2026-09-27: `tests` run `36297560916` on `2f3f17b` is green in all 7 jobs: test-unit,
+test-purego, build-purego, test-cgo, differential, test-lint, test-format. The logs show
+`libsignal-go/compat`, `pkg/libsignalgo` and `pkg/signalmeow` passing in test-purego and
+differential, and the six archives in build-purego. `tests.yaml` runs on every pull request to
+main, as on pushes.)
 
 #### 10.2 Security hardening
 
