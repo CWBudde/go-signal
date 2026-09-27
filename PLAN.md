@@ -1455,19 +1455,33 @@ tampered or truncated messages and a wrong static key. The shim wiring is 9.3.
 #### 9.3 CDSI client state
 
 - [ ] `SGXClientState`/`CDS2ClientState`: initial request, `CompleteHandshake`,
-      `EstablishedSend`/`EstablishedRecv`, wired into the shim
-      (2026-09-27 — partial: wired, but the handshake is not verified through the shim. The fork
-      side is `attest/enclave` in libsignal-go `v0.7.1-cw.4`. mautrix-signal `4313c0e` implements
-      `sgxclient_purego.go` on it, with the error codes of upstream's `IntoFfiError` for
-      `enclave::Error`; it is released in `v0.2609.0-purego.5`, which go.mod pins. The shared
-      `TestCDS2ClientState*` tests pass in both builds with the same codes. They cover
-      construction on the recorded CDSI staging attestation, a wrong MRENCLAVE, time, malformed
-      and tampered evidence, failed handshakes and wrong-state calls. Neither build can complete a
-      handshake offline: `cds2_test`, the only recording with a known enclave key, needs
-      upstream's test-only TCB evaluation number 12 exception, which neither build enables, and
-      the staging enclave's key is unknown. The completed handshake is covered only by the fork's
-      `attest/enclave` tests. Remaining: the live CDSI lookup in the Done when below, or an
-      exported test hook in the fork.)
+      `EstablishedSend`/`EstablishedRecv`, wired into the shim. Split into the subtasks below; it
+      is done when all of them are.
+  - [x] Fork: `attest/enclave` client state on DCAP (9.2) and Noise NK (9.1)
+        (2026-09-27 — released in libsignal-go `v0.7.1-cw.4`. The fork's `attest/enclave` tests
+        complete the `cds2_test` handshake against a Go Noise responder; see the ported tests below.)
+  - [x] Shim: `sgxclient_purego.go` on `attest/enclave`, with upstream's error codes
+        (2026-09-27 — mautrix-signal `4313c0e`, released in `v0.2609.0-purego.5`, which go.mod
+        pins. Errors follow upstream's `IntoFfiError` for `enclave::Error`: invalid state 2,
+        attestation data 42, everything else 30 with the "SGX operation failed" prefix.
+        `grep -l ErrNotImplemented pkg/libsignalgo/*_purego.go` finds nothing.)
+  - [x] Shim tests in both builds, up to the handshake
+        (2026-09-27 — the shared `TestCDS2ClientState*` tests pass under cgo and purego with the
+        same codes. They cover construction on the recorded CDSI staging attestation, a wrong
+        MRENCLAVE, time, malformed and tampered evidence, failed handshakes and wrong-state calls.)
+  - [ ] Shim test of a completed handshake (`CompleteHandshake`, then `EstablishedSend` and
+        `EstablishedRecv` both ways). Offline this is unreachable today: `cds2_test`, the only
+        recording with a known enclave key, needs upstream's test-only TCB evaluation number 12
+        exception, which lives in the fork's `attest/internal/testhook` and so can't be turned on
+        from the shim. The staging enclave's key is unknown. Options: export a test hook from
+        the fork (new `cw.N` release plus a `purego.N` bump; purego build only, since the cgo
+        build can't enable it either), or rely on the live lookup below.
+  - [x] go-signal: the CDSI lookup path is compiled in purego builds
+        (2026-09-27 — `internal/signal/meow_resolve.go` is `cgo || purego` and calls
+        signalmeow's `LookupPhone`; `go list -tags purego` includes it, and `just check-purego`
+        passes on `purego.5`.)
+  - [ ] Live acceptance: a purego build resolves a phone number through CDSI against Signal's
+        servers (the Done when below). Needs a linked account that the MCP server isn't holding.
 - [x] Port the handshake-level attestation tests on the recorded blobs: `sgx_session.rs`
       `test_clock_skew` with `SKEW_ADJUSTMENT` in the session, `test_happy_path`,
       `test_mismatched_keys` and `test_invalid_private_key` on `cds2_test`, and `cds2.rs`
