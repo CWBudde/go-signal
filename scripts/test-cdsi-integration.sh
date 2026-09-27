@@ -17,5 +17,5 @@ cp scripts/testdata/cdsi_integration_test.go "$test_dir/mautrix-signal/pkg/libsi
 cp "$test_dir/libsignal-go/attest/dcap/testdata/cds2_test.privatekey" \
 	"$test_dir/mautrix-signal/pkg/libsignalgo/testdata/"
 (cd "$test_dir" && GOWORK=off go work init "$root" "$test_dir/mautrix-signal" "$test_dir/libsignal-go")
-GOWORK="$test_dir/go.work" go test -tags purego "$@" -count=1 \
+GOWORK="$test_dir/go.work" go test -tags libsignal_go "$@" -count=1 \
 	-run '^TestCDS(IIntegration|2ClientState)' go.mau.fi/mautrix-signal/pkg/libsignalgo

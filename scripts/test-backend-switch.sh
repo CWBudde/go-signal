@@ -6,7 +6,7 @@ cd "$root"
 test_dir=$(mktemp -d)
 trap 'rm -rf "$test_dir"' EXIT
 CGO_ENABLED=1 go test -race -c -o "$test_dir/cgo" ./internal/store
-CGO_ENABLED=0 go test -tags purego -c -o "$test_dir/purego" ./internal/store
+CGO_ENABLED=0 go test -tags libsignal_go -c -o "$test_dir/purego" ./internal/store
 for first in cgo purego; do
 	second=purego
 	if [[ $first == purego ]]; then

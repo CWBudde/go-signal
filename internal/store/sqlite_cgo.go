@@ -1,4 +1,4 @@
-//go:build cgo && !purego
+//go:build cgo && !libsignal_go
 
 package store
 

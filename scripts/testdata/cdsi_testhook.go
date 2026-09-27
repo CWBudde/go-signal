@@ -1,4 +1,4 @@
-//go:build purego
+//go:build libsignal_go
 
 // Package shimtest is copied into attest/ only by test-cdsi-integration.sh.
 // It is absent from both published forks and from every production build.

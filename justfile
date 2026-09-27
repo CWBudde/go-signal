@@ -69,20 +69,20 @@ package os arch: docs-gen
 
 # Pure-Go binary (no cgo, no libsignal_ffi.a; libsignalgo from the purego fork, PLAN.md Phase 7)
 build-purego:
-    CGO_ENABLED=0 go build -tags purego -ldflags "{{ version_ldflags }}" -o bin/go-signal-purego .
+    CGO_ENABLED=0 go build -tags libsignal_go -ldflags "{{ version_ldflags }}" -o bin/go-signal-purego .
 
 # Vet, lint and test the purego build (cgo-only tests are excluded by their build tags)
 check-purego:
-    CGO_ENABLED=0 go vet -tags purego ./...
-    CGO_ENABLED=0 golangci-lint run --timeout 5m --build-tags purego
-    CGO_ENABLED=0 go test -tags purego -count=1 ./...
+    CGO_ENABLED=0 go vet -tags libsignal_go ./...
+    CGO_ENABLED=0 golangci-lint run --timeout 5m --build-tags libsignal_go
+    CGO_ENABLED=0 go test -tags libsignal_go -count=1 ./...
 
 # Test the pinned forks: libsignal-go (committed vectors, unit tests) and the purego libsignalgo shim
 test-fork:
     CGO_ENABLED=0 go test -count=1 github.com/cwbudde/libsignal-go/...
-    CGO_ENABLED=0 go test -tags purego -count=1 go.mau.fi/mautrix-signal/pkg/libsignalgo/...
+    CGO_ENABLED=0 go test -tags libsignal_go -count=1 go.mau.fi/mautrix-signal/pkg/libsignalgo/...
     CGO_ENABLED=0 scripts/test-cdsi-integration.sh
-    CGO_ENABLED=0 scripts/test-zkgroup-integration.sh -tags purego
+    CGO_ENABLED=0 scripts/test-zkgroup-integration.sh -tags libsignal_go
 
 # Differential tests (cgo): purego vs libsignal in go-signal, the shim's cgo side, signalmeow's zkgroup paths.
 
@@ -96,7 +96,7 @@ test-diff:
 
 # Cross-compiled purego release binary to dist/purego/<os>_<arch>/, packaged as go-signal-purego_*
 build-purego-release os arch: docs-gen
-    CGO_ENABLED=0 GOOS={{ os }} GOARCH={{ arch }} go build -tags purego -trimpath -ldflags "-s -w {{ version_ldflags }}" -o dist/purego/{{ os }}_{{ arch }}/go-signal{{ if os == "windows" { ".exe" } else { "" } }} .
+    CGO_ENABLED=0 GOOS={{ os }} GOARCH={{ arch }} go build -tags libsignal_go -trimpath -ldflags "-s -w {{ version_ldflags }}" -o dist/purego/{{ os }}_{{ arch }}/go-signal{{ if os == "windows" { ".exe" } else { "" } }} .
     DIST=dist/purego NAME=go-signal-purego ./scripts/package.sh "{{ version }}" {{ os }} {{ arch }}
 
 # Build the binary without version info (faster for development)

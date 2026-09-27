@@ -34,7 +34,7 @@ jobs:
           install-only: true
 
       - name: Build
-        run: go build -v -tags purego ./...
+        run: go build -v -tags libsignal_go ./...
 
       - name: Vet, lint and test
         run: just check-purego

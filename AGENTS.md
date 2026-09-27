@@ -31,13 +31,13 @@ Layering, top to bottom:
   CLI and the planned MCP server.
 - `internal/signal/`: facade over `signalmeow` behind the `Client` interface (`client.go`). All
   signalmeow/zerolog types stay inside this package and are converted to our own types
-  (`convert.go`). The real client (`meow*.go`) is `//go:build cgo || purego`; `meow_nocgo.go`
-  (`!cgo && !purego`) returns `ErrCGORequired`. signalmeow's zerolog output is bridged to slog (`logbridge.go`).
+  (`convert.go`). The real client (`meow*.go`) is `//go:build cgo || libsignal_go`; `meow_nocgo.go`
+  (`!cgo && !libsignal_go`) returns `ErrCGORequired`. signalmeow's zerolog output is bridged to slog (`logbridge.go`).
 - `internal/signal/signaltest/`: in-memory fake `Client` (no cgo) that mimics account selection,
   the per-account lock and remote-unlink behaviour of the real client. Command tests use it.
 - `internal/store/`: data-dir layout (`accounts.json` registry, `<aci>/account.db` SQLite with
   signalmeow's tables plus ours, `<aci>/lock` flock). Opening the DB needs cgo (mattn/go-sqlite3)
-  or the `purego` tag (modernc.org/sqlite), see `sqlite_cgo.go` / `sqlite_purego.go`.
+  or the `libsignal_go` tag (modernc.org/sqlite), see `sqlite_cgo.go` / `sqlite_purego.go`.
 - `internal/mcp/`: MCP server (`mcp serve`, official go-sdk) whose tools call `internal/app`.
   Stdout carries only JSON-RPC; the SDK's logs are demoted to debug. While it runs, `app.Inbox`
   receives events into the account's inbox table, which the message tools and resources read.
@@ -62,10 +62,10 @@ event counts as acked once it is read from the channel; unread events are redeli
 - Tests live in the `_test` package (`testpackage` linter). `internal/signal/export_test.go` (cgo)
   and `export_internal_test.go` are in-package files that expose internals to `signal_test`.
 - Command output is checked against golden files in `cmd/testdata/`.
-- Build tags: `purego` selects the pure-Go backend (PLAN.md Phases 7–10). go.mod always replaces
+- Build tags: `libsignal_go` selects the pure-Go backend (PLAN.md Phases 7–10). go.mod always replaces
   `go.mau.fi/mautrix-signal` with the fork `github.com/cwbudde/mautrix-signal` (only
-  `pkg/libsignalgo` differs). Code that calls libsignal through cgo is `cgo && !purego` and gets a
-  `purego` twin; tests that need real libsignal are `cgo && !purego`; `purego_diff_test.go`
+  `pkg/libsignalgo` differs). Code that calls libsignal through cgo is `cgo && !libsignal_go` and gets a
+  `libsignal_go` twin; tests that need real libsignal are `cgo && !libsignal_go`; `purego_diff_test.go`
   compares both implementations. Details in `docs/dev.md` ("Pure-Go backend").
 
 ## Commands
@@ -85,7 +85,7 @@ directly, set `CGO_LDFLAGS` yourself, or use `CGO_ENABLED=0` for the pure-Go pac
 
 ```sh
 CGO_LDFLAGS="-L $PWD/third_party/lib" go test -race -run TestName ./cmd/   # single test, cgo
-CGO_ENABLED=0 go test -tags purego -run TestName ./internal/store/         # no libsignal needed
+CGO_ENABLED=0 go test -tags libsignal_go -run TestName ./internal/store/         # no libsignal needed
 UPDATE_GOLDEN=1 go test ./cmd/                                             # rewrite cmd/testdata/*.golden
 ```
 
