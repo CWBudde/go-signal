@@ -65,8 +65,19 @@ How it fits together:
 store test binaries and alternates them over temporary account databases, starting with each
 backend. The test continues prekey/session and sender-key exchanges, checks persisted ACI/PNI
 identity keys, consumes one-time prekeys, recovers skipped group keys and rejects replays.
+Skipped session keys are exercised too. Tampered messages must leave persisted session,
+identity, prekey and sender-key records unchanged, and the original message must still decrypt.
 It uses generated accounts and needs no Signal credentials or server access. The ordinary
 store suite runs the same scenario as `TestProtocolStateSurvivesReopen` within one backend.
+
+`scripts/test-cdsi-integration.sh` completes the purego CDSI shim's hybrid handshake offline
+against the recorded enclave key and tests transport boundaries, tampering, replay rejection,
+nonce recovery and state transitions. It copies both pinned forks to a temporary workspace and
+adds a helper under `attest/` solely to enable the old fixture's evaluation-number-12 exception
+inside one test scope. Production rejection is checked before and after that scope; the module
+cache, working checkouts and published APIs remain unchanged. No fork release is needed.
+`just test-fork` runs it without cgo; `just test-diff` runs it with the race detector (still using
+the purego shim). CGO handshake completion and live CDSI lookup remain acceptance work.
 
 To work on the forks locally, point go.mod at the checkouts temporarily and don't commit it:
 

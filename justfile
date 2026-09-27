@@ -81,6 +81,7 @@ check-purego:
 test-fork:
     CGO_ENABLED=0 go test -count=1 github.com/cwbudde/libsignal-go/...
     CGO_ENABLED=0 go test -tags purego -count=1 go.mau.fi/mautrix-signal/pkg/libsignalgo/...
+    CGO_ENABLED=0 scripts/test-cdsi-integration.sh
     CGO_ENABLED=0 scripts/test-zkgroup-integration.sh -tags purego
 
 # Differential tests (cgo): purego vs libsignal in go-signal, the shim's cgo side, signalmeow's zkgroup paths.
@@ -90,6 +91,7 @@ test-diff:
     go test -race -count=1 -run '^TestDiff' ./internal/signal/
     go test -race -count=1 go.mau.fi/mautrix-signal/pkg/libsignalgo/...
     scripts/test-backend-switch.sh
+    scripts/test-cdsi-integration.sh -race
     scripts/test-zkgroup-integration.sh
 
 # Cross-compiled purego release binary to dist/purego/<os>_<arch>/, packaged as go-signal-purego_*

@@ -1230,7 +1230,9 @@ and a DB created with the CGO build keeps working with the purego build (and the
 `scripts/test-backend-switch.sh`, run by `just test-diff` and CI: separate CGO and purego test
 binaries alternate over the same temporary `account.db` files, starting with either backend.
 They preserve ACI/PNI identity keys, consume persisted EC/Kyber prekeys, continue session replies
-and sender-key messages across switches, recover skipped group-message keys and reject replays.
+and sender-key messages across switches, recover skipped session/group-message keys and reject
+replays. Tampered prekey, session and group messages return no plaintext and leave serialized
+sessions, identities, prekeys and sender-key records unchanged; the valid message still decrypts.
 `TestProtocolStateSurvivesReopen` runs the same scenario within each backend's ordinary suite.)
 
 ### Phase 8 — zkgroup in pure Go (in the libsignal-go fork)
@@ -1473,13 +1475,17 @@ tampered or truncated messages and a wrong static key. The shim wiring is 9.3.
         (2026-09-27 — the shared `TestCDS2ClientState*` tests pass under cgo and purego with the
         same codes. They cover construction on the recorded CDSI staging attestation, a wrong
         MRENCLAVE, time, malformed and tampered evidence, failed handshakes and wrong-state calls.)
-  - [ ] Shim test of a completed handshake (`CompleteHandshake`, then `EstablishedSend` and
-        `EstablishedRecv` both ways). Offline this is unreachable today: `cds2_test`, the only
-        recording with a known enclave key, needs upstream's test-only TCB evaluation number 12
-        exception, which lives in the fork's `attest/internal/testhook` and so can't be turned on
-        from the shim. The staging enclave's key is unknown. Options: export a test hook from
-        the fork (new `cw.N` release plus a `purego.N` bump; purego build only, since the cgo
-        build can't enable it either), or rely on the live lookup below.
+  - [x] Purego shim test of a completed handshake (`CompleteHandshake`, then `EstablishedSend`
+        and `EstablishedReceive` both ways). `scripts/test-cdsi-integration.sh` makes disposable
+        copies of both pinned forks and adds a test-only helper under `attest/` to scope the
+        existing evaluation-number-12 exception to the recorded `cds2_test` fixture. Neither
+        published dependencies nor production code change. `TestCDSIIntegration` checks
+        production rejection before and after the exception, completes Noise NKhfs against
+        the known enclave key, exchanges empty/single/multiple-chunk messages at exact size
+        boundaries, rejects tampering/truncation/wrong-channel messages and replays, and checks
+        nonce recovery, failed-handshake state and Destroy. Runs in `just test-fork` and with
+        `-race` in `just test-diff`/CI. The CGO shim still needs live acceptance for this path;
+        its compiled attestation verifier cannot enable the fixture exception.
   - [x] go-signal: the CDSI lookup path is compiled in purego builds
         (2026-09-27 — `internal/signal/meow_resolve.go` is `cgo || purego` and calls
         signalmeow's `LookupPhone`; `go list -tags purego` includes it, and `just check-purego`
@@ -1490,8 +1496,8 @@ tampered or truncated messages and a wrong static key. The shim wiring is 9.3.
       `test_clock_skew` with `SKEW_ADJUSTMENT` in the session, `test_happy_path`,
       `test_mismatched_keys` and `test_invalid_private_key` on `cds2_test`, and `cds2.rs`
       `attest_cds2`. The DCAP half of all of these is already covered by 9.2. The remaining half needs
-      `Handshake::for_sgx` and Noise NK from `feat/noise`. Other packages' tests will need an
-      exported form of the evaluation number 12 exception (upstream's `test-util`). `svr2.rs`
+      `Handshake::for_sgx` and Noise NK from `feat/noise`. The shim test above exposes the
+      evaluation number 12 exception only in disposable test copies. `svr2.rs`
       `attest_svr2_bad_config` checks the raft config, not DCAP; PLAN.md has no SVR2 item.
       (2026-09-27 — fork commits `b9b3d8598` and `ae07c98cb`. All five are ported
       under their names in `attest/enclave`, with a Go `noise` responder in place of snow. The
