@@ -1,0 +1,43 @@
+name: test-purego
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  purego:
+    # The pure-Go backend (PLAN.md Phases 7–10): no cgo, no Rust. Vets, lints and tests the purego
+    # build, then the pinned forks' own tests: libsignal-go with its committed vectors, the purego
+    # libsignalgo shim, and signalmeow's zkgroup paths on the shim.
+    runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: "0"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up just
+        uses: extractions/setup-just@v2
+
+      - name: Install golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: latest
+          install-only: true
+
+      - name: Build
+        run: go build -v -tags purego ./...
+
+      - name: Vet, lint and test
+        run: just check-purego
+
+      - name: Fork tests and vectors
+        run: just test-fork

@@ -76,3 +76,37 @@ jobs:
         with:
           recreate: true
           path: coverage-results.md
+
+  differential:
+    # Differential tests: the purego code against libsignal on the same inputs (TestDiff*), the
+    # shim's cgo side (TestCrossBackend reads the fixture the purego build wrote, TestZKGroupAPI and
+    # TestGroupSendEndorsementShim the pinned Rust fixtures), and signalmeow's zkgroup paths on
+    # libsignal. Runs after cgo, which has built or restored libsignal_ffi.a into the cache.
+    needs: cgo
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up just
+        uses: extractions/setup-just@v2
+
+      - name: Resolve libsignal commit
+        id: libsignal
+        run: echo "sha=$(git rev-parse HEAD:third_party/libsignal)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore libsignal_ffi.a
+        uses: actions/cache/restore@v4
+        with:
+          path: third_party/lib
+          key: libsignal-ffi-${{ runner.os }}-${{ runner.arch }}-${{ steps.libsignal.outputs.sha }}
+          fail-on-cache-miss: true
+
+      - name: Differential tests
+        run: just test-diff

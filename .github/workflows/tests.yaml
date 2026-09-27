@@ -24,6 +24,12 @@ jobs:
   test-unit:
     uses: ./.github/workflows/test-unit.yaml
 
+  test-purego:
+    uses: ./.github/workflows/test-purego.yaml
+
+  build-purego:
+    uses: ./.github/workflows/build-purego.yaml
+
   test-lint:
     uses: ./.github/workflows/test-lint.yaml
 

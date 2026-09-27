@@ -77,6 +77,25 @@ check-purego:
     CGO_ENABLED=0 golangci-lint run --timeout 5m --build-tags purego
     CGO_ENABLED=0 go test -tags purego -count=1 ./...
 
+# Test the pinned forks: libsignal-go (committed vectors, unit tests) and the purego libsignalgo shim
+test-fork:
+    CGO_ENABLED=0 go test -count=1 github.com/cwbudde/libsignal-go/...
+    CGO_ENABLED=0 go test -tags purego -count=1 go.mau.fi/mautrix-signal/pkg/libsignalgo/...
+    CGO_ENABLED=0 scripts/test-zkgroup-integration.sh -tags purego
+
+# Differential tests (cgo): purego vs libsignal in go-signal, the shim's cgo side, signalmeow's zkgroup paths.
+
+# The last runs without -race: upstream signalmeow's SignalWebsocket.connectLoop has a data race.
+test-diff:
+    go test -race -count=1 -run '^TestDiff' ./internal/signal/
+    go test -race -count=1 go.mau.fi/mautrix-signal/pkg/libsignalgo/...
+    scripts/test-zkgroup-integration.sh
+
+# Cross-compiled purego release binary to dist/purego/<os>_<arch>/, packaged as go-signal-purego_*
+build-purego-release os arch: docs-gen
+    CGO_ENABLED=0 GOOS={{ os }} GOARCH={{ arch }} go build -tags purego -trimpath -ldflags "-s -w {{ version_ldflags }}" -o dist/purego/{{ os }}_{{ arch }}/go-signal{{ if os == "windows" { ".exe" } else { "" } }} .
+    DIST=dist/purego NAME=go-signal-purego ./scripts/package.sh "{{ version }}" {{ os }} {{ arch }}
+
 # Build the binary without version info (faster for development)
 build-dev:
     go build -o bin/go-signal .

@@ -6,7 +6,16 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 cd "$root"
 module_dir=$(go list -f '{{.Dir}}' go.mau.fi/mautrix-signal/pkg/signalmeow)
 test_dir=$(mktemp -d)
-trap 'rm -rf "$test_dir"' EXIT
+trap 'chmod -R u+w "$test_dir"; rm -rf "$test_dir"' EXIT
+# Go refuses overlays for files in the module cache. Without a workspace that points at a
+# checkout, test a writable copy of the pinned fork instead.
+if [[ $module_dir == "$(go env GOMODCACHE)"/* ]]; then
+	cp -r "$(go list -m -f '{{.Dir}}' go.mau.fi/mautrix-signal)" "$test_dir/mautrix-signal"
+	chmod -R u+w "$test_dir/mautrix-signal"
+	(cd "$test_dir" && go work init "$root" "$test_dir/mautrix-signal")
+	export GOWORK="$test_dir/go.work"
+	module_dir=$(go list -f '{{.Dir}}' go.mau.fi/mautrix-signal/pkg/signalmeow)
+fi
 python3 - "$module_dir" "$root" "$test_dir" <<'PY'
 import json, pathlib, sys
 module_dir, root, test_dir = map(pathlib.Path, sys.argv[1:])

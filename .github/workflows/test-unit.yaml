@@ -8,8 +8,9 @@ permissions:
 
 jobs:
   test:
-    # Pure-Go build and tests: CGO_ENABLED=0 drops the libsignal link, so this job needs no Rust.
-    # The race detector requires cgo; the test-cgo job runs the tests with -race.
+    # Build and tests without cgo and without the purego tag: the real client is left out
+    # (meow_nocgo.go), so this covers the fake-backed tests. The race detector requires cgo; the
+    # test-cgo job runs the tests with -race, test-purego covers the purego build.
     runs-on: ubuntu-latest
     env:
       CGO_ENABLED: "0"
@@ -29,8 +30,3 @@ jobs:
       - name: Run tests
         run: go test -v -count=1 -coverprofile=coverage.txt -covermode=atomic ./...
 
-      - name: Build and test the purego backend
-        run: |
-          go build -v -tags purego ./...
-          go vet -tags purego ./...
-          go test -v -count=1 -tags purego ./...
