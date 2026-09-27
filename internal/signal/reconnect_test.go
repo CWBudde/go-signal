@@ -31,6 +31,8 @@ type loops struct {
 	stops  int
 	// startErrs fail the first len(startErrs) starts.
 	startErrs []error
+	// emitted, if set, sees every event the supervisor emits.
+	emitted func(*signal.Connection)
 }
 
 func (l *loops) start() (<-chan signal.LoopStatus, error) {
@@ -84,6 +86,9 @@ func supervise(
 		}
 
 		emitted = append(emitted, conn)
+		if fake.emitted != nil {
+			fake.emitted(conn)
+		}
 
 		return true
 	}
@@ -295,13 +300,16 @@ func TestSupervisorCancelDuringBackoff(t *testing.T) {
 	t.Parallel()
 
 	ctx, cancel := context.WithCancel(t.Context())
-	fake := &loops{}
+	// Cancel once the supervisor has reported the disconnect, which is right before its backoff.
+	fake := &loops{emitted: func(conn *signal.Connection) {
+		if conn.State == signal.StateDisconnected {
+			cancel()
+		}
+	}}
 
 	first := queue(
 		signal.LoopStatus{State: signal.StateError, Err: errFatal, Stopped: true},
 	)
-
-	time.AfterFunc(10*time.Millisecond, cancel)
 
 	got, _ := supervise(t, ctx, fake, signal.ReconnectPolicy{
 		MaxAttempts: 3, InitialBackoff: time.Hour, MaxBackoff: time.Hour,

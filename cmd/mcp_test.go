@@ -188,7 +188,9 @@ func startMCPConfig(
 			}
 
 			return err
-		case <-time.After(5 * time.Second):
+		// More than the HTTP server's 5s shutdown grace period, so that a slow runner that uses it
+		// up doesn't fail.
+		case <-time.After(10 * time.Second):
 			t.Fatal("mcp serve did not end")
 
 			return nil

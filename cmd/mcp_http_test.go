@@ -17,16 +17,24 @@ import (
 
 const httpToken = "0123456789abcdef0123456789abcdef"
 
-// bearer adds a bearer token to every request.
+// bearer adds a bearer token to every request and sends it over its own connections, so that a
+// test can close them.
 type bearer struct {
-	token string
+	token     string
+	transport *http.Transport
+}
+
+func newBearer(token string) bearer {
+	transport, _ := http.DefaultTransport.(*http.Transport)
+
+	return bearer{token: token, transport: transport.Clone()}
 }
 
 func (b bearer) RoundTrip(req *http.Request) (*http.Response, error) {
 	req = req.Clone(req.Context())
 	req.Header.Set("Authorization", "Bearer "+b.token)
 
-	return http.DefaultTransport.RoundTrip(req) //nolint:wrapcheck // a transport passes through
+	return b.transport.RoundTrip(req) //nolint:wrapcheck // a transport passes through
 }
 
 // freeAddr returns a loopback address with a port that was free a moment ago.
@@ -98,8 +106,9 @@ func TestMCPServeHTTP(t *testing.T) {
 	session, wait := startMCP(t, ctx, fake, "--listen="+addr, "--token-file="+tokenFile, "--read-only")
 
 	client := sdk.NewClient(&sdk.Implementation{Name: "test", Version: "0"}, nil)
+	auth := newBearer(httpToken)
 	transport := &sdk.StreamableClientTransport{
-		Endpoint: "http://" + addr + "/mcp", HTTPClient: &http.Client{Transport: bearer{httpToken}},
+		Endpoint: "http://" + addr + "/mcp", HTTPClient: &http.Client{Transport: auth},
 	}
 
 	var mcpSession *sdk.ClientSession
@@ -124,6 +133,10 @@ func TestMCPServeHTTP(t *testing.T) {
 	}
 
 	_ = mcpSession.Close()
+
+	// A spare connection that never sent a request would hold up the server's graceful shutdown
+	// until its grace period ends.
+	auth.transport.CloseIdleConnections()
 
 	// stdout stays unused, and SIGINT (a cancelled context) ends the server normally.
 	cancel()
