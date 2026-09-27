@@ -1614,12 +1614,17 @@ main, as on pushes.)
       runs 36329631511/…472/…542) and `just test-diff` (backend switch both ways) pass. Optimized
       amd64 (`GOAMD64=v1`) and arm64 output: no division, coefficients only through
       SETcc/CMOV/CSET/CSEL/SAR, jumps only on length, loop counters and bounds.)
-- [ ] CT-02: replace the backend-selection `purego` tag with a distinct tag across go-signal
+- [x] CT-02: replace the backend-selection `purego` tag with a distinct tag across go-signal
       and the mautrix fork: it currently disables Go's hardware AES even on capable CPUs.
       Verify release build-file selection, define/enforce supported CPU conditions or supply
       a reviewed constant-time fallback, and correct the fork's AES-GCM-SIV timing claim.
-      (2026-09-27 — partial: the GCM-SIV comment is corrected in libsignal-go `e3aa3bf3e`
-      (`cw.5`). The tag rename, CPU policy / fallback and the release-build check remain.)
+      (2026-09-27 — The backend tag is now `libsignal_go`, in mautrix-signal `v0.2609.0-purego.7`
+      and go-signal. `purego_tag.go` makes `-tags purego` fail to build. `just check-aes-asm`
+      (in `check-purego` and the `build-purego` workflow) asserts the stdlib AES assembly for all
+      six release targets, and the workflow checks the binary's `-tags=libsignal_go` build info.
+      CPU policy: warn, don't refuse. `internal/cpu.HasAESHardware` mirrors Go's selection; there
+      is a startup slog warning and a `cpu` check in `mcp doctor` and the MCP `doctor` tool. No
+      software fallback. The GCM-SIV comment was fixed in libsignal-go `e3aa3bf3e` (`cw.5`).)
 - [x] CT-03: remove the CBC padding check's secret-dependent early return in libsignal-go;
       test all padding values/positions and preserve authentication before decryption.
       Current callers authenticate first, so this is defense in depth, not a demonstrated
@@ -1630,7 +1635,7 @@ main, as on pushes.)
       `TestPKCS7UnpadMatchesReference` covers all 256 final bytes, correct and with each padding
       position corrupted. Callers are unchanged, so they still authenticate first. Optimized amd64
       and arm64 output uses only SETcc/CMOV/CSEL on the pad byte.)
-- [ ] Opt-in staging integration suite (`-tags integration,purego`): link, 1:1, group send,
+- [ ] Opt-in staging integration suite (`-tags integration,libsignal_go`): link, 1:1, group send,
       profile fetch, CDSI
 - [ ] Consider an external review of the zkgroup and attestation ports before flipping the default
 
@@ -1640,7 +1645,7 @@ and build configuration.
 
 #### 10.3 Default flip
 
-- [ ] Release binaries are built with `purego`. The CGO backend stays available (`-tags cgo`
+- [ ] Release binaries are built with the `libsignal_go` tag. The CGO backend stays available (`-tags cgo`
       builds, and the differential CI job keeps it honest).
 - [ ] Phase 6.2 (musl + static CGO link) is superseded for release builds. Update the README
       install and build docs, and drop Rust from the release workflow.
@@ -1649,7 +1654,7 @@ and build configuration.
       harness to the new libsignal tag, port the drift. Document it in `docs/maintenance.md`.
 
 **Done when:** a tagged release ships pure-Go binaries only, and a fresh clone builds with
-`go build -tags purego` and nothing else installed.
+`go build -tags libsignal_go` and nothing else installed.
 
 ### Later / on demand
 

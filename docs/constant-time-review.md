@@ -2,16 +2,16 @@
 
 Reviewed 2026-09-27 for PLAN.md §10.2. **The review is complete; remediation is
 not.** The current backend does not support an unconditional constant-time or
-secure-erasure claim. CT-01 and CT-02 need fixing before the default switch.
-CT-03 is defense in depth.
+secure-erasure claim. CT-01 and CT-02 needed fixing before the default switch;
+both are fixed (see below). CT-03 is defense in depth.
 
 ## Remediation status
 
-| Finding | Status                                                                                                                                      |
-| ------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| CT-01   | Fixed in libsignal-go `v0.7.1-cw.5` (`478422d0e`), pinned through mautrix-signal `v0.2609.0-purego.6`.                                      |
-| CT-02   | Open. Only the GCM-SIV package comment is corrected (`e3aa3bf3e`, in `cw.5`); the backend tag, CPU policy and release builds are unchanged. |
-| CT-03   | Fixed in `cw.5` (`d6f6f7409`, `8e218f057`), pinned through `purego.6`.                                                                      |
+| Finding | Status                                                                                                                                                                               |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| CT-01   | Fixed in libsignal-go `v0.7.1-cw.5` (`478422d0e`), pinned through mautrix-signal `v0.2609.0-purego.6`.                                                                               |
+| CT-02   | Fixed: the backend tag is `libsignal_go` (mautrix-signal `v0.2609.0-purego.7`); `-tags purego` fails to build; CPUs without AES instructions get a warning (see "CT-02 resolution"). |
+| CT-03   | Fixed in `cw.5` (`d6f6f7409`, `8e218f057`), pinned through `purego.6`.                                                                                                               |
 
 The findings below describe the reviewed `cw.4` baseline. The fork's
 `docs/constant-time.md` records each fix, its tests and the disassembly check.
@@ -127,6 +127,37 @@ selected standard-library files in release builds. Do not infer a timing
 guarantee from successful functional tests with `GODEBUG=cpu.aes=off`; those tests
 only exercise fallback correctness. Other dependencies also recognize `purego`,
 so inspect their effective build files when changing the tag.
+
+#### CT-02 resolution
+
+- **Tag.** The pure-Go backend is selected with `libsignal_go`, in go-signal and in
+  mautrix-signal's `pkg/libsignalgo` (`v0.2609.0-purego.7`). A `//go:build purego` file in
+  go-signal (`purego_tag.go`) makes a build with the old tag fail with
+  `undefined: tag_purego_was_renamed_to_libsignal_go_see_docs_dev_md`.
+- **Release builds.** `just check-aes-asm` (in `check-purego` and the `build-purego` workflow)
+  asserts that `crypto/internal/fips140/aes` selects `aes_*.s`/`ctr_*.s` for all six release
+  targets with `libsignal_go`, and none with `purego`. The workflow also checks that the built
+  binary's build info says `-tags=libsignal_go`.
+- **CPU policy.** Go's AES assembly is used only when the CPU has the instructions;
+  `internal/cpu.HasAESHardware` mirrors Go 1.26's selection:
+
+  | Architecture                 | Constant-time AES when              |
+  | ---------------------------- | ----------------------------------- |
+  | amd64                        | AES-NI, PCLMULQDQ, SSE4.1 and SSSE3 |
+  | arm64                        | AES and PMULL                       |
+  | s390x                        | CPACF KM-AES and KMC-AES            |
+  | ppc64, ppc64le               | always (POWER8 assembly)            |
+  | other (386, arm, riscv64, …) | never: Go has no AES assembly there |
+
+  On such CPUs go-signal still runs, in both backends (signalmeow uses `crypto/aes` for
+  attachments and profiles with cgo too). It logs a warning at startup, and `mcp doctor` and
+  the MCP `doctor` tool report a `cpu` warning. No constant-time software AES fallback is
+  provided.
+
+- **Other dependencies that honour `purego`:** `filippo.io/edwards25519/field`,
+  `cloudflare/circl`, `golang.org/x/crypto` and `segmentio/asm`. Their generic code paths are
+  constant-time (or, for `segmentio/asm`, not secret-dependent), so the rename only gives them
+  their assembly back for speed.
 
 ### CT-03 — Defense in depth: CBC padding check returns early
 

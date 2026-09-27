@@ -25,20 +25,23 @@ submodule SHA it built next to the library and skips the cargo build while it st
 
 `CGO_ENABLED=0 go test ./...` works without the library for the pure-Go packages.
 
-## Pure-Go backend (purego)
+## Pure-Go backend (libsignal_go)
 
-The `purego` build tag builds go-signal without cgo, Rust or `libsignal_ffi.a` (PLAN.md Phases
+The `libsignal_go` build tag builds go-signal without cgo, Rust or `libsignal_ffi.a` (PLAN.md Phases
 7–10). Every libsignalgo API is implemented in pure Go; what is still open is live acceptance
 against Signal's servers and the hardening of Phase 10. The cgo build stays the default.
 
-The [Phase 10.2 timing and secret-lifetime review](constant-time-review.md) records open
-SPQR and CBC findings and the zeroization posture. It also confirms that the current
-`purego` tag disables Go's hardware AES and selects a variable-time table implementation,
-even on CPUs with AES acceleration. The tag migration and CPU support policy must be
-resolved before switching the default. Shim `Destroy` methods do not guarantee erasure.
+The [Phase 10.2 timing and secret-lifetime review](constant-time-review.md) records the
+timing findings and the zeroization posture. The backend tag used to be `purego`, which also
+disables the stdlib's AES assembly and selects a variable-time table implementation (CT-02).
+`libsignal_go` leaves Go's hardware AES in place; building with `-tags purego` now fails on
+purpose (`purego_tag.go`). On CPUs without AES instructions Go still uses the table
+implementation in both backends, so go-signal logs a warning at startup and `doctor` reports a
+`cpu` warning. `just check-aes-asm` asserts that the release targets select the AES assembly.
+Shim `Destroy` methods do not guarantee erasure.
 
 ```sh
-just build-purego    # CGO_ENABLED=0 go build -tags purego -> bin/go-signal-purego
+just build-purego    # CGO_ENABLED=0 go build -tags libsignal_go -> bin/go-signal-purego
 just check-purego    # vet, golangci-lint and tests of the purego build
 just test-fork       # the pinned forks' tests: libsignal-go with its vectors, the purego shim,
                      # and signalmeow's zkgroup paths (scripts/test-zkgroup-integration.sh)
@@ -52,19 +55,19 @@ How it fits together:
 - go.mod replaces `go.mau.fi/mautrix-signal` with the fork
   [`cwbudde/mautrix-signal`](https://github.com/cwbudde/mautrix-signal) (branch `purego`, tags
   `vX.YYMM.Z-purego.N`). The fork changes only `pkg/libsignalgo`: every cgo file builds with
-  `!purego`, and `x_purego.go` twins implement the same API on top of
+  `!libsignal_go`, and `x_purego.go` twins implement the same API on top of
   [`cwbudde/libsignal-go`](https://github.com/cwbudde/libsignal-go). The fork's `PUREGO.md` and
   `internal/stubgen` (stub generator and API parity check) describe the details. The cgo build uses upstream libsignal. The fork also corrects
   the CGO endorsement wrapper to use the combined result supplied by Rust.
 - `cwbudde/libsignal-go` is a fork of `GoCodeAlone/libsignal-go` whose Rust compat harness is
   pinned to the libsignal tag libsignalgo expects (its `decisions/0007-cwbudde-fork-policy.md`).
   Fork releases are tagged `vX.Y.Z-cw.N`.
-- In go-signal, files that need libsignal through cgo are `cgo && !purego` (`libsignal.go`,
+- In go-signal, files that need libsignal through cgo are `cgo && !libsignal_go` (`libsignal.go`,
   `hpke.go`, `username_cgo.go`, `internal/store/sqlite_cgo.go`), and their purego counterparts
-  are `purego`. The real client and the store build with `cgo || purego`; `meow_nocgo.go` is
-  `!cgo && !purego`. Purego builds use `modernc.org/sqlite` instead of `mattn/go-sqlite3`, with
+  are `libsignal_go`. The real client and the store build with `cgo || libsignal_go`; `meow_nocgo.go` is
+  `!cgo && !libsignal_go`. Purego builds use `modernc.org/sqlite` instead of `mattn/go-sqlite3`, with
   the same connection options (`TestConnectionPragmas` checks both).
-- Tests that need real libsignal are `cgo && !purego`. `purego_diff_test.go` (cgo) runs the
+- Tests that need real libsignal are `cgo && !libsignal_go`. `purego_diff_test.go` (cgo) runs the
   cgo code and the pure-Go code on the same inputs and requires identical results.
 
 `just test-diff` also runs `scripts/test-backend-switch.sh`. It builds separate CGO and purego
@@ -105,7 +108,7 @@ checkout instead, run it in a workspace, from the go-signal directory:
 work_dir=$(mktemp -d)
 (cd "$work_dir" && go work init "$OLDPWD" "$OLDPWD/../mautrix-signal")
 export GOWORK="$work_dir/go.work"
-CGO_ENABLED=0 scripts/test-zkgroup-integration.sh -tags purego
+CGO_ENABLED=0 scripts/test-zkgroup-integration.sh -tags libsignal_go
 CGO_LDFLAGS="-L $PWD/third_party/lib" scripts/test-zkgroup-integration.sh
 ```
 
@@ -159,7 +162,7 @@ The submodule must sit at exactly the tag that `libsignalgo` was generated again
 
 - `test-unit`: `CGO_ENABLED=0` build and tests without the purego tag. No Rust and no libsignal,
   so it is fast. It runs without `-race`, because the race detector needs cgo.
-- `test-purego`: `CGO_ENABLED=0 -tags purego` build, then `just check-purego` and
+- `test-purego`: `CGO_ENABLED=0 -tags libsignal_go` build, then `just check-purego` and
   `just test-fork`.
 - `build-purego`: cross-compiles and packages the purego binaries for linux, darwin and windows
   on amd64 and arm64 on one runner (`just build-purego-release`), smoke-runs the linux/amd64 one
