@@ -1,0 +1,55 @@
+name: build-purego
+
+# Cross-compiles and packages the purego binaries for linux, darwin and windows on amd64 and arm64,
+# all on one runner (no cgo, so no per-OS runners). Until PLAN.md 10.3 flips the default, the
+# archives stay workflow artifacts: release.yaml doesn't attach them to the GitHub release.
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: Tag to build; empty builds the triggering commit
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up just
+        uses: extractions/setup-just@v2
+
+      - name: Build and package
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          if [[ -n $TAG ]]; then export VERSION=$TAG; fi
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
+            just build-purego-release "${target%/*}" "${target#*/}"
+          done
+
+      - name: Smoke test
+        run: dist/purego/linux_amd64/go-signal version
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: purego
+          path: |
+            dist/purego/go-signal-purego_*.tar.gz
+            dist/purego/go-signal-purego_*.zip
+          if-no-files-found: error

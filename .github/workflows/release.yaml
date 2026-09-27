@@ -12,6 +12,8 @@ name: release
 # - release: SHA256SUMS, a build provenance attestation and the release assets.
 # - image: ghcr.io/cwbudde/go-signal for linux/amd64 and linux/arm64 (scratch + static binary).
 # - homebrew / aur: skipped until the HOMEBREW_TAP_TOKEN / AUR_SSH_KEY secrets are set.
+# - purego: the pure-Go binaries for linux/darwin/windows × amd64/arm64, as a workflow artifact
+#   only (build-purego.yaml); they are not attached to the release until PLAN.md 10.3.
 
 on:
   push:
@@ -148,6 +150,11 @@ jobs:
           name: darwin-arm64
           path: dist/go-signal_*.tar.gz
           if-no-files-found: error
+
+  purego:
+    uses: ./.github/workflows/build-purego.yaml
+    with:
+      tag: ${{ inputs.tag || github.ref_name }}
 
   release:
     needs: [linux, macos]

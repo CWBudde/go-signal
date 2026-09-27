@@ -28,12 +28,16 @@ submodule SHA it built next to the library and skips the cargo build while it st
 ## Pure-Go backend (purego)
 
 The `purego` build tag builds go-signal without cgo, Rust or `libsignal_ffi.a` (PLAN.md Phases
-7–10). It is a work in progress: most of the protocol still returns `ErrNotImplemented`, so it can't
-link or send yet. The cgo build stays the default.
+7–10). Every libsignalgo API is implemented in pure Go; what is still open is live acceptance
+against Signal's servers and the hardening of Phase 10. The cgo build stays the default.
 
 ```sh
 just build-purego    # CGO_ENABLED=0 go build -tags purego -> bin/go-signal-purego
 just check-purego    # vet, golangci-lint and tests of the purego build
+just test-fork       # the pinned forks' tests: libsignal-go with its vectors, the purego shim,
+                     # and signalmeow's zkgroup paths (scripts/test-zkgroup-integration.sh)
+just test-diff       # cgo: purego against libsignal on the same inputs, and the shim's cgo side
+just build-purego-release <os> <arch>   # cross-compiled archive in dist/purego/
 ```
 
 How it fits together:
@@ -68,8 +72,9 @@ When the change is done, commit and tag the fork, then set the replace to the ne
 
 The zkgroup integration test (Phases 8.3–8.4) runs signalmeow's group and profile code
 against both builds of the shim. It overlays test files into signalmeow's sources, which Go
-refuses for the module cache, so it needs a workspace with the mautrix-signal checkout at the
-pinned tag. Run from the go-signal directory:
+refuses for the module cache, so without a workspace it tests a temporary copy of the pinned
+fork (that is how `just test-fork`, `just test-diff` and CI run it). To test a mautrix-signal
+checkout instead, run it in a workspace, from the go-signal directory:
 
 ```sh
 work_dir=$(mktemp -d)
@@ -127,12 +132,18 @@ The submodule must sit at exactly the tag that `libsignalgo` was generated again
 
 `.github/workflows/tests.yaml` runs these jobs:
 
-- `test-unit`: `CGO_ENABLED=0` build and tests, then the same with `-tags purego`. No Rust and
-  no libsignal, so it is fast. It runs without `-race`, because the race detector needs cgo.
+- `test-unit`: `CGO_ENABLED=0` build and tests without the purego tag. No Rust and no libsignal,
+  so it is fast. It runs without `-race`, because the race detector needs cgo.
+- `test-purego`: `CGO_ENABLED=0 -tags purego` build, then `just check-purego` and
+  `just test-fork`.
+- `build-purego`: cross-compiles and packages the purego binaries for linux, darwin and windows
+  on amd64 and arm64 on one runner (`just build-purego-release`), smoke-runs the linux/amd64 one
+  and keeps the archives as the `purego` artifact.
 - `test-cgo`: restores `third_party/lib` from the Actions cache, keyed on the libsignal submodule
   commit and the runner OS/arch. On a miss it installs `protoc`, `clang`, `cmake` and the pinned
   Rust toolchain, then builds the library. Either way it then runs `just check-libsignal`,
-  `just build` and `just test`.
+  `just build` and `just test`. Its second job, `differential`, restores the same cache after it
+  and runs `just test-diff`.
 - `test-lint`, `test-format`.
 
 `release-please.yaml` and `release.yaml` make the releases (see below).
@@ -151,6 +162,8 @@ conventional commit messages on `main` (`feat:`, `fix:`, `feat!:` …):
 3. `release.yaml` builds and attaches the binaries: `go-signal_<version>_<os>_<arch>.tar.gz` for
    linux amd64/arm64 (static) and darwin arm64, plus `SHA256SUMS` and a build provenance
    attestation. It also pushes the container image and updates the Homebrew tap and the AUR package.
+   Its `purego` job builds the pure-Go archives (`go-signal-purego_*`) as a workflow artifact only;
+   they are not attached to the release until PLAN.md 10.3 flips the default.
 
 Pushing a `v*` tag by hand runs `release.yaml` as well and creates the release if it is missing;
 "Run workflow" on `release.yaml` rebuilds an existing tag. The binaries are replaced
