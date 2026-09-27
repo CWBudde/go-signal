@@ -1635,8 +1635,24 @@ main, as on pushes.)
       `TestPKCS7UnpadMatchesReference` covers all 256 final bytes, correct and with each padding
       position corrupted. Callers are unchanged, so they still authenticate first. Optimized amd64
       and arm64 output uses only SETcc/CMOV/CSEL on the pad byte.)
-- [ ] Opt-in staging integration suite (`-tags integration,libsignal_go`): link, 1:1, group send,
-      profile fetch, CDSI
+- [ ] Opt-in integration suite (`-tags integration,libsignal_go`): link, 1:1, group send,
+      profile fetch, CDSI. Production with a dedicated test account, not staging: signalmeow is
+      hard-wired to production hosts, zkgroup parameters and the CDSI enclave.
+      (2026-09-27 — `internal/signal/integration_test.go`, `just test-integration` (cgo, then
+      libsignal_go on the same account), docs/dev.md "Integration tests". First live run, test
+      account linked with the purego binary: Receive, CDSI, Profile (own and peer, with the
+      zkgroup credential), NoteToSelf and Direct (with the peer's delivery receipt) pass on both
+      backends. CDSI returns only the PNI for a number whose access key we don't send; the step
+      accepts that. Still open: a live Group run (needs a test group, `GOSIGNAL_IT_GROUP`) and
+      `TestIntegrationLink` (`GOSIGNAL_IT_LINK=1`). Found IT-01 below.)
+- [ ] IT-01: the cgo libsignalgo passes `time.Now().Unix()` (seconds) as `now` to
+      `SessionCipher_EncryptMessage` and `SessionBuilder_ProcessPreKeyBundle`, which take epoch
+      milliseconds (`message.go`, `prekeybundle.go`; upstream mautrix too). Unacknowledged
+      sessions created under cgo store a 1970 timestamp, so cgo's 30-day stale-session rule never
+      fires, and libsignal-go treats all of them as stale: after the switch the first send to such
+      a device fails with "stale unacknowledged session", and signalmeow refetches pre-keys and
+      starts a new session (seen live on the second backend's run). Fix in the fork (`UnixMilli`),
+      add a cross-backend test, report upstream.
 - [ ] Consider an external review of the zkgroup and attestation ports before flipping the default
 
 **Done when:** fuzzers run in CI (short budget), the integration suite passes on staging,

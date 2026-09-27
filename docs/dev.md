@@ -127,8 +127,8 @@ The WebSocket test currently detects an upstream shutdown race under `-race` in
 `web/signalwebsocket.go` (`incomingRequestChan` is cleared while the handler goroutine
 reads it); the ordinary CGO/purego integration runs and go-signal's race suite pass.
 
-Live group-list/profile-fetch/group-send acceptance remains pending; the offline tests do not
-substitute for that check.
+The offline tests don't substitute for live group, profile and send checks; those are in the
+integration suite (see "Integration tests").
 
 ### Upgrading signalmeow and libsignal
 
@@ -155,6 +155,51 @@ The submodule must sit at exactly the tag that `libsignalgo` was generated again
 5. If the libsignal tag moved, re-pin `cwbudde/libsignal-go`'s compat harness to it
    (`scripts/update-upstream-pin.sh vA.B.C` plus the manual steps in its ADR 0007), port the
    drift, tag a new `-cw.N` release and bump it in the mautrix fork.
+
+## Integration tests
+
+`internal/signal/integration_test.go` (`-tags integration`) runs the real client against Signal's
+**production** servers with a dedicated test account. It is opt-in and never runs in CI; `just
+check-purego` only vets and lints it. signalmeow is hard-wired to production (hosts, zkgroup server
+parameters, CDSI enclave), so there is no staging variant.
+
+`TestIntegration` connects the test account once and runs these steps in order:
+
+| Step         | What it checks                                                                                                    |
+| ------------ | ----------------------------------------------------------------------------------------------------------------- |
+| `Receive`    | the queued messages are received and decrypted, up to the queue-empty marker                                      |
+| `CDSI`       | contact discovery for the peer's number (the enclave handshake, bypassing the cache) agrees with `Resolve`        |
+| `Profile`    | our own profile, and the peer's if we have their profile key, is fetched and decrypted, with a zkgroup credential |
+| `NoteToSelf` | a sync transcript to our other devices                                                                            |
+| `Direct`     | a 1:1 message to the peer, which must come back with the peer phone's delivery receipt                            |
+| `Group`      | the test group is fetched and a group message (group send endorsements) is sent to all members                    |
+
+A decryption failure for a message sent during the run fails it too. `TestIntegrationLink` links
+a new device into a temporary data dir (scan the QR code it prints), connects, lists the devices,
+sends a note to self and unlinks it again.
+
+Setup:
+
+- A test account linked with go-signal into its own data dir (`go-signal --data-dir DIR link`).
+  The suite acks the queued messages and uses the account's sessions, so don't point it at an
+  account you use, and stop anything else connected with that data dir (`mcp serve`, `receive`).
+- A second Signal account (the peer) whose phone is online, so that its delivery receipts arrive.
+  It must be discoverable by number. For `Profile/Peer`, message the test account from it once.
+- Optionally a group with the test account and the peer in it.
+
+| Variable               | Meaning                                                           |
+| ---------------------- | ----------------------------------------------------------------- |
+| `GOSIGNAL_IT_DATA_DIR` | data dir of the test account (the suite skips without it)         |
+| `GOSIGNAL_IT_ACCOUNT`  | the account in it, by number or ACI; empty selects the first      |
+| `GOSIGNAL_IT_PEER`     | the peer's number (required)                                      |
+| `GOSIGNAL_IT_GROUP`    | the test group's ID or master key (`go-signal groups list`)       |
+| `GOSIGNAL_IT_LINK`     | `1` to run `TestIntegrationLink` too                              |
+| `GOSIGNAL_IT_TIMEOUT`  | how long to wait for the queue and delivery receipts (default 2m) |
+| `GOSIGNAL_IT_LOG`      | log level of the client (default `warn`)                          |
+
+`just test-integration` runs the suite with the cgo backend and then with `libsignal_go` on the
+same account, which also checks that each backend picks up the other's sessions. The peer gets
+one set of messages from each run. With `GOSIGNAL_IT_LINK=1` there are two QR codes to scan.
 
 ## CI
 

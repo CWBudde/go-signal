@@ -71,10 +71,12 @@ package os arch: docs-gen
 build-purego:
     CGO_ENABLED=0 go build -tags libsignal_go -ldflags "{{ version_ldflags }}" -o bin/go-signal-purego .
 
-# Vet, lint and test the purego build (cgo-only tests are excluded by their build tags)
+# Vet, lint and test the purego build (cgo-only tests are excluded by their build tags;
+
+# vet and lint include the integration suite, which only runs by hand)
 check-purego:
-    CGO_ENABLED=0 go vet -tags libsignal_go ./...
-    CGO_ENABLED=0 golangci-lint run --timeout 5m --build-tags libsignal_go
+    CGO_ENABLED=0 go vet -tags integration,libsignal_go ./...
+    CGO_ENABLED=0 golangci-lint run --timeout 5m --build-tags integration,libsignal_go
     CGO_ENABLED=0 go test -tags libsignal_go -count=1 ./...
     just check-aes-asm
 
@@ -111,6 +113,13 @@ test-diff:
     scripts/test-backend-switch.sh
     scripts/test-cdsi-integration.sh -race
     scripts/test-zkgroup-integration.sh
+
+# Opt-in integration suite against Signal's production servers, cgo then libsignal_go on the same
+
+# account (docs/dev.md, "Integration tests"). Needs GOSIGNAL_IT_DATA_DIR and GOSIGNAL_IT_PEER.
+test-integration:
+    go test -count=1 -v -timeout 20m -tags integration -run '^TestIntegration' ./internal/signal/
+    CGO_ENABLED=0 go test -count=1 -v -timeout 20m -tags integration,libsignal_go -run '^TestIntegration' ./internal/signal/
 
 # Cross-compiled purego release binary to dist/purego/<os>_<arch>/, packaged as go-signal-purego_*
 build-purego-release os arch: docs-gen
