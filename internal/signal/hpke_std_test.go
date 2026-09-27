@@ -1,9 +1,11 @@
 package signal_test
 
 import (
+	"bytes"
 	"crypto/ecdh"
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"testing"
 
 	"github.com/cwbudde/go-signal/internal/signal"
@@ -67,6 +69,79 @@ func TestStdHPKERoundTrip(t *testing.T) {
 	_, err = signal.StdHPKESeal(public[1:], []byte("hello"), info, aad)
 	if err == nil {
 		t.Error("seal to a public key without the type byte succeeded")
+	}
+}
+
+func TestStdHPKERejectsMalformedCiphertexts(t *testing.T) {
+	t.Parallel()
+
+	private, _ := hex.DecodeString(libsignalHPKEPrivate)
+	sealed, _ := hex.DecodeString(libsignalHPKESealed)
+	info, aad := []byte(libsignalHPKEInfo), []byte{2, 0, 0, 0x10, 0x92}
+
+	// Check every framing/key/tag boundary, including a complete encapsulation
+	// followed by a missing or partial AEAD tag.
+	for length := range sealed {
+		t.Run(fmt.Sprintf("truncated-%d", length), func(t *testing.T) {
+			t.Parallel()
+
+			plain, err := signal.StdHPKEOpen(private, sealed[:length], info, aad)
+			if err == nil || len(plain) != 0 {
+				t.Fatalf("truncated ciphertext: plaintext %x, error %v", plain, err)
+			}
+		})
+	}
+
+	// Mutate each byte: the type, encapsulated key, ciphertext and tag must all
+	// be bound to the message. No unauthenticated plaintext may escape.
+	for pos := range sealed {
+		t.Run(fmt.Sprintf("tampered-%d", pos), func(t *testing.T) {
+			t.Parallel()
+
+			tampered := bytes.Clone(sealed)
+			tampered[pos] ^= 1
+
+			plain, err := signal.StdHPKEOpen(private, tampered, info, aad)
+			if err == nil || len(plain) != 0 {
+				t.Fatalf("tampered ciphertext: plaintext %x, error %v", plain, err)
+			}
+		})
+	}
+}
+
+func TestStdHPKERejectsInvalidKeys(t *testing.T) {
+	t.Parallel()
+
+	public, private := x25519Keys(t)
+	_, otherPrivate := x25519Keys(t)
+	sealed, _ := hex.DecodeString(libsignalHPKESealed)
+
+	for name, key := range map[string][]byte{
+		"missing": nil, "31 bytes": private[:31], "33 bytes": append(bytes.Clone(private), 0), "wrong": otherPrivate,
+	} {
+		t.Run("private-"+name, func(t *testing.T) {
+			t.Parallel()
+
+			plain, err := signal.StdHPKEOpen(key, sealed, []byte(libsignalHPKEInfo), []byte{2, 0, 0, 0x10, 0x92})
+			if err == nil || len(plain) != 0 {
+				t.Fatalf("invalid private key: plaintext %x, error %v", plain, err)
+			}
+		})
+	}
+
+	for name, key := range map[string][]byte{
+		"missing": nil, "32 bytes": public[:32], "34 bytes": append(bytes.Clone(public), 0),
+		"wrong type": append([]byte{0x06}, public[1:]...),
+		"low order":  append([]byte{0x05}, make([]byte, 32)...),
+	} {
+		t.Run("public-"+name, func(t *testing.T) {
+			t.Parallel()
+
+			ciphertext, err := signal.StdHPKESeal(key, []byte("hello"), nil, nil)
+			if err == nil || len(ciphertext) != 0 {
+				t.Fatalf("invalid public key: ciphertext %x, error %v", ciphertext, err)
+			}
+		})
 	}
 }
 

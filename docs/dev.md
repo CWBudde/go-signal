@@ -37,6 +37,7 @@ just check-purego    # vet, golangci-lint and tests of the purego build
 just test-fork       # the pinned forks' tests: libsignal-go with its vectors, the purego shim,
                      # and signalmeow's zkgroup paths (scripts/test-zkgroup-integration.sh)
 just test-diff       # cgo: purego against libsignal on the same inputs, and the shim's cgo side
+                     # plus on-disk account state across backend switches and zkgroup integration
 just build-purego-release <os> <arch>   # cross-compiled archive in dist/purego/
 ```
 
@@ -59,6 +60,13 @@ How it fits together:
   the same connection options (`TestConnectionPragmas` checks both).
 - Tests that need real libsignal are `cgo && !purego`. `purego_diff_test.go` (cgo) runs the
   cgo code and the pure-Go code on the same inputs and requires identical results.
+
+`just test-diff` also runs `scripts/test-backend-switch.sh`. It builds separate CGO and purego
+store test binaries and alternates them over temporary account databases, starting with each
+backend. The test continues prekey/session and sender-key exchanges, checks persisted ACI/PNI
+identity keys, consumes one-time prekeys, recovers skipped group keys and rejects replays.
+It uses generated accounts and needs no Signal credentials or server access. The ordinary
+store suite runs the same scenario as `TestProtocolStateSurvivesReopen` within one backend.
 
 To work on the forks locally, point go.mod at the checkouts temporarily and don't commit it:
 

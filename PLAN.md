@@ -1226,8 +1226,12 @@ and `just check` is green.)
 
 **Done when:** a purego build links a device and does 1:1 send/receive against the live server,
 and a DB created with the CGO build keeps working with the purego build (and the other way round).
-(Open: both need a live account. Record compatibility is covered by the tests above, not yet
-with a real `account.db`.)
+(Live linking/send/receive remains open. Offline database switching is covered by
+`scripts/test-backend-switch.sh`, run by `just test-diff` and CI: separate CGO and purego test
+binaries alternate over the same temporary `account.db` files, starting with either backend.
+They preserve ACI/PNI identity keys, consume persisted EC/Kyber prekeys, continue session replies
+and sender-key messages across switches, recover skipped group-message keys and reject replays.
+`TestProtocolStateSurvivesReopen` runs the same scenario within each backend's ordinary suite.)
 
 ### Phase 8 — zkgroup in pure Go (in the libsignal-go fork)
 
@@ -1508,6 +1512,9 @@ tampered or truncated messages and a wrong static key. The shim wiring is 9.3.
       replaces `hpke.go` in purego builds. (Done early, in 7.2: `hpke_std.go` on `crypto/hpke`
       with libsignal's framing (type byte, enc, AEAD output). Checked against libsignal in both
       directions (`TestDiffHPKE`) and against a committed libsignal ciphertext.)
+      Malformed-input tests also reject every truncation and single-byte mutation of that
+      ciphertext, invalid key lengths/types, a wrong private key and a low-order public key,
+      without returning plaintext on failure.
 - [x] Sweep: any `libsignalgo` symbol still returning `ErrNotImplemented` gets implemented or
       listed as a known gap in the fork's scope matrix
       (2026-09-27 — The last three stubs are implemented in mautrix-signal and released in
@@ -1568,8 +1575,19 @@ main, as on pushes.)
 
 #### 10.2 Security hardening
 
-- [ ] Go native fuzzing for every parser (wire messages, records, certificates, quotes, zkgroup
+- [x] Go native fuzzing for every parser (wire messages, records, certificates, quotes, zkgroup
       serializations) in the fork
+      (2026-09-27 — libsignal-go main, commits `e52619e2c` and `b29cd1175`. The fork's
+      `docs/fuzzing.md` lists 161 parsers: 114 already had fuzz targets, and 35 new targets plus
+      one extended target cover the other 47, which makes 74 targets. It also lists what is left
+      out and why (derived key material, parsers that accept any input, packages without parsers).
+      `scripts/fuzz.sh` finds and runs every target; `fuzz.yml` runs it in 4 shards, 10s per target on
+      PRs and pushes and 2m weekly, and uploads new corpus entries on failure. Run `36300130921`
+      on `b29cd1175` is green, and its shards ran 19+19+18+18 = 74 targets. `FuzzRecv` found a
+      panic in `spqr` on a corrupted stored state: a decoder that needs too few points gave a short
+      header or ct2. Both sites now return `ErrInvalidState`, and the input is a regression seed
+      that fails without the fix. Also fixed: gofmt on `sealedsender/known_certs.go` had turned the
+      fork's `go` workflow red since the `feat/cdsi` merge; run `36300130885` is green.)
 - [ ] Constant-time review of secret-dependent code paths. Document the zeroization posture.
 - [ ] Opt-in staging integration suite (`-tags integration,purego`): link, 1:1, group send,
       profile fetch, CDSI

@@ -89,6 +89,7 @@ test-fork:
 test-diff:
     go test -race -count=1 -run '^TestDiff' ./internal/signal/
     go test -race -count=1 go.mau.fi/mautrix-signal/pkg/libsignalgo/...
+    scripts/test-backend-switch.sh
     scripts/test-zkgroup-integration.sh
 
 # Cross-compiled purego release binary to dist/purego/<os>_<arch>/, packaged as go-signal-purego_*
