@@ -47,6 +47,11 @@ jobs:
             just build-release "${target%/*}" "${target#*/}"
           done
 
+      - name: Install script
+        run: |
+          cp scripts/install.sh dist/
+          sh -n dist/install.sh
+
       - name: Smoke test
         run: |
           dist/linux_amd64/go-signal version
@@ -64,5 +69,6 @@ jobs:
           path: |
             dist/go-signal_*.tar.gz
             dist/go-signal_*.zip
+            dist/install.sh
             dist/linux_*/go-signal
           if-no-files-found: error

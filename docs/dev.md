@@ -225,7 +225,8 @@ conventional commit messages on `main` (`feat:`, `fix:`, `feat!:` …):
 2. Merging the PR tags `vX.Y.Z`, creates the GitHub release and calls `release.yaml` for it.
 3. `release.yaml` builds the binaries with `build.yaml` and attaches them:
    `go-signal_<version>_<os>_<arch>.tar.gz` for linux and darwin, `.zip` for windows, each on
-   amd64 and arm64, plus `SHA256SUMS` and a build provenance attestation. It also pushes the
+   amd64 and arm64, `install.sh` (the README's `curl … | sh`, from `scripts/install.sh`), plus
+   `SHA256SUMS` and a build provenance attestation. It also pushes the
    container image and updates the Homebrew tap and the AUR package. All of them are pure-Go
    (`libsignal_go`) builds; releases need no Rust.
 

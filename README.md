@@ -17,18 +17,19 @@ The [releases](https://github.com/cwbudde/go-signal/releases) have a single, sel
 binary for Linux, macOS and Windows on amd64 and arm64. On Linux and macOS:
 
 ```sh
-version=0.1.0
-os=$(uname -s | tr '[:upper:]' '[:lower:]')                 # linux or darwin
-arch=$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')   # amd64 or arm64
-curl -fsSL https://github.com/cwbudde/go-signal/releases/download/v$version/go-signal_${version}_${os}_${arch}.tar.gz | tar xz
-mkdir -p ~/.local/bin && mv go-signal_${version}_${os}_${arch}/go-signal ~/.local/bin/
+curl -fsSL https://github.com/cwbudde/go-signal/releases/latest/download/install.sh | sh
 ```
+
+The [script](scripts/install.sh) downloads the latest release for your OS and CPU, checks it
+against the release's `SHA256SUMS` and installs `go-signal` to `~/.local/bin`. Set
+`GOSIGNAL_VERSION=0.2.0` for a specific release, or `GOSIGNAL_INSTALL_DIR` for another
+directory (`… | sudo GOSIGNAL_INSTALL_DIR=/usr/local/bin sh`).
 
 On Windows, download `go-signal_<version>_windows_amd64.zip` (or `_arm64`) from the release and
 put `go-signal.exe` on your `PATH`.
 
 The archives also contain man pages, shell completions and, for Linux, a systemd timer (see
-[Staying linked](#staying-linked)). To check a download, compare it with the release's
+[Staying linked](#staying-linked)). To check a manual download, compare it with the release's
 `SHA256SUMS`, or verify its [build provenance](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations)
 with `gh attestation verify <archive> --repo cwbudde/go-signal`.
 
