@@ -7,9 +7,9 @@ import (
 	"testing"
 
 	"github.com/cwbudde/go-signal/internal/signal"
+	"github.com/cwbudde/mautrix-signal/pkg/signalmeow/events"
+	"github.com/cwbudde/mautrix-signal/pkg/signalmeow/types"
 	"github.com/google/uuid"
-	"go.mau.fi/mautrix-signal/pkg/signalmeow/events"
-	"go.mau.fi/mautrix-signal/pkg/signalmeow/types"
 )
 
 func TestSetBlockedWithoutServer(t *testing.T) {

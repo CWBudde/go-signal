@@ -15,13 +15,13 @@ import (
 
 	"github.com/coder/websocket"
 	storagepb "github.com/cwbudde/libsignal-go/proto"
+	"github.com/cwbudde/mautrix-signal/pkg/libsignalgo"
+	"github.com/cwbudde/mautrix-signal/pkg/signalmeow/protobuf/signalpb"
+	"github.com/cwbudde/mautrix-signal/pkg/signalmeow/store"
+	"github.com/cwbudde/mautrix-signal/pkg/signalmeow/types"
+	"github.com/cwbudde/mautrix-signal/pkg/signalmeow/web"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
-	"go.mau.fi/mautrix-signal/pkg/libsignalgo"
-	"go.mau.fi/mautrix-signal/pkg/signalmeow/protobuf/signalpb"
-	"go.mau.fi/mautrix-signal/pkg/signalmeow/store"
-	"go.mau.fi/mautrix-signal/pkg/signalmeow/types"
-	"go.mau.fi/mautrix-signal/pkg/signalmeow/web"
 	"google.golang.org/protobuf/proto"
 )
 

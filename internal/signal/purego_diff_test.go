@@ -22,8 +22,8 @@ import (
 	"github.com/cwbudde/libsignal-go/protocol"
 	"github.com/cwbudde/libsignal-go/session"
 	"github.com/cwbudde/libsignal-go/usernames"
+	"github.com/cwbudde/mautrix-signal/pkg/libsignalgo"
 	"github.com/google/uuid"
-	"go.mau.fi/mautrix-signal/pkg/libsignalgo"
 )
 
 // Differential tests (PLAN.md 7.3): the cgo backend (libsignal FFI) and the pure-Go code the

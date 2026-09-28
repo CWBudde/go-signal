@@ -11,7 +11,7 @@ import (
 
 	"github.com/cwbudde/libsignal-go/attest/shimtest"
 	"github.com/cwbudde/libsignal-go/noise"
-	"go.mau.fi/mautrix-signal/pkg/libsignalgo"
+	"github.com/cwbudde/mautrix-signal/pkg/libsignalgo"
 	"google.golang.org/protobuf/encoding/protowire"
 )
 

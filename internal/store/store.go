@@ -10,8 +10,8 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/cwbudde/mautrix-signal/pkg/signalmeow/store"
 	"github.com/rs/zerolog"
-	"go.mau.fi/mautrix-signal/pkg/signalmeow/store"
 	"go.mau.fi/util/dbutil"
 )
 

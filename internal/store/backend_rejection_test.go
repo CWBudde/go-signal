@@ -6,8 +6,8 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/cwbudde/mautrix-signal/pkg/libsignalgo"
 	"github.com/google/uuid"
-	"go.mau.fi/mautrix-signal/pkg/libsignalgo"
 )
 
 // Rejected ciphertext must neither consume a skipped key nor commit a new

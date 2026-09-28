@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/cwbudde/go-signal/internal/store"
+	"github.com/cwbudde/mautrix-signal/pkg/signalmeow/types"
 	"github.com/google/uuid"
-	"go.mau.fi/mautrix-signal/pkg/signalmeow/types"
 )
 
 func TestBlockOverrides(t *testing.T) {

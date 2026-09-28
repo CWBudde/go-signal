@@ -4,17 +4,17 @@
 set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 cd "$root"
-module_dir=$(go list -f '{{.Dir}}' go.mau.fi/mautrix-signal/pkg/signalmeow)
+module_dir=$(go list -f '{{.Dir}}' github.com/cwbudde/mautrix-signal/pkg/signalmeow)
 test_dir=$(mktemp -d)
 trap 'chmod -R u+w "$test_dir"; rm -rf "$test_dir"' EXIT
 # Go refuses overlays for files in the module cache. Without a workspace that points at a
 # checkout, test a writable copy of the pinned fork instead.
 if [[ $module_dir == "$(go env GOMODCACHE)"/* ]]; then
-	cp -r "$(go list -m -f '{{.Dir}}' go.mau.fi/mautrix-signal)" "$test_dir/mautrix-signal"
+	cp -r "$(go list -m -f '{{.Dir}}' github.com/cwbudde/mautrix-signal)" "$test_dir/mautrix-signal"
 	chmod -R u+w "$test_dir/mautrix-signal"
 	(cd "$test_dir" && go work init "$root" "$test_dir/mautrix-signal")
 	export GOWORK="$test_dir/go.work"
-	module_dir=$(go list -f '{{.Dir}}' go.mau.fi/mautrix-signal/pkg/signalmeow)
+	module_dir=$(go list -f '{{.Dir}}' github.com/cwbudde/mautrix-signal/pkg/signalmeow)
 fi
 python3 - "$module_dir" "$root" "$test_dir" <<'PY'
 import json, pathlib, sys
@@ -27,4 +27,4 @@ overlay["Replace"][str(module_dir / "group_send_helpers_test.go")] = str(test_di
 overlay["Replace"][str(module_dir / "group_send_integration_test.go")] = str(root / "scripts/testdata/group_send_integration_test.go")
 (test_dir / "overlay.json").write_text(json.dumps(overlay))
 PY
-GROUP_SEND_TEST_FIXTURE="$module_dir/../libsignalgo/testdata/group-send.json" go test -overlay "$test_dir/overlay.json" "$@" -count=1 -run '^TestZKGroupIntegration' go.mau.fi/mautrix-signal/pkg/signalmeow
+GROUP_SEND_TEST_FIXTURE="$module_dir/../libsignalgo/testdata/group-send.json" go test -overlay "$test_dir/overlay.json" "$@" -count=1 -run '^TestZKGroupIntegration' github.com/cwbudde/mautrix-signal/pkg/signalmeow

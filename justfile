@@ -85,7 +85,7 @@ check-aes-asm:
 # Test the pinned forks: libsignal-go (committed vectors, unit tests) and the purego libsignalgo shim
 test-fork:
     CGO_ENABLED=0 go test -count=1 github.com/cwbudde/libsignal-go/...
-    CGO_ENABLED=0 go test -tags libsignal_go -count=1 go.mau.fi/mautrix-signal/pkg/libsignalgo/...
+    CGO_ENABLED=0 go test -tags libsignal_go -count=1 github.com/cwbudde/mautrix-signal/pkg/libsignalgo/...
     CGO_ENABLED=0 scripts/test-cdsi-integration.sh
     CGO_ENABLED=0 scripts/test-zkgroup-integration.sh -tags libsignal_go
 
@@ -94,7 +94,7 @@ test-fork:
 # The last runs without -race: upstream signalmeow's SignalWebsocket.connectLoop has a data race.
 test-diff:
     go test -race -count=1 -run '^TestDiff' ./internal/signal/
-    go test -race -count=1 go.mau.fi/mautrix-signal/pkg/libsignalgo/...
+    go test -race -count=1 github.com/cwbudde/mautrix-signal/pkg/libsignalgo/...
     scripts/test-backend-switch.sh
     scripts/test-cdsi-integration.sh -race
     scripts/test-zkgroup-integration.sh
@@ -184,8 +184,8 @@ check-libsignal:
     set -euo pipefail
     git submodule update --init --depth 1 third_party/libsignal
     # .Dir is empty until the module is in the module cache (e.g. on a fresh CI runner).
-    go mod download go.mau.fi/mautrix-signal
-    dir=$(go list -m -f '{{{{.Dir}}' go.mau.fi/mautrix-signal)
+    go mod download github.com/cwbudde/mautrix-signal
+    dir=$(go list -m -f '{{{{.Dir}}' github.com/cwbudde/mautrix-signal)
     want=$(grep -o 'v[0-9][0-9.]*' "$dir/pkg/libsignalgo/signalversion/version.go")
     lib="git -C third_party/libsignal"
     # Shallow clones carry no tags, so fetch the expected one and compare commits.

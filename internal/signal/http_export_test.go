@@ -5,7 +5,7 @@ package signal
 import (
 	"net/http"
 
-	"go.mau.fi/mautrix-signal/pkg/signalmeow/web"
+	"github.com/cwbudde/mautrix-signal/pkg/signalmeow/web"
 )
 
 // SetSignalTransport routes signalmeow's REST requests through rt until the returned function

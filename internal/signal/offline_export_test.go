@@ -6,8 +6,8 @@ import (
 	"context"
 	"time"
 
-	"go.mau.fi/mautrix-signal/pkg/signalmeow/events"
-	"go.mau.fi/mautrix-signal/pkg/signalmeow/protobuf/signalpb"
+	"github.com/cwbudde/mautrix-signal/pkg/signalmeow/events"
+	"github.com/cwbudde/mautrix-signal/pkg/signalmeow/protobuf/signalpb"
 )
 
 // ConnectOffline sets client (from Open) up as Connect does for the selected account, without

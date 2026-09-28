@@ -18,8 +18,8 @@ import (
 	"github.com/cwbudde/libsignal-go/sealedsender"
 	"github.com/cwbudde/libsignal-go/session"
 	"github.com/cwbudde/libsignal-go/stores/inmem"
+	"github.com/cwbudde/mautrix-signal/pkg/libsignalgo"
 	"github.com/google/uuid"
-	"go.mau.fi/mautrix-signal/pkg/libsignalgo"
 )
 
 // The differential tests run the same protocol flows with one party on the cgo libsignalgo and

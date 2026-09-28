@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/cwbudde/go-signal/internal/signal"
-	"go.mau.fi/mautrix-signal/pkg/libsignalgo"
-	"go.mau.fi/mautrix-signal/pkg/signalmeow"
+	"github.com/cwbudde/mautrix-signal/pkg/libsignalgo"
+	"github.com/cwbudde/mautrix-signal/pkg/signalmeow"
 )
 
 func TestHPKERoundTrip(t *testing.T) {

@@ -7,8 +7,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/cwbudde/mautrix-signal/pkg/signalmeow"
 	"github.com/google/uuid"
-	"go.mau.fi/mautrix-signal/pkg/signalmeow"
 )
 
 var errNotMeow = errors.New("not a signalmeow client")

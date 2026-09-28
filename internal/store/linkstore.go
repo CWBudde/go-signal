@@ -7,9 +7,9 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/cwbudde/mautrix-signal/pkg/signalmeow/store"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
-	"go.mau.fi/mautrix-signal/pkg/signalmeow/store"
 )
 
 // errNoDevice means signalmeow looked a device up before storing one.

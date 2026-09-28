@@ -5,8 +5,8 @@ package signal
 import (
 	"context"
 
-	"go.mau.fi/mautrix-signal/pkg/signalmeow"
-	"go.mau.fi/mautrix-signal/pkg/signalmeow/types"
+	"github.com/cwbudde/mautrix-signal/pkg/signalmeow"
+	"github.com/cwbudde/mautrix-signal/pkg/signalmeow/types"
 )
 
 // ConvertGroup exposes convertGroup to the signal_test package.

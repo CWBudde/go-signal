@@ -13,10 +13,10 @@ import (
 	"time"
 
 	"github.com/cwbudde/go-signal/internal/store"
+	"github.com/cwbudde/mautrix-signal/pkg/libsignalgo"
+	mstore "github.com/cwbudde/mautrix-signal/pkg/signalmeow/store"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
-	"go.mau.fi/mautrix-signal/pkg/libsignalgo"
-	mstore "go.mau.fi/mautrix-signal/pkg/signalmeow/store"
 )
 
 // The ordinary suite checks restarts with its own backend. test-backend-switch.sh

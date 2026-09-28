@@ -11,8 +11,8 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/cwbudde/mautrix-signal/pkg/signalmeow/web"
 	"github.com/google/uuid"
-	"go.mau.fi/mautrix-signal/pkg/signalmeow/web"
 )
 
 // usernameHashPath looks up the ACI of a username hash. The server refuses it with credentials.

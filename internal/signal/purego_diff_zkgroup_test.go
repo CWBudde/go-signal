@@ -8,8 +8,8 @@ import (
 
 	"github.com/cwbudde/libsignal-go/address"
 	"github.com/cwbudde/libsignal-go/zkgroup"
+	"github.com/cwbudde/mautrix-signal/pkg/libsignalgo"
 	"github.com/google/uuid"
-	"go.mau.fi/mautrix-signal/pkg/libsignalgo"
 )
 
 func TestDiffZKGroup(t *testing.T) {

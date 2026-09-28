@@ -6,7 +6,7 @@ import (
 	"context"
 	"fmt"
 
-	"go.mau.fi/mautrix-signal/pkg/signalmeow/protobuf/signalpb"
+	"github.com/cwbudde/mautrix-signal/pkg/signalmeow/protobuf/signalpb"
 )
 
 func (c *meowClient) SendReceipt(ctx context.Context, sender Recipient, typ ReceiptType, timestamps []uint64) error {

@@ -18,10 +18,10 @@ import (
 	"strconv"
 	"time"
 
-	"go.mau.fi/mautrix-signal/pkg/libsignalgo"
-	"go.mau.fi/mautrix-signal/pkg/signalmeow/protobuf/signalpb"
-	mstore "go.mau.fi/mautrix-signal/pkg/signalmeow/store"
-	"go.mau.fi/mautrix-signal/pkg/signalmeow/web"
+	"github.com/cwbudde/mautrix-signal/pkg/libsignalgo"
+	"github.com/cwbudde/mautrix-signal/pkg/signalmeow/protobuf/signalpb"
+	mstore "github.com/cwbudde/mautrix-signal/pkg/signalmeow/store"
+	"github.com/cwbudde/mautrix-signal/pkg/signalmeow/web"
 	"google.golang.org/protobuf/proto"
 )
 

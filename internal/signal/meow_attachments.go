@@ -7,9 +7,9 @@ import (
 	"errors"
 	"fmt"
 
-	"go.mau.fi/mautrix-signal/pkg/signalmeow"
-	"go.mau.fi/mautrix-signal/pkg/signalmeow/protobuf/signalpb"
-	"go.mau.fi/mautrix-signal/pkg/signalmeow/web"
+	"github.com/cwbudde/mautrix-signal/pkg/signalmeow"
+	"github.com/cwbudde/mautrix-signal/pkg/signalmeow/protobuf/signalpb"
+	"github.com/cwbudde/mautrix-signal/pkg/signalmeow/web"
 )
 
 // Lengths of an attachment's key (AES-256 + HMAC-SHA256) and digest (SHA-256).

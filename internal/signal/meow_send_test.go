@@ -9,10 +9,10 @@ import (
 	"time"
 
 	"github.com/cwbudde/go-signal/internal/signal"
+	"github.com/cwbudde/mautrix-signal/pkg/libsignalgo"
+	"github.com/cwbudde/mautrix-signal/pkg/signalmeow"
+	"github.com/cwbudde/mautrix-signal/pkg/signalmeow/protobuf/signalpb"
 	"github.com/google/uuid"
-	"go.mau.fi/mautrix-signal/pkg/libsignalgo"
-	"go.mau.fi/mautrix-signal/pkg/signalmeow"
-	"go.mau.fi/mautrix-signal/pkg/signalmeow/protobuf/signalpb"
 	"google.golang.org/protobuf/proto"
 )
 

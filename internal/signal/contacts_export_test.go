@@ -7,11 +7,11 @@ import (
 	"time"
 
 	"github.com/cwbudde/go-signal/internal/store"
+	"github.com/cwbudde/mautrix-signal/pkg/signalmeow"
+	"github.com/cwbudde/mautrix-signal/pkg/signalmeow/protobuf/signalpb"
+	mstore "github.com/cwbudde/mautrix-signal/pkg/signalmeow/store"
+	"github.com/cwbudde/mautrix-signal/pkg/signalmeow/types"
 	"github.com/google/uuid"
-	"go.mau.fi/mautrix-signal/pkg/signalmeow"
-	"go.mau.fi/mautrix-signal/pkg/signalmeow/protobuf/signalpb"
-	mstore "go.mau.fi/mautrix-signal/pkg/signalmeow/store"
-	"go.mau.fi/mautrix-signal/pkg/signalmeow/types"
 )
 
 // BlockedList exposes blockedList to the signal_test package.

@@ -11,11 +11,11 @@ import (
 	"time"
 
 	"github.com/cwbudde/go-signal/internal/store"
+	"github.com/cwbudde/mautrix-signal/pkg/libsignalgo"
+	"github.com/cwbudde/mautrix-signal/pkg/signalmeow"
+	mstore "github.com/cwbudde/mautrix-signal/pkg/signalmeow/store"
+	"github.com/cwbudde/mautrix-signal/pkg/signalmeow/types"
 	"github.com/google/uuid"
-	"go.mau.fi/mautrix-signal/pkg/libsignalgo"
-	"go.mau.fi/mautrix-signal/pkg/signalmeow"
-	mstore "go.mau.fi/mautrix-signal/pkg/signalmeow/store"
-	"go.mau.fi/mautrix-signal/pkg/signalmeow/types"
 )
 
 // groupKeyLen is the length of group IDs and master keys.

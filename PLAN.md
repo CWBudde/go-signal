@@ -1667,7 +1667,7 @@ with the test account (signalmeow can't reach staging),
 and the CT-01/CT-02 default-switch blockers above are resolved in the shipped dependencies
 and build configuration.
 
-#### 10.3 Default flip
+#### 10.3 Default flip — ✅ DONE (2026-09-29)
 
 - [x] Release binaries are built with the `libsignal_go` tag. The CGO backend stays available (`-tags cgo`
       builds, and the differential CI job keeps it honest).
@@ -1695,10 +1695,14 @@ and build configuration.
 
 **Done when:** a tagged release ships pure-Go binaries only, and a fresh clone builds with
 `go build -tags libsignal_go` and nothing else installed.
-(2026-09-28 — The fresh clone part holds: `git clone` without submodules, then
-`go build -tags libsignal_go .` with cgo enabled and with `CGO_ENABLED=0`, no `CGO_LDFLAGS`, no
-Rust. Open: the first tagged release. release-please can't open its PR yet ("GitHub Actions is not
-permitted to create or approve pull requests", docs/dev.md "Releases", one-time setup).)
+(2026-09-29 — [v0.1.0](https://github.com/cwbudde/go-signal/releases/tag/v0.1.0), the first
+release, ships the six pure-Go archives, `SHA256SUMS`, the attestation and the image (release run
+36492142495). A fresh clone builds with `go build -tags libsignal_go .` with or without cgo, no
+submodules, no `CGO_LDFLAGS`, no Rust. `go install -tags libsignal_go
+github.com/cwbudde/go-signal@latest` works too: the mautrix fork has its own module path
+`github.com/cwbudde/mautrix-signal` since `v0.2609.0-purego.9`, so go.mod has no `replace`
+(docs/maintenance.md covers redoing the rename on a rebase). The Homebrew tap and the AUR package
+don't exist yet; their jobs skip until the secrets are set, and the README no longer lists them.)
 
 ### Later / on demand
 

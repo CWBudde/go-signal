@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"strings"
 
+	mstore "github.com/cwbudde/mautrix-signal/pkg/signalmeow/store"
 	"github.com/google/uuid"
-	mstore "go.mau.fi/mautrix-signal/pkg/signalmeow/store"
 )
 
 var errInvalidNumber = errors.New("invalid phone number")

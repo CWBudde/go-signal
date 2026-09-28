@@ -4,6 +4,7 @@ go 1.26.0
 
 require (
 	github.com/cwbudde/libsignal-go v0.7.1-cw.5
+	github.com/cwbudde/mautrix-signal v0.2609.0-purego.9
 	github.com/google/uuid v1.6.0
 	github.com/mattn/go-sqlite3 v1.14.52
 	github.com/mdp/qrterminal/v3 v3.2.1
@@ -11,7 +12,6 @@ require (
 	github.com/rs/zerolog v1.35.1
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
-	go.mau.fi/mautrix-signal v0.2609.0
 	go.mau.fi/util v0.10.1
 	golang.org/x/sys v0.48.0
 	google.golang.org/protobuf v1.36.12
@@ -65,5 +65,3 @@ require (
 	modernc.org/memory v1.12.1 // indirect
 	rsc.io/qr v0.2.0 // indirect
 )
-
-replace go.mau.fi/mautrix-signal => github.com/cwbudde/mautrix-signal v0.2609.0-purego.8

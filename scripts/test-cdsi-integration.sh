@@ -4,7 +4,7 @@
 set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 cd "$root"
-shim_dir=$(go list -m -f '{{.Dir}}' go.mau.fi/mautrix-signal)
+shim_dir=$(go list -m -f '{{.Dir}}' github.com/cwbudde/mautrix-signal)
 crypto_dir=$(go list -m -f '{{.Dir}}' github.com/cwbudde/libsignal-go)
 test_dir=$(mktemp -d)
 trap 'chmod -R u+w "$test_dir"; rm -rf "$test_dir"' EXIT
@@ -18,4 +18,4 @@ cp "$test_dir/libsignal-go/attest/dcap/testdata/cds2_test.privatekey" \
 	"$test_dir/mautrix-signal/pkg/libsignalgo/testdata/"
 (cd "$test_dir" && GOWORK=off go work init "$root" "$test_dir/mautrix-signal" "$test_dir/libsignal-go")
 GOWORK="$test_dir/go.work" go test -tags libsignal_go "$@" -count=1 \
-	-run '^TestCDS(IIntegration|2ClientState)' go.mau.fi/mautrix-signal/pkg/libsignalgo
+	-run '^TestCDS(IIntegration|2ClientState)' github.com/cwbudde/mautrix-signal/pkg/libsignalgo

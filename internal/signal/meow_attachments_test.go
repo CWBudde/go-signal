@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/cwbudde/go-signal/internal/signal"
-	"go.mau.fi/mautrix-signal/pkg/signalmeow"
+	"github.com/cwbudde/mautrix-signal/pkg/signalmeow"
 )
 
 func downloadable() signal.Attachment {

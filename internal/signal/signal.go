@@ -5,7 +5,7 @@ package signal
 import (
 	"runtime/debug"
 
-	"go.mau.fi/mautrix-signal/pkg/libsignalgo/signalversion"
+	"github.com/cwbudde/mautrix-signal/pkg/libsignalgo/signalversion"
 )
 
 // LibsignalVersion is the libsignal release that the libsignalgo bindings were generated against.
@@ -13,7 +13,7 @@ import (
 const LibsignalVersion = signalversion.Version
 
 const (
-	signalmeowModule = "go.mau.fi/mautrix-signal"
+	signalmeowModule = "github.com/cwbudde/mautrix-signal"
 	unknownVersion   = "unknown"
 )
 

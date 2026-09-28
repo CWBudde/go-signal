@@ -4,10 +4,12 @@
 
 go-signal depends on three pinned pieces that have to move together:
 
-- `go.mau.fi/mautrix-signal` (signalmeow), required at an upstream release tag and replaced
-  with the fork [`cwbudde/mautrix-signal`](https://github.com/cwbudde/mautrix-signal) (branch
-  `purego`, tags `vX.YYMM.Z-purego.N`). The fork changes only `pkg/libsignalgo`: every cgo file
-  gets a `libsignal_go` twin on top of libsignal-go (its `PUREGO.md`).
+- signalmeow, from the fork [`cwbudde/mautrix-signal`](https://github.com/cwbudde/mautrix-signal)
+  of upstream `go.mau.fi/mautrix-signal` (branch `purego`, tags `vX.YYMM.Z-purego.N`). The fork
+  has its own module path, `github.com/cwbudde/mautrix-signal`, so that go-signal needs no
+  `replace` and `go install github.com/cwbudde/go-signal@latest` works. Otherwise it changes only
+  `pkg/libsignalgo`: every cgo file gets a `libsignal_go` twin on top of libsignal-go (its
+  `PUREGO.md`).
 - [`cwbudde/libsignal-go`](https://github.com/cwbudde/libsignal-go) (tags `vX.Y.Z-cw.N`), the
   pure-Go libsignal that the default backend runs on. Its Rust compat harness is pinned to the
   libsignal tag libsignalgo was generated against (its `decisions/0007-cwbudde-fork-policy.md`).
@@ -22,10 +24,20 @@ release branches and push; don't open PRs.
 
 In a `cwbudde/mautrix-signal` checkout:
 
+The commit that renames the module path (`build!: module path github.com/cwbudde/mautrix-signal`)
+is not rebased but redone: drop it, rebase the rest, then rename again on top, so that the rename
+covers the new upstream files too. Fork commits made after the rename already use the new path;
+where they touch upstream files, their conflicts are only in import lines.
+
 ```sh
 git fetch upstream --tags
 git switch purego
-git rebase vX.YYMM.Z                                   # the new upstream tag
+# the new upstream tag; the sequence editor drops the rename commit
+GIT_SEQUENCE_EDITOR="sed -i '/build!: module path github.com.cwbudde.mautrix-signal/d'" \
+  git rebase -i vX.YYMM.Z
+git grep -l go.mau.fi/mautrix-signal | xargs sed -i 's#go\.mau\.fi/mautrix-signal#github.com/cwbudde/mautrix-signal#g'
+gofmt -w $(git diff --name-only | grep '\.go$')
+git commit -am 'build!: module path github.com/cwbudde/mautrix-signal'
 go run ./pkg/libsignalgo/internal/stubgen -gen         # stubs for new cgo files
 go run ./pkg/libsignalgo/internal/stubgen -check       # exported API parity of the two builds
 ```
@@ -82,10 +94,11 @@ Tag `vX.YYMM.Z-purego.1` on `purego` and push the branch and the tag. The fork's
 ### 5. Bump go-signal
 
 ```sh
-go mod edit -require go.mau.fi/mautrix-signal@vX.YYMM.Z \
-  -replace go.mau.fi/mautrix-signal=github.com/cwbudde/mautrix-signal@vX.YYMM.Z-purego.1
+go get github.com/cwbudde/mautrix-signal@vX.YYMM.Z-purego.1
 go mod tidy
 ```
+
+go.mod must not get a `replace` (it breaks `go install`).
 
 Move the submodule to the libsignal tag (`go run -tags libsignal_go . version` prints it as
 `libsignal:`):

@@ -13,50 +13,46 @@ over [MCP](docs/mcp.md).
 
 ### Release binaries
 
-The [releases](https://github.com/cwbudde/go-signal/releases) have binaries for Linux, macOS and
-Windows on amd64 and arm64. They are pure Go (no cgo), so the Linux binary is fully static and runs
-on any distribution, glibc or musl. Each archive also contains the man pages and shell completions,
-the Linux one also a systemd timer (see [Staying linked](#staying-linked)). Windows gets a `.zip`.
+The [releases](https://github.com/cwbudde/go-signal/releases) have a single, self-contained
+binary for Linux, macOS and Windows on amd64 and arm64. On Linux and macOS:
 
 ```sh
-version=0.1.0 os=linux arch=amd64   # arch=arm64 for ARM; os=darwin for macOS
-name=go-signal_${version}_${os}_${arch}
-curl -LO https://github.com/cwbudde/go-signal/releases/download/v$version/$name.tar.gz
-curl -LO https://github.com/cwbudde/go-signal/releases/download/v$version/SHA256SUMS
-sha256sum --ignore-missing -c SHA256SUMS   # macOS: shasum -a 256 --ignore-missing -c SHA256SUMS
-tar xzf $name.tar.gz
-mkdir -p ~/.local/bin && cp $name/go-signal ~/.local/bin/
+version=0.1.0
+os=$(uname -s | tr '[:upper:]' '[:lower:]')                 # linux or darwin
+arch=$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')   # amd64 or arm64
+curl -fsSL https://github.com/cwbudde/go-signal/releases/download/v$version/go-signal_${version}_${os}_${arch}.tar.gz | tar xz
+mkdir -p ~/.local/bin && mv go-signal_${version}_${os}_${arch}/go-signal ~/.local/bin/
 ```
 
-The archives carry a [build provenance attestation](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations):
-`gh attestation verify go-signal_*.tar.gz --repo cwbudde/go-signal` checks that the release
-workflow built them from this repository.
+On Windows, download `go-signal_<version>_windows_amd64.zip` (or `_arm64`) from the release and
+put `go-signal.exe` on your `PATH`.
 
-### Homebrew (macOS, Linux)
+The archives also contain man pages, shell completions and, for Linux, a systemd timer (see
+[Staying linked](#staying-linked)). To check a download, compare it with the release's
+`SHA256SUMS`, or verify its [build provenance](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations)
+with `gh attestation verify <archive> --repo cwbudde/go-signal`.
+
+### With Go
+
+With Go 1.26 or later:
 
 ```sh
-brew install cwbudde/tap/go-signal
+go install -tags libsignal_go github.com/cwbudde/go-signal@latest
 ```
 
-### Arch Linux (AUR)
-
-```sh
-yay -S go-signal-bin   # or any other AUR helper
-```
+This installs to `$(go env GOPATH)/bin`. Don't leave out `-tags libsignal_go`: it selects the
+pure-Go backend the releases use. Without it, Go builds the cgo backend, which needs a libsignal
+library built with Rust (see [Development](#development)).
 
 ### Container
 
-`ghcr.io/cwbudde/go-signal` (linux/amd64, linux/arm64) holds only the static binary. Keep the
-account data in a volume mounted at `/data`:
+`ghcr.io/cwbudde/go-signal` (linux/amd64, linux/arm64) holds only the binary. Keep the account data
+in a volume mounted at `/data`:
 
 ```sh
 docker run --rm -it -v go-signal:/data ghcr.io/cwbudde/go-signal link
 docker run --rm -v go-signal:/data ghcr.io/cwbudde/go-signal receive
 ```
-
-### From source
-
-See [Development](#development).
 
 ## Quick start
 
@@ -76,8 +72,7 @@ go-signal receive --follow -o json   # one JSON document per event (docs/json.md
 ```
 
 `go-signal <command> --help` and the man pages (`man go-signal-send`) describe every command.
-[docs/json.md](docs/json.md) documents the JSON output, and [docs/mcp.md](docs/mcp.md) shows how to
-connect go-signal to Claude Code, Claude Desktop and other MCP clients.
+[docs/json.md](docs/json.md) documents the JSON output.
 
 ### Staying linked
 
@@ -94,6 +89,29 @@ systemctl --user enable --now go-signal-receive.timer
 A cron entry works as well, e.g. `0 9 * * * go-signal receive >> ~/signal.log`. `receive`
 acknowledges what it prints, so collect its output if you want to keep the messages. If the
 device was unlinked anyway, commands exit with code 3 (see below).
+
+## AI agents (MCP)
+
+`go-signal mcp serve` makes your account available to AI agents such as Claude Code, Claude
+Desktop and other [Model Context Protocol](https://modelcontextprotocol.io) clients. The agent can
+look up contacts and groups, read and wait for incoming messages and fetch attachments. It can
+send messages, reactions and deletes only to the recipients you allow.
+
+```sh
+# Claude Code, read-only: the agent can read messages but not send any.
+claude mcp add signal -- go-signal mcp serve --read-only
+
+# The agent may message one person and one group, and attach files only from ~/signal-out.
+claude mcp add signal -- go-signal mcp serve \
+  --allow-recipient +4915112345678 --allow-recipient group:<group-id> \
+  --attach-dir ~/signal-out
+```
+
+While it runs, the server holds the account and receives messages into an inbox that the agent
+reads; other go-signal commands for that account fail with "account in use" until it stops.
+`--confirm` has the client ask you before every send, `--listen` serves HTTP on a loopback address
+instead of stdio, and `--on-message` runs a program for new messages from chats you choose. [docs/mcp.md](docs/mcp.md) covers Claude Desktop and other clients, every tool and
+flag, and the security model.
 
 ## Configuration
 
@@ -130,6 +148,7 @@ Building needs only Go. The default backend is libsignal-go, a pure-Go port of l
 with the `libsignal_go` build tag:
 
 ```sh
+git clone https://github.com/cwbudde/go-signal && cd go-signal
 go build -tags libsignal_go .
 ```
 

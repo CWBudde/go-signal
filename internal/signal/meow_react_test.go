@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	"github.com/cwbudde/go-signal/internal/signal"
+	"github.com/cwbudde/mautrix-signal/pkg/signalmeow/protobuf/signalpb"
 	"github.com/google/uuid"
-	"go.mau.fi/mautrix-signal/pkg/signalmeow/protobuf/signalpb"
 	"google.golang.org/protobuf/proto"
 )
 

@@ -60,9 +60,11 @@ just build-release <os> <arch>   # cross-compiled release archive in dist/
 
 How it fits together:
 
-- go.mod replaces `go.mau.fi/mautrix-signal` with the fork
+- go.mod requires the fork
   [`cwbudde/mautrix-signal`](https://github.com/cwbudde/mautrix-signal) (branch `purego`, tags
-  `vX.YYMM.Z-purego.N`). The fork changes only `pkg/libsignalgo`: every cgo file builds with
+  `vX.YYMM.Z-purego.N`) under its own module path `github.com/cwbudde/mautrix-signal`, not as a
+  `replace` of `go.mau.fi/mautrix-signal`: a `replace` would make `go install` fail. Apart from
+  the module path, the fork changes only `pkg/libsignalgo`: every cgo file builds with
   `!libsignal_go`, and `x_purego.go` twins implement the same API on top of
   [`cwbudde/libsignal-go`](https://github.com/cwbudde/libsignal-go). The fork's `PUREGO.md` and
   `internal/stubgen` (stub generator and API parity check) describe the details. The cgo build uses upstream libsignal. The fork also corrects
@@ -99,12 +101,13 @@ the purego shim). CGO handshake completion and live CDSI lookup remain acceptanc
 To work on the forks locally, point go.mod at the checkouts temporarily and don't commit it:
 
 ```sh
-go mod edit -replace go.mau.fi/mautrix-signal=../mautrix-signal
+go mod edit -replace github.com/cwbudde/mautrix-signal=../mautrix-signal
 # in ../mautrix-signal/go.mod, for libsignal-go changes:
 #   go mod edit -replace github.com/cwbudde/libsignal-go=../libsignal-go
 ```
 
-When the change is done, commit and tag the fork, then set the replace to the new tag.
+When the change is done, commit and tag the fork, drop the replace
+(`go mod edit -dropreplace github.com/cwbudde/mautrix-signal`) and `go get` the new tag.
 
 The zkgroup integration test (Phases 8.3–8.4) runs signalmeow's group and profile code
 against both builds of the shim. It overlays test files into signalmeow's sources, which Go
