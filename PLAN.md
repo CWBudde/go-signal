@@ -1645,14 +1645,21 @@ main, as on pushes.)
       backends. CDSI returns only the PNI for a number whose access key we don't send; the step
       accepts that. Still open: a live Group run (needs a test group, `GOSIGNAL_IT_GROUP`) and
       `TestIntegrationLink` (`GOSIGNAL_IT_LINK=1`). Found IT-01 below.)
-- [ ] IT-01: the cgo libsignalgo passes `time.Now().Unix()` (seconds) as `now` to
+- [x] IT-01: the cgo libsignalgo passes `time.Now().Unix()` (seconds) as `now` to
       `SessionCipher_EncryptMessage` and `SessionBuilder_ProcessPreKeyBundle`, which take epoch
       milliseconds (`message.go`, `prekeybundle.go`; upstream mautrix too). Unacknowledged
       sessions created under cgo store a 1970 timestamp, so cgo's 30-day stale-session rule never
       fires, and libsignal-go treats all of them as stale: after the switch the first send to such
       a device fails with "stale unacknowledged session", and signalmeow refetches pre-keys and
-      starts a new session (seen live on the second backend's run). Fix in the fork (`UnixMilli`),
-      add a cross-backend test, report upstream.
+      starts a new session (seen live on the second backend's run).
+      (2026-09-28 — mautrix-signal `acd96fe`, `v0.2609.0-purego.8`, which go.mod pins. Also
+      `SessionRecord.HasCurrentState` (`SessionRecord_HasUsableSenderChain`, same unit); all
+      other time arguments were already right (zkgroup's `Timestamp` is in seconds).
+      `TestUnacknowledgedSessionClock` runs in both shim builds: the stored pending pre-key time
+      is now, and a session backdated past 30 days is stale for `HasCurrentState` and `Encrypt`;
+      it failed on cgo before the fix (stored `1790575`). Sessions stored before the fix count as
+      stale once. `just test-diff`, `check-purego` and the live suite on both backends pass.
+      Not yet reported upstream.)
 - [ ] Consider an external review of the zkgroup and attestation ports before flipping the default
 
 **Done when:** fuzzers run in CI (short budget), the integration suite passes on staging,
