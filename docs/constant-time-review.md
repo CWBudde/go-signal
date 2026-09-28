@@ -134,7 +134,7 @@ so inspect their effective build files when changing the tag.
   mautrix-signal's `pkg/libsignalgo` (`v0.2609.0-purego.7`). A `//go:build purego` file in
   go-signal (`purego_tag.go`) makes a build with the old tag fail with
   `undefined: tag_purego_was_renamed_to_libsignal_go_see_docs_dev_md`.
-- **Release builds.** `just check-aes-asm` (in `check-purego` and the `build-purego` workflow)
+- **Release builds.** `just check-aes-asm` (in `check-purego` and the `build` workflow, formerly `build-purego`)
   asserts that `crypto/internal/fips140/aes` selects `aes_*.s`/`ctr_*.s` for all six release
   targets with `libsignal_go`, and none with `purego`. The workflow also checks that the built
   binary's build info says `-tags=libsignal_go`.

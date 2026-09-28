@@ -290,11 +290,11 @@ func TestIntegrationLink(t *testing.T) { //nolint:paralleltest // needs the phon
 }
 
 func backend() string {
-	if signal.LibsignalGoVersion() != "" {
-		return "libsignal_go " + signal.LibsignalGoVersion()
+	if version := signal.LibsignalGoVersion(); version != "" {
+		return signal.Backend + " " + version
 	}
 
-	return "cgo"
+	return signal.Backend
 }
 
 func body(what string) string {

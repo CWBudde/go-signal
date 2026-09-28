@@ -1662,22 +1662,43 @@ main, as on pushes.)
       Not yet reported upstream.)
 - [ ] Consider an external review of the zkgroup and attestation ports before flipping the default
 
-**Done when:** fuzzers run in CI (short budget), the integration suite passes on staging,
+**Done when:** fuzzers run in CI (short budget), the integration suite passes against production
+with the test account (signalmeow can't reach staging),
 and the CT-01/CT-02 default-switch blockers above are resolved in the shipped dependencies
 and build configuration.
 
 #### 10.3 Default flip
 
-- [ ] Release binaries are built with the `libsignal_go` tag. The CGO backend stays available (`-tags cgo`
+- [x] Release binaries are built with the `libsignal_go` tag. The CGO backend stays available (`-tags cgo`
       builds, and the differential CI job keeps it honest).
-- [ ] Phase 6.2 (musl + static CGO link) is superseded for release builds. Update the README
+      (2026-09-28 — `build.yaml` (was `build-purego.yaml`) cross-compiles linux/darwin/windows ×
+      amd64/arm64 with `just build-release <os> <arch>` into `go-signal_<version>_<os>_<arch>`
+      (`.zip` for windows), checks the AES assembly and the `-tags=libsignal_go` build info,
+      smoke-runs the binary and the scratch image (`just smoke-image`). `release.yaml` calls it
+      and attaches all six archives; the image and the Homebrew/AUR templates use them (Homebrew
+      gains darwin/amd64). `just build`, `build-dev` and `run` are pure Go; `just build-cgo` builds
+      the cgo backend, which `test-cgo` and `differential` keep testing.)
+- [x] Phase 6.2 (musl + static CGO link) is superseded for release builds. Update the README
       install and build docs, and drop Rust from the release workflow.
-- [ ] `version` reports the backend (`purego`/`cgo`) and the libsignal-go fork version
-- [ ] Update procedure for a mautrix-signal bump: rebase the `purego` branch, re-pin the fork's
+      (2026-09-28 — The musl/Alpine build (`scripts/build-static.sh`, `just build-static`,
+      `clean-static`) and the macOS cgo job are gone; the release workflow has no Rust, no cgo and
+      no per-OS runner. README: binaries for all six targets, building needs only Go. docs/dev.md:
+      prerequisites split into default and cgo, "Release build" replaces "Static build".)
+- [x] `version` reports the backend (`purego`/`cgo`) and the libsignal-go fork version
+      (2026-09-28 — `backend: libsignal_go`, `cgo` or `none` (`signal.Backend`, per build tag);
+      `libsignal-go:` was already there. `TestVersion` checks both in each build.)
+- [x] Update procedure for a mautrix-signal bump: rebase the `purego` branch, re-pin the fork's
       harness to the new libsignal tag, port the drift. Document it in `docs/maintenance.md`.
+      (2026-09-28 — [docs/maintenance.md](docs/maintenance.md): rebase and stubgen, porting the
+      drift, re-pinning libsignal-go (ADR 0007), tagging, the go.mod and submodule bump, and the
+      test ladder ending in the live suite. docs/dev.md's upgrade section points there.)
 
 **Done when:** a tagged release ships pure-Go binaries only, and a fresh clone builds with
 `go build -tags libsignal_go` and nothing else installed.
+(2026-09-28 — The fresh clone part holds: `git clone` without submodules, then
+`go build -tags libsignal_go .` with cgo enabled and with `CGO_ENABLED=0`, no `CGO_LDFLAGS`, no
+Rust. Open: the first tagged release. release-please can't open its PR yet ("GitHub Actions is not
+permitted to create or approve pull requests", docs/dev.md "Releases", one-time setup).)
 
 ### Later / on demand
 
@@ -1699,8 +1720,8 @@ and build configuration.
 - Pure-Go backend (Phases 7–10): Rust-generated vectors and live Rust↔Go interop in the
   libsignal-go fork; differential CGO-vs-purego tests in go-signal
 - MCP server tests through the SDK's in-memory transport against the fake facade
-- Opt-in integration tests (`-tags integration`) against Signal **staging** with a dedicated test
-  account. Never against live in CI.
+- Opt-in integration tests (`-tags integration`) against Signal's production servers with a
+  dedicated test account (signalmeow is hard-wired to production). Never in CI.
 
 ## 6. Risks
 

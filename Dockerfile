@@ -1,4 +1,4 @@
-# go-signal container image: the static binary from `just build-static` on scratch.
+# go-signal container image: the static pure-Go binary from `just build-release linux <arch>` on scratch.
 #
 #   docker run --rm -it -v go-signal:/data ghcr.io/cwbudde/go-signal link
 #   docker run --rm -v go-signal:/data ghcr.io/cwbudde/go-signal receive

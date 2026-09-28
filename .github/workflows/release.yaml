@@ -6,14 +6,11 @@ name: release
 #
 # Triggers: pushing a v* tag, a call from release-please.yaml, or a manual run for an existing tag.
 #
-# - linux: fully static musl binaries, built in an Alpine container on native amd64/arm64
-#   runners (just build-static). libsignal_ffi.a for musl is cached per libsignal commit.
-# - macos: a dynamically linked arm64 binary (just build-release).
+# - build: the pure-Go (libsignal_go) binaries for linux/darwin/windows × amd64/arm64, cross-compiled
+#   on one runner (build.yaml). No cgo and no Rust; the linux binaries are static.
 # - release: SHA256SUMS, a build provenance attestation and the release assets.
 # - image: ghcr.io/cwbudde/go-signal for linux/amd64 and linux/arm64 (scratch + static binary).
 # - homebrew / aur: skipped until the HOMEBREW_TAP_TOKEN / AUR_SSH_KEY secrets are set.
-# - purego: the pure-Go binaries for linux/darwin/windows × amd64/arm64, as a workflow artifact
-#   only (build-purego.yaml); they are not attached to the release until PLAN.md 10.3.
 
 on:
   push:
@@ -38,128 +35,13 @@ env:
   IMAGE: ghcr.io/cwbudde/go-signal
 
 jobs:
-  linux:
-    strategy:
-      matrix:
-        include:
-          - arch: amd64
-            runner: ubuntu-24.04
-          - arch: arm64
-            runner: ubuntu-24.04-arm
-    runs-on: ${{ matrix.runner }}
-    env:
-      VERSION: ${{ inputs.tag || github.ref_name }}
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ env.TAG }}
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Set up just
-        uses: extractions/setup-just@v2
-
-      - name: Resolve libsignal commit
-        id: libsignal
-        run: echo "sha=$(git rev-parse HEAD:third_party/libsignal)" >> "$GITHUB_OUTPUT"
-
-      - name: Cache libsignal_ffi.a (musl)
-        uses: actions/cache@v4
-        with:
-          path: third_party/lib-musl
-          key: libsignal-ffi-musl-linux-${{ matrix.arch }}-${{ steps.libsignal.outputs.sha }}
-
-      - name: Check libsignal version
-        run: just check-libsignal
-
-      - name: Build static binary
-        run: just build-static
-
-      - name: Smoke test in a scratch container
-        run: just smoke-static
-
-      - name: Package
-        run: just package linux ${{ matrix.arch }}
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: linux-${{ matrix.arch }}
-          path: |
-            dist/go-signal_*.tar.gz
-            dist/linux_${{ matrix.arch }}/go-signal
-          if-no-files-found: error
-
-  macos:
-    runs-on: macos-15
-    # The macOS build is new and not yet proven in CI; don't let it hold back the Linux release.
-    continue-on-error: true
-    env:
-      VERSION: ${{ inputs.tag || github.ref_name }}
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ env.TAG }}
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Set up just
-        uses: extractions/setup-just@v2
-
-      - name: Resolve libsignal commit
-        id: libsignal
-        run: echo "sha=$(git rev-parse HEAD:third_party/libsignal)" >> "$GITHUB_OUTPUT"
-
-      - name: Cache libsignal_ffi.a
-        id: cache
-        uses: actions/cache@v4
-        with:
-          path: third_party/lib
-          key: libsignal-ffi-${{ runner.os }}-${{ runner.arch }}-${{ steps.libsignal.outputs.sha }}
-
-      - name: Check libsignal version
-        run: just check-libsignal
-
-      - name: Install libsignal build dependencies
-        if: steps.cache.outputs.cache-hit != 'true'
-        working-directory: third_party/libsignal
-        run: |
-          brew install protobuf cmake
-          rustup toolchain install --profile minimal
-
-      - name: Build libsignal_ffi.a
-        run: just libsignal
-
-      - name: Build
-        run: just build-release
-
-      - name: Package
-        run: just package darwin arm64
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: darwin-arm64
-          path: dist/go-signal_*.tar.gz
-          if-no-files-found: error
-
-  purego:
-    uses: ./.github/workflows/build-purego.yaml
+  build:
+    uses: ./.github/workflows/build.yaml
     with:
       tag: ${{ inputs.tag || github.ref_name }}
 
   release:
-    needs: [linux, macos]
-    # Release even when the (continue-on-error) macOS build failed.
-    if: ${{ !cancelled() && needs.linux.result == 'success' }}
+    needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -169,13 +51,13 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
+          name: release
           path: dist
-          merge-multiple: true
 
       - name: Checksums
         working-directory: dist
         run: |
-          sha256sum go-signal_*.tar.gz > SHA256SUMS
+          sha256sum go-signal_*.tar.gz go-signal_*.zip > SHA256SUMS
           cat SHA256SUMS
 
       - name: Attest build provenance
@@ -195,10 +77,10 @@ jobs:
         run: |
           gh release view "$TAG" >/dev/null 2>&1 ||
             gh release create "$TAG" --verify-tag --generate-notes --title "$TAG"
-          gh release upload "$TAG" dist/go-signal_*.tar.gz dist/SHA256SUMS --clobber
+          gh release upload "$TAG" dist/go-signal_*.tar.gz dist/go-signal_*.zip dist/SHA256SUMS --clobber
 
   image:
-    needs: linux
+    needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -213,9 +95,8 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          pattern: linux-*
+          name: release
           path: dist
-          merge-multiple: true
 
       # Artifacts don't keep file modes.
       - run: chmod +x dist/linux_*/go-signal
@@ -284,12 +165,6 @@ jobs:
       - name: Update the formula
         if: env.TAP_TOKEN != ''
         run: |
-          # The macOS build may fail without failing the release (continue-on-error); keep the
-          # previous formula then rather than publishing one without macOS.
-          if ! grep -q "_darwin_arm64.tar.gz" dist/SHA256SUMS; then
-            echo "::warning::no macOS archive in this release; the Homebrew formula is not updated"
-            exit 0
-          fi
           mkdir -p tap/Formula
           scripts/render-packaging.sh packaging/homebrew/go-signal.rb.tmpl "$TAG" dist/SHA256SUMS > tap/Formula/go-signal.rb
           cd tap

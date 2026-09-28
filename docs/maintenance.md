@@ -1,0 +1,119 @@
+# Maintenance
+
+## Bumping mautrix-signal (signalmeow) and libsignal
+
+go-signal depends on three pinned pieces that have to move together:
+
+- `go.mau.fi/mautrix-signal` (signalmeow), required at an upstream release tag and replaced
+  with the fork [`cwbudde/mautrix-signal`](https://github.com/cwbudde/mautrix-signal) (branch
+  `purego`, tags `vX.YYMM.Z-purego.N`). The fork changes only `pkg/libsignalgo`: every cgo file
+  gets a `libsignal_go` twin on top of libsignal-go (its `PUREGO.md`).
+- [`cwbudde/libsignal-go`](https://github.com/cwbudde/libsignal-go) (tags `vX.Y.Z-cw.N`), the
+  pure-Go libsignal that the default backend runs on. Its Rust compat harness is pinned to the
+  libsignal tag libsignalgo was generated against (its `decisions/0007-cwbudde-fork-policy.md`).
+- The `third_party/libsignal` submodule, which the cgo backend links. It must sit at exactly the
+  tag libsignalgo was generated against (`pkg/libsignalgo/signalversion/version.go`);
+  `just check-libsignal` and the `internal/signal` tests fail when the two differ.
+
+Always move to an upstream release tag, never a pseudo-version of `main`. Commit to the forks'
+release branches and push; don't open PRs.
+
+### 1. Rebase the mautrix fork
+
+In a `cwbudde/mautrix-signal` checkout:
+
+```sh
+git fetch upstream --tags
+git switch purego
+git rebase vX.YYMM.Z                                   # the new upstream tag
+go run ./pkg/libsignalgo/internal/stubgen -gen         # stubs for new cgo files
+go run ./pkg/libsignalgo/internal/stubgen -check       # exported API parity of the two builds
+```
+
+Resolve conflicts in `pkg/libsignalgo` only; everything else takes upstream's side. Keep the
+fork's fixes that upstream doesn't have yet (the cgo clock fix in `message.go`,
+`prekeybundle.go` and `sessionrecord.go`, the combined endorsement result; see `PUREGO.md`).
+
+Read `pkg/libsignalgo/signalversion/version.go`: that is the libsignal tag `vA.B.C` everything
+else follows. Note whether it moved.
+
+### 2. Port the drift
+
+`-check` lists new or changed exported API. For each difference:
+
+- a new cgo file got a generated stub (`x_purego.go`) returning `ErrNotImplemented`: implement it
+  by hand on libsignal-go (the generator leaves hand-written files alone once its marker is gone);
+- a changed signature in a hand-written `x_purego.go`: port the change;
+- new libsignal behaviour behind an unchanged API (error codes, serialized forms): compare with
+  the Rust bridge in the new libsignal tag.
+
+If the port needs something libsignal-go doesn't have, add it there first (step 3).
+
+Then run the shim's tests in both builds, including `TestCrossBackend` (regenerate its
+fixtures with `LIBSIGNALGO_WRITE_FIXTURE=1` only when the serialized forms changed on purpose),
+`TestZKGroupAPI`, `TestGroupSendEndorsementShim` and `TestUnacknowledgedSessionClock`:
+
+```sh
+CGO_ENABLED=0 go test -tags libsignal_go ./pkg/libsignalgo/...
+go test ./pkg/libsignalgo/...          # cgo; needs libsignal_ffi.a for vA.B.C
+```
+
+### 3. Re-pin libsignal-go (only if the libsignal tag moved)
+
+In a `cwbudde/libsignal-go` checkout:
+
+```sh
+scripts/update-upstream-pin.sh vA.B.C
+```
+
+It bumps the tag mentions, updates the lockfile, regenerates the vectors and runs the vector,
+report and interop tests. By hand (ADR 0007): set `rust-toolchain.toml` to the libsignal tag's
+`rust-toolchain`, and the direct `spqr` and `libcrux-ml-kem` pins in
+`compat/rust-harness/Cargo.toml` to what the tag's workspace `Cargo.toml` pulls in. Port what
+the regenerated vectors or the interop tests show changed, run `scripts/fuzz.sh` briefly, tag
+the next `-cw.N` and push. Then pin it in the mautrix fork
+(`go get github.com/cwbudde/libsignal-go@vX.Y.Z-cw.N && go mod tidy`) and rerun step 2's tests.
+
+### 4. Tag the mautrix fork
+
+Tag `vX.YYMM.Z-purego.1` on `purego` and push the branch and the tag. The fork's CI
+(`.github/workflows/purego.yml`) runs the stub check and the purego build and tests.
+
+### 5. Bump go-signal
+
+```sh
+go mod edit -require go.mau.fi/mautrix-signal@vX.YYMM.Z \
+  -replace go.mau.fi/mautrix-signal=github.com/cwbudde/mautrix-signal@vX.YYMM.Z-purego.1
+go mod tidy
+```
+
+Move the submodule to the libsignal tag (`go run -tags libsignal_go . version` prints it as
+`libsignal:`):
+
+```sh
+git -C third_party/libsignal fetch --depth 1 origin tag vA.B.C
+git -C third_party/libsignal checkout vA.B.C
+git add third_party/libsignal
+```
+
+Stage the submodule before running any `just` recipe: `check-libsignal` runs
+`git submodule update`, which resets an unstaged checkout to the recorded commit.
+
+Fix whatever signalmeow's API changes broke in `internal/signal` (the facade keeps them there).
+
+### 6. Test
+
+```sh
+just check-libsignal && just libsignal   # cgo library for the new tag (Rust build)
+just check                               # fmt, lint, cgo tests, tidy
+just check-purego                        # the default backend: vet, lint, tests, AES assembly
+just test-fork                           # the pinned forks' own tests
+just test-diff                           # cgo vs pure Go, backend switch, zkgroup integration
+just test-integration                    # live, on the test account (docs/dev.md, "Integration tests")
+```
+
+The live suite is the last word on a bump: it is the only test against Signal's servers. Run it
+before tagging a release that contains the bump.
+
+Bumping the submodule changes the CI cache key, so the first `test-cgo` run afterwards does a
+full Rust build. The release workflow doesn't build Rust at all.

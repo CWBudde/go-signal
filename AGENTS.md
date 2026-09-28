@@ -12,8 +12,7 @@ commands are idiomatic noun-verb subcommands in kebab-case (see PLAN.md §3). Th
 - `cmd/` holds the Cobra commands. `NewRootCmd()` builds the tree, with no package globals and no
   `init()`. Each command (group) gets its own file and a `newXxxCmd()` constructor.
 - `internal/` holds the implementation packages (see PLAN.md §2).
-- `scripts/` holds build and release helpers: `build-static.sh` (musl build in Alpine),
-  `package.sh`, `render-packaging.sh` and `gendocs/` (man pages and completions).
+- `scripts/` holds build and release helpers: `package.sh`, `render-packaging.sh` and `gendocs/` (man pages and completions).
   `packaging/` has the Homebrew/AUR templates, `contrib/systemd/` the receive timer, and the
   root `Dockerfile` the scratch image. Releases: release-please plus `.github/workflows/release.yaml`
   (docs/dev.md, "Releases").
@@ -62,7 +61,7 @@ event counts as acked once it is read from the channel; unread events are redeli
 - Tests live in the `_test` package (`testpackage` linter). `internal/signal/export_test.go` (cgo)
   and `export_internal_test.go` are in-package files that expose internals to `signal_test`.
 - Command output is checked against golden files in `cmd/testdata/`.
-- Build tags: `libsignal_go` selects the pure-Go backend (PLAN.md Phases 7–10). go.mod always replaces
+- Build tags: `libsignal_go` selects the pure-Go backend, the default for releases (PLAN.md Phases 7–10). go.mod always replaces
   `go.mau.fi/mautrix-signal` with the fork `github.com/cwbudde/mautrix-signal` (only
   `pkg/libsignalgo` differs). Code that calls libsignal through cgo is `cgo && !libsignal_go` and gets a
   `libsignal_go` twin; tests that need real libsignal are `cgo && !libsignal_go`; `purego_diff_test.go`
@@ -70,16 +69,18 @@ event counts as acked once it is read from the channel; unread events are redeli
 
 ## Commands
 
-- `just build` / `just test` / `just lint` / `just fmt` / `just check`
-- `just build-purego` / `just check-purego` for the pure-Go build (no cgo, no Rust)
-- `just build-static` / `just smoke-static` / `just package <os> <arch>` for release builds
-  (Docker needed)
+- `just build` (pure-Go default backend) / `just test` / `just lint` / `just fmt` / `just check`
+- `just check-purego` for the pure-Go build (no cgo, no Rust); `just build-cgo` for the cgo backend
+- `just build-release <os> <arch>` / `just smoke-image` for release builds (the smoke test needs Docker)
+- Bumping mautrix-signal or libsignal: `docs/maintenance.md`
 - Run `just fmt` and `just lint` before committing.
 - `just check` = fmt-check, lint, check-libsignal, test, go mod tidy check. golangci-lint runs with
   `default = 'all'` (see `.golangci.toml` for the few disabled linters).
 
-The build needs CGO plus `third_party/lib/libsignal_ffi.a`, which is built from the
-`third_party/libsignal` submodule with Rust (`just libsignal`, once and after submodule bumps).
+The default build (`libsignal_go`, what `just build` and the releases use) needs only Go. The cgo
+backend and most tests (`just test`, `just check`) need CGO plus `third_party/lib/libsignal_ffi.a`,
+which is built from the `third_party/libsignal` submodule with Rust (`just libsignal`, once and
+after submodule bumps).
 The justfile exports `CGO_ENABLED=1` and `CGO_LDFLAGS=-L third_party/lib`. When you call `go`
 directly, set `CGO_LDFLAGS` yourself, or use `CGO_ENABLED=0` for the pure-Go packages:
 

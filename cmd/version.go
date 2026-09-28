@@ -27,6 +27,7 @@ func newVersionCmd() *cobra.Command {
 			fmt.Fprintf(out, "go-signal %s\n", Version)
 			fmt.Fprintf(out, "Git commit: %s\n", GitCommit)
 			fmt.Fprintf(out, "Build date: %s\n", BuildDate)
+			fmt.Fprintf(out, "backend: %s\n", signal.Backend)
 			fmt.Fprintf(out, "signalmeow: %s\n", signal.SignalmeowVersion())
 			fmt.Fprintf(out, "libsignal: %s\n", signal.LibsignalVersion)
 

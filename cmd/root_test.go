@@ -32,6 +32,10 @@ func TestVersionCommand(t *testing.T) {
 		t.Errorf("missing libsignal version: %q", out.String())
 	}
 
+	if !strings.Contains(out.String(), "backend: "+signal.Backend+"\n") {
+		t.Errorf("missing backend: %q", out.String())
+	}
+
 	if !strings.Contains(out.String(), "signalmeow: "+signal.SignalmeowVersion()+"\n") {
 		t.Errorf("missing signalmeow version: %q", out.String())
 	}

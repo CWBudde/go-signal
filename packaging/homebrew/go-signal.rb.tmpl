@@ -6,6 +6,10 @@ class GoSignal < Formula
   license "AGPL-3.0-only"
 
   on_macos do
+    on_intel do
+      url "https://github.com/cwbudde/go-signal/releases/download/v@VERSION@/go-signal_@VERSION@_darwin_amd64.tar.gz"
+      sha256 "@SHA256_DARWIN_AMD64@"
+    end
     on_arm do
       url "https://github.com/cwbudde/go-signal/releases/download/v@VERSION@/go-signal_@VERSION@_darwin_arm64.tar.gz"
       sha256 "@SHA256_DARWIN_ARM64@"

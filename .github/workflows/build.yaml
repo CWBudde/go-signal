@@ -1,8 +1,9 @@
-name: build-purego
+name: build
 
-# Cross-compiles and packages the purego binaries for linux, darwin and windows on amd64 and arm64,
-# all on one runner (no cgo, so no per-OS runners). Until PLAN.md 10.3 flips the default, the
-# archives stay workflow artifacts: release.yaml doesn't attach them to the GitHub release.
+# Cross-compiles and packages the release binaries for linux, darwin and windows on amd64 and
+# arm64, all on one runner: the default backend is pure Go (libsignal_go), so there is no cgo, no
+# Rust and no per-OS runner. tests.yaml runs it on every push; release.yaml calls it for a tag
+# and attaches the archives to the release.
 
 on:
   workflow_call:
@@ -43,19 +44,25 @@ jobs:
         run: |
           if [[ -n $TAG ]]; then export VERSION=$TAG; fi
           for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
-            just build-purego-release "${target%/*}" "${target#*/}"
+            just build-release "${target%/*}" "${target#*/}"
           done
 
       - name: Smoke test
         run: |
-          dist/purego/linux_amd64/go-signal version
+          dist/linux_amd64/go-signal version
+          dist/linux_amd64/go-signal version | grep -qx 'backend: libsignal_go'
           # Built with the backend tag, never with purego (which drops the AES assembly, CT-02).
-          go version -m dist/purego/linux_amd64/go-signal | tee /dev/stderr | grep -q -- '-tags=libsignal_go$'
+          go version -m dist/linux_amd64/go-signal | tee /dev/stderr | grep -q -- '-tags=libsignal_go$'
+
+      - name: Smoke test in a scratch container
+        run: just smoke-image
 
       - uses: actions/upload-artifact@v4
         with:
-          name: purego
+          name: release
+          # The linux binaries are for the container image (release.yaml).
           path: |
-            dist/purego/go-signal-purego_*.tar.gz
-            dist/purego/go-signal-purego_*.zip
+            dist/go-signal_*.tar.gz
+            dist/go-signal_*.zip
+            dist/linux_*/go-signal
           if-no-files-found: error

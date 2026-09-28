@@ -27,8 +27,8 @@ jobs:
   test-purego:
     uses: ./.github/workflows/test-purego.yaml
 
-  build-purego:
-    uses: ./.github/workflows/build-purego.yaml
+  build:
+    uses: ./.github/workflows/build.yaml
 
   test-lint:
     uses: ./.github/workflows/test-lint.yaml

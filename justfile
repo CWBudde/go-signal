@@ -18,32 +18,21 @@ commit := env("COMMIT", `git rev-parse --short HEAD 2>/dev/null || echo unknown`
 build_date := `date -u +%Y-%m-%dT%H:%M:%SZ`
 version_ldflags := "-X github.com/cwbudde/go-signal/cmd.Version=" + version + " -X github.com/cwbudde/go-signal/cmd.GitCommit=" + commit + " -X github.com/cwbudde/go-signal/cmd.BuildDate=" + build_date
 
-# Go image for the static build, matching the go directive in go.mod
-
-go_image := "golang:" + `sed -n 's/^go \([0-9]*\.[0-9]*\).*/\1/p' go.mod` + "-alpine"
-
-# Build the binary with version info
+# Build the binary with version info (pure-Go libsignal_go backend: no cgo, no Rust)
 build:
+    CGO_ENABLED=0 go build -tags libsignal_go -ldflags "{{ version_ldflags }}" -o bin/go-signal .
+
+# Build with the cgo backend (libsignal_ffi.a from `just libsignal`, needs Rust and a C toolchain)
+build-cgo:
     go build -ldflags "{{ version_ldflags }}" -o bin/go-signal .
 
-# Release build for this OS/arch (glibc/macOS, dynamic) to dist/<os>_<arch>/go-signal
-build-release:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    out=dist/$(go env GOOS)_$(go env GOARCH)
-    go build -trimpath -ldflags "-s -w {{ version_ldflags }}" -o "$out/go-signal" .
-    "$out/go-signal" version
+# Cross-compiled release binary to dist/<os>_<arch>/, packaged as dist/go-signal_<version>_<os>_<arch>.*
+build-release os arch: docs-gen
+    CGO_ENABLED=0 GOOS={{ os }} GOARCH={{ arch }} go build -tags libsignal_go -trimpath -ldflags "-s -w {{ version_ldflags }}" -o dist/{{ os }}_{{ arch }}/go-signal{{ if os == "windows" { ".exe" } else { "" } }} .
+    ./scripts/package.sh "{{ version }}" {{ os }} {{ arch }}
 
-# Fully static linux binary for this machine's arch (musl, in an Alpine container) to dist/linux_<arch>/
-build-static:
-    git submodule update --init --depth 1 third_party/libsignal
-    docker run --rm -v "$PWD:/src" \
-        -e VERSION="{{ version }}" -e COMMIT="{{ commit }}" -e BUILD_DATE="{{ build_date }}" \
-        -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
-        {{ go_image }} /src/scripts/build-static.sh
-
-# Run the static binary in a scratch container (the release image) as a smoke test
-smoke-static:
+# Run the linux release binary for this machine's arch in a scratch container (the release image)
+smoke-image:
     #!/usr/bin/env bash
     set -euo pipefail
     arch=$(go env GOARCH)
@@ -66,10 +55,6 @@ docs-gen:
 # Pack dist/<os>_<arch>/go-signal with docs into dist/go-signal_<version>_<os>_<arch>.tar.gz
 package os arch: docs-gen
     ./scripts/package.sh "{{ version }}" {{ os }} {{ arch }}
-
-# Pure-Go binary (no cgo, no libsignal_ffi.a; libsignalgo from the purego fork, PLAN.md Phase 7)
-build-purego:
-    CGO_ENABLED=0 go build -tags libsignal_go -ldflags "{{ version_ldflags }}" -o bin/go-signal-purego .
 
 # Vet, lint and test the purego build (cgo-only tests are excluded by their build tags;
 
@@ -121,14 +106,9 @@ test-integration:
     go test -count=1 -v -timeout 20m -tags integration -run '^TestIntegration' ./internal/signal/
     CGO_ENABLED=0 go test -count=1 -v -timeout 20m -tags integration,libsignal_go -run '^TestIntegration' ./internal/signal/
 
-# Cross-compiled purego release binary to dist/purego/<os>_<arch>/, packaged as go-signal-purego_*
-build-purego-release os arch: docs-gen
-    CGO_ENABLED=0 GOOS={{ os }} GOARCH={{ arch }} go build -tags libsignal_go -trimpath -ldflags "-s -w {{ version_ldflags }}" -o dist/purego/{{ os }}_{{ arch }}/go-signal{{ if os == "windows" { ".exe" } else { "" } }} .
-    DIST=dist/purego NAME=go-signal-purego ./scripts/package.sh "{{ version }}" {{ os }} {{ arch }}
-
 # Build the binary without version info (faster for development)
 build-dev:
-    go build -o bin/go-signal .
+    CGO_ENABLED=0 go build -tags libsignal_go -o bin/go-signal .
 
 # Test that the project can build successfully
 test-can-build:
@@ -136,7 +116,7 @@ test-can-build:
 
 # Run the application
 run *args:
-    go run . {{ args }}
+    CGO_ENABLED=0 go run -tags libsignal_go . {{ args }}
 
 # Run tests
 test:
@@ -219,10 +199,6 @@ check-libsignal:
 # Clean build artifacts
 clean:
     rm -rf bin/ dist/ coverage.out coverage.html coverage-results.md
-
-# Remove the static build's caches and libraries (third_party/.musl, third_party/lib-musl)
-clean-static:
-    rm -rf third_party/.musl third_party/lib-musl
 
 # Show help
 help:

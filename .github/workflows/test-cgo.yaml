@@ -53,7 +53,7 @@ jobs:
         run: just libsignal
 
       - name: Build
-        run: just build
+        run: just build-cgo
 
       # Coverage is taken here rather than in test-unit: only this job compiles the real
       # signalmeow client (meow*.go is cgo-only).

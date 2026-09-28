@@ -6,19 +6,20 @@ runs as a linked device next to your phone: it sends and receives messages, reac
 and attachments, lists contacts, groups and identities, and can serve your account to AI agents
 over [MCP](docs/mcp.md).
 
-> **Status:** usable, but young. Linux (amd64, arm64) and macOS (arm64) are supported. See
+> **Status:** usable, but young. Linux, macOS and Windows on amd64 and arm64 are supported. See
 > [PLAN.md](PLAN.md) for the roadmap.
 
 ## Install
 
 ### Release binaries
 
-The [releases](https://github.com/cwbudde/go-signal/releases) have a fully static Linux binary
-(it runs on any distribution, glibc or musl) and a macOS arm64 binary. Each archive also contains
-the man pages, shell completions and a systemd timer (see [Staying linked](#staying-linked)).
+The [releases](https://github.com/cwbudde/go-signal/releases) have binaries for Linux, macOS and
+Windows on amd64 and arm64. They are pure Go (no cgo), so the Linux binary is fully static and runs
+on any distribution, glibc or musl. Each archive also contains the man pages and shell completions,
+the Linux one also a systemd timer (see [Staying linked](#staying-linked)). Windows gets a `.zip`.
 
 ```sh
-version=0.1.0 os=linux arch=amd64   # arch=arm64 for ARM; os=darwin arch=arm64 for macOS
+version=0.1.0 os=linux arch=amd64   # arch=arm64 for ARM; os=darwin for macOS
 name=go-signal_${version}_${os}_${arch}
 curl -LO https://github.com/cwbudde/go-signal/releases/download/v$version/$name.tar.gz
 curl -LO https://github.com/cwbudde/go-signal/releases/download/v$version/SHA256SUMS
@@ -125,19 +126,24 @@ links the device again.
 
 ## Development
 
-Building needs Go, Rust and a C toolchain. See [docs/dev.md](docs/dev.md) for details, including
-how releases are made.
+Building needs only Go. The default backend is libsignal-go, a pure-Go port of libsignal, selected
+with the `libsignal_go` build tag:
 
 ```sh
-git submodule update --init --depth 1 third_party/libsignal
-just libsignal    # build libsignal_ffi.a (once, and after submodule bumps)
-just build        # bin/go-signal with version info
-just test         # go test -race
+go build -tags libsignal_go .
+```
+
+The cgo backend on the Rust libsignal is still there, for the differential tests and as a
+fallback; it needs Rust and a C toolchain (`just libsignal`, then `just build-cgo`). See
+[docs/dev.md](docs/dev.md) for details, including how releases are made.
+
+```sh
+just build        # bin/go-signal with version info (pure Go)
+just test         # go test -race (cgo backend; just check-purego for the pure-Go one)
 just lint         # golangci-lint
 just fmt          # treefmt (gofumpt, gci, prettier, taplo, yamlfmt)
 just check        # all of the above + go mod tidy check
 just reference    # fetch the signal-cli reference submodule
-just build-static # fully static linux binary via an Alpine container (needs Docker)
 ```
 
 ## Reference
