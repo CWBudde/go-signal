@@ -6,8 +6,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -132,6 +135,157 @@ echo "ran $GOSIGNAL_ENTRY_ID"
 	err = json.Unmarshal(data, &entry)
 	if err != nil || entry.ID != "5" || !entry.Unread || entry.Event["body"] != "hi" {
 		t.Errorf("stdin %s (%v), want entry 5 with body hi", data, err)
+	}
+}
+
+// TestHookQueueOverflow holds the first run until the queue fills, then checks that overflow
+// leaves messages in the inbox, warns, and does not block receiving or displace queued runs.
+func TestHookQueueOverflow(t *testing.T) {
+	t.Parallel()
+
+	script, dir := hookScript(t, `set -eu
+if [ "$GOSIGNAL_ENTRY_ID" = 1 ]; then
+    echo started > "$DIR/started"
+    while [ ! -f "$DIR/release" ]; do sleep 0.01; done
+fi
+cat > /dev/null
+echo "$GOSIGNAL_ENTRY_ID" >> "$DIR/runs"
+`)
+
+	logPath := filepath.Join(dir, "warnings")
+	logger := hookWarningLogger(t, logPath)
+
+	fake := toolsFake()
+	session := connectWith(t, fake, mcp.Options{
+		OnMessage: script, HookFrom: hookFrom(t, aliceNumber),
+		Logger: logger,
+	}, testClient{})
+
+	// Release the child before receive cleanup even if an assertion fails while it is held.
+	release := func() {
+		err := os.WriteFile(filepath.Join(dir, "release"), nil, 0o600)
+		if err != nil {
+			t.Error(err)
+		}
+	}
+	t.Cleanup(release)
+
+	pushHookMessages(t, fake, 1, 1)
+	waitForLines(t, filepath.Join(dir, "started"), 1)
+
+	// The documented capacity is 64 waiting messages, besides the running hook. Two more
+	// must be dropped from the hook queue. Bound the wait so a blocking offer fails cleanly.
+	const queued, overflow = 64, 2
+
+	const total = 1 + queued + overflow
+
+	pushHookMessages(t, fake, 2, total)
+	checkHookOverflowWarnings(t, logPath, queued+2, overflow)
+
+	var got messages
+
+	call(t, session, messagesList, map[string]any{"limit": total}, &got)
+	checkHookInbox(t, got, total)
+
+	release()
+	waitForLines(t, filepath.Join(dir, "runs"), queued+1)
+
+	// A fresh message after draining is a barrier: preceding accepted entries must have run
+	// exactly once, in order, and neither overflow entry may have been retried.
+	pushHookMessages(t, fake, total+1, total+1)
+
+	runs := waitForLines(t, filepath.Join(dir, "runs"), queued+2)
+	want := make([]string, 0, queued+2)
+
+	for id := range queued + 1 {
+		want = append(want, strconv.Itoa(id+1))
+	}
+
+	want = append(want, strconv.Itoa(total+1))
+	if !slices.Equal(runs, want) {
+		t.Errorf("runs %q, want %q", runs, want)
+	}
+}
+
+func hookWarningLogger(t *testing.T, path string) *slog.Logger {
+	t.Helper()
+
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() { _ = file.Close() })
+
+	return slog.New(slog.NewJSONHandler(file, &slog.HandlerOptions{Level: slog.LevelWarn}))
+}
+
+// pushHookMessages bounds the wait for receive so a blocking queue offer fails the test.
+func pushHookMessages(t *testing.T, fake *signaltest.Fake, first, last uint64) {
+	t.Helper()
+
+	pushed := make(chan bool, 1)
+
+	go func() {
+		for id := first; id <= last; id++ {
+			if !fake.Push(photoMessage(id)) {
+				pushed <- false
+
+				return
+			}
+		}
+
+		pushed <- true
+	}()
+
+	select {
+	case ok := <-pushed:
+		if !ok {
+			t.Fatal("push failed")
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("receiving blocked while pushing hook messages")
+	}
+}
+
+func checkHookOverflowWarnings(t *testing.T, path string, first, count int) {
+	t.Helper()
+
+	warnings := waitForLines(t, path, count)
+	if len(warnings) != count {
+		t.Fatalf("warnings %q, want %d", warnings, count)
+	}
+
+	for i, line := range warnings {
+		var warning struct {
+			Level string `json:"level"`
+			Msg   string `json:"msg"`
+			Entry string `json:"entry"`
+		}
+
+		err := json.Unmarshal([]byte(line), &warning)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if warning.Level != "WARN" || warning.Msg != "hook: queue full, message left out" ||
+			warning.Entry != strconv.Itoa(first+i) {
+			t.Errorf("overflow warning: %s", line)
+		}
+	}
+}
+
+func checkHookInbox(t *testing.T, got messages, total int) {
+	t.Helper()
+
+	if len(got.Messages) != total || got.Cursor != strconv.Itoa(total) || got.More {
+		t.Fatalf("inbox: %+v, want all %d messages", got, total)
+	}
+
+	for i, msg := range got.Messages {
+		if msg.ID != strconv.Itoa(i+1) || !msg.Unread || msg.Event["body"] != photoMessage(1).Body {
+			t.Errorf("inbox message %d: %+v", i+1, msg)
+		}
 	}
 }
 

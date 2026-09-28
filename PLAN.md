@@ -1038,7 +1038,10 @@ only storing them, e.g. by having an LLM answer through the same server.
       output goes to the log, and nothing is retried.
 - [x] Example `contrib/hooks/claude-reply.sh` (`claude -p`, no built-in tools, only
       `messages_list`/`send_message`/`mark_read`); `docs/mcp.md` "Hooks".
-- [ ] Not covered by tests: queue overflow.
+- [x] Queue overflow regression coverage (`TestHookQueueOverflow`): hold one run, fill all 64
+      waiting slots, then verify overflow warns without blocking receive, all messages stay
+      unread in the inbox, accepted runs execute once in order, and a fresh message runs after
+      draining without retrying the overflow entries.
 
 **Done when:** a message from a `--hook-from` chat runs the program once, with the entry on stdin,
 and nothing else runs it. (`TestHook*` in `internal/mcp`, `TestMCPServeHook*` in `cmd`,
