@@ -75,6 +75,18 @@ go-signal receive --follow -o json   # one JSON document per event (docs/json.md
 `go-signal <command> --help` and the man pages (`man go-signal-send`) describe every command.
 [docs/json.md](docs/json.md) documents the JSON output.
 
+To rename a group, list it first, then use its title or ID:
+
+```sh
+go-signal groups list
+go-signal groups rename "Family" "Family and friends"
+```
+
+You must be a full member with permission to edit group information. The command prints the
+updated group and remembers the new title for subsequent commands. An unchanged title sends
+no update; a concurrent change fails with a retry hint. A successful rename confirms the server
+update; failures notifying members are logged separately.
+
 ### Staying linked
 
 Signal removes a linked device that hasn't connected for about 30 days. Run `go-signal receive`

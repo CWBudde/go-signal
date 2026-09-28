@@ -53,3 +53,8 @@ func ResolveGroupRef(ctx context.Context, client Client, ref string) (string, er
 
 	return string(id), err
 }
+
+// RenameChange exposes renameChange to the signal_test package.
+func RenameChange(group Group, self, title string) (*signalmeow.GroupChange, error) {
+	return renameChange(group, self, title)
+}

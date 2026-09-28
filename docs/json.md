@@ -453,6 +453,12 @@ The document is `{"version": 1, "group": {…}}`, where `group` is one group obj
 [`groups list`](#groups-list), always without `error`: a group that can't be fetched fails the
 command instead.
 
+## `groups rename`
+
+Returns the same document as [`groups show`](#groups-show), with the updated title and revision.
+Renaming to the existing title leaves the revision unchanged. Validation, permission and
+conflict errors fail the command without printing a success document.
+
 ## `groups leave`
 
 ```json

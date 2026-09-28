@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 var (
@@ -23,6 +24,10 @@ var (
 	// ErrGroupChanged means that the server refused a group change because the group changed
 	// meanwhile (a conflict); trying again works on the new state.
 	ErrGroupChanged = errors.New("the group changed meanwhile; try again")
+	// ErrInvalidGroupTitle means a title is blank or is not valid UTF-8.
+	ErrInvalidGroupTitle = errors.New("invalid group title")
+	// ErrGroupPermission means the group's permissions forbid the requested change.
+	ErrGroupPermission = errors.New("group permissions forbid this change")
 )
 
 // CachedGroup is what the title cache knows about a group (see Client.GroupTitles).
@@ -105,7 +110,10 @@ type Group struct {
 	Timer time.Duration
 	// AnnouncementsOnly means that only admins can send messages.
 	AnnouncementsOnly bool
-	Members           []GroupMember
+	// MembersCanEditAttributes allows ordinary members to change the title and description.
+	// Otherwise only administrators can edit them.
+	MembersCanEditAttributes bool
+	Members                  []GroupMember
 	// Pending are the invited users who haven't accepted yet. Users invited by phone number
 	// (PNI) are missing: signalmeow can't decrypt them.
 	Pending []PendingMember
@@ -123,6 +131,35 @@ type Group struct {
 	// (see there) or ErrUnknownGroup (the server doesn't know it). Then only ID, the last known
 	// Title and LeftAt are set, and Membership is MembershipNone.
 	Err error
+}
+
+// ValidateGroupTitle rejects blank or invalid UTF-8 titles without changing their contents.
+// The server enforces its size limits.
+func ValidateGroupTitle(title string) error {
+	if !utf8.ValidString(title) || strings.TrimSpace(title) == "" {
+		return fmt.Errorf("%w: provide a non-blank UTF-8 title", ErrInvalidGroupTitle)
+	}
+
+	return nil
+}
+
+// CheckRename checks the title and the user's full membership and attribute permissions.
+func (g Group) CheckRename(self, title string) error {
+	err := ValidateGroupTitle(title)
+	if err != nil {
+		return err
+	}
+
+	membership, role := g.MembershipOf(self)
+	if membership != MembershipMember {
+		return ErrNotAMember
+	}
+
+	if role != GroupRoleAdmin && !g.MembersCanEditAttributes {
+		return fmt.Errorf("%w: only administrators can rename this group", ErrGroupPermission)
+	}
+
+	return nil
 }
 
 // GroupMember is a full member of a group.

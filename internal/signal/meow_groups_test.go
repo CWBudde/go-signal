@@ -342,6 +342,11 @@ func TestGroupsNeedConnect(t *testing.T) {
 	if !errors.Is(err, signal.ErrNotConnected) {
 		t.Errorf("LeaveGroup: %v, want ErrNotConnected", err)
 	}
+
+	_, err = client.RenameGroup(t.Context(), familyID, renameTitle)
+	if !errors.Is(err, signal.ErrNotConnected) {
+		t.Errorf("RenameGroup: %v, want ErrNotConnected", err)
+	}
 }
 
 func randomKey(t *testing.T) []byte {

@@ -109,6 +109,8 @@ type Fake struct {
 	GroupErrs map[string]error
 	// LeaveErr makes LeaveGroup fail after its checks.
 	LeaveErr error
+	// RenameErr makes RenameGroup fail after validation, before changing the group.
+	RenameErr error
 	// LeaveTime is what LeaveGroup records as Group.LeftAt; zero means now.
 	LeaveTime time.Time
 

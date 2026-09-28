@@ -12,20 +12,21 @@ import (
 var errConfirmLeave = errors.New("groups leave removes you from the group and tells its members; " +
 	"pass --yes to confirm")
 
-// groupArgHelp explains the <group> argument of groups show and leave.
+// groupArgHelp explains the <group> argument of group commands.
 const groupArgHelp = `<group> is group:<id>, the base64 group ID or master key, or the group's title if exactly
 one group listed before has it (ignoring case).`
 
 func newGroupsCmd(clients *clientOpener, printers *printerFactory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "groups",
-		Short: "List, show or leave groups",
+		Short: "List, show, rename or leave groups",
 		Args:  cobra.NoArgs,
 	}
 
 	cmd.AddCommand(
 		newGroupsListCmd(clients, printers),
 		newGroupsShowCmd(clients, printers),
+		newGroupsRenameCmd(clients, printers),
 		newGroupsLeaveCmd(clients, printers),
 	)
 

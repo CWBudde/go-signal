@@ -192,8 +192,13 @@ type Client interface { //nolint:interfacebloat // the one facade over signalmeo
 	// meanwhile fails with ErrGroupChanged. It needs Connect like Group.
 	LeaveGroup(ctx context.Context, ref string, opts LeaveOptions) (LeaveResult, error)
 
+	// RenameGroup updates the title of ref (as for Group) and its cached title. It needs
+	// Connect, full membership and permission to edit attributes. An unchanged title is a
+	// no-op. The returned group includes the new revision; conflicts return ErrGroupChanged.
+	RenameGroup(ctx context.Context, ref, title string) (Group, error)
+
 	// GroupTitles returns what the title cache knows about the groups fetched before (by Groups,
-	// Group or LeaveGroup), by group ID, from the store: it needs no Connect. Groups never fetched
+	// Group, RenameGroup or LeaveGroup), by group ID, from the store: it needs no Connect. Groups never fetched
 	// are missing. It fails with ErrClosed after Close.
 	GroupTitles(ctx context.Context) (map[string]CachedGroup, error)
 

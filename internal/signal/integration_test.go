@@ -7,6 +7,8 @@
 //	GOSIGNAL_IT_ACCOUNT   account in it (number or ACI); empty selects the first
 //	GOSIGNAL_IT_PEER      number of a second Signal account whose phone is online (required)
 //	GOSIGNAL_IT_GROUP     group ID or master key of a test group (optional)
+//	GOSIGNAL_IT_CREATE_GROUP "1" to create a reusable two-member test group (one-time setup)
+//	GOSIGNAL_IT_RENAME_GROUP "1" to rename the test group and restore its original title
 //	GOSIGNAL_IT_LINK      "1" to also link a new device by QR code and unlink it again
 //	GOSIGNAL_IT_TIMEOUT   how long to wait for delivery receipts (default 2m)
 //	GOSIGNAL_IT_LOG       log level of the client's logs (default warn)
@@ -219,13 +221,13 @@ func (env *liveEnv) stepGroup(t *testing.T) { //nolint:thelper // a step of Test
 
 	t.Logf("group %q, revision %d, %d members", group.Title, group.Revision, len(group.Members))
 
+	if !slices.ContainsFunc(group.Members, func(m signal.GroupMember) bool { return m.Recipient.ACI == env.peer.ACI }) {
+		t.Fatal("peer must be a full member of the test group to verify delivery")
+	}
+
 	result := sendAndCheck(t, env.client, signal.SendRequest{GroupID: group.ID, Body: body("group")})
 
-	if slices.ContainsFunc(group.Members, func(m signal.GroupMember) bool { return m.Recipient.ACI == env.peer.ACI }) {
-		waitForReceipt(t, env.events, env.receiptTimeout, env.peer.ACI, result.Timestamp)
-	} else {
-		t.Log("peer is not a member; not waiting for a delivery receipt")
-	}
+	waitForReceipt(t, env.events, env.receiptTimeout, env.peer.ACI, result.Timestamp)
 }
 
 // TestIntegrationLink links a new device into a temporary data dir (scan the QR code with the
@@ -238,7 +240,9 @@ func TestIntegrationLink(t *testing.T) { //nolint:paralleltest // needs the phon
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Minute)
 	defer cancel()
 
-	client, err := signal.Open(ctx, signal.Options{DataDir: t.TempDir(), Logger: testLogger(t)})
+	dataDir := t.TempDir()
+
+	client, err := signal.Open(ctx, signal.Options{DataDir: dataDir, Logger: testLogger(t)})
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -255,19 +259,7 @@ func TestIntegrationLink(t *testing.T) { //nolint:paralleltest // needs the phon
 
 	t.Logf("linked %s (%s) as device %d", acc.Number, acc.ACI, acc.DeviceID)
 
-	defer func() {
-		removed, err := client.Unlink(context.WithoutCancel(ctx), signal.UnlinkOptions{})
-		if err != nil {
-			t.Errorf("Unlink: %v", err)
-		} else {
-			t.Logf("unlinked device %d", removed.DeviceID)
-		}
-
-		err = client.Close()
-		if err != nil {
-			t.Errorf("Close: %v", err)
-		}
-	}()
+	defer cleanupLinkedDevice(t, client, dataDir)
 
 	err = client.Connect(ctx, signal.SendOnly())
 	if err != nil {
@@ -287,6 +279,39 @@ func TestIntegrationLink(t *testing.T) { //nolint:paralleltest // needs the phon
 		Recipients: []signal.Recipient{{ACI: acc.ACI}},
 		Body:       body("freshly linked"),
 	})
+}
+
+func cleanupLinkedDevice(t *testing.T, client signal.Client, dataDir string) {
+	t.Helper()
+
+	// Unlink refuses a connected client; release the connection and reopen the temporary
+	// account before removing this device from the server. Cleanup must outlive the test context.
+	err := client.Close()
+	if err != nil {
+		t.Errorf("Close linked client: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	cleanup, err := signal.Open(ctx, signal.Options{DataDir: dataDir, Logger: testLogger(t)})
+	if err != nil {
+		t.Errorf("Open for unlink: %v", err)
+
+		return
+	}
+
+	removed, err := cleanup.Unlink(ctx, signal.UnlinkOptions{})
+	if err != nil {
+		t.Errorf("Unlink: %v; remove the temporary integration device on the phone", err)
+	} else {
+		t.Logf("unlinked device %d", removed.DeviceID)
+	}
+
+	err = cleanup.Close()
+	if err != nil {
+		t.Errorf("Close unlink client: %v", err)
+	}
 }
 
 func backend() string {

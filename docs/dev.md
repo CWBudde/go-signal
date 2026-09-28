@@ -162,7 +162,7 @@ parameters, CDSI enclave), so there is no staging variant.
 | `Profile`    | our own profile, and the peer's if we have their profile key, is fetched and decrypted, with a zkgroup credential |
 | `NoteToSelf` | a sync transcript to our other devices                                                                            |
 | `Direct`     | a 1:1 message to the peer, which must come back with the peer phone's delivery receipt                            |
-| `Group`      | the test group is fetched and a group message (group send endorsements) is sent to all members                    |
+| `Group`      | the test group is fetched, a group message is sent to all members, and the peer's delivery receipt arrives        |
 
 A decryption failure for a message sent during the run fails it too. `TestIntegrationLink` links
 a new device into a temporary data dir (scan the QR code it prints), connects, lists the devices,
@@ -177,19 +177,54 @@ Setup:
   It must be discoverable by number. For `Profile/Peer`, message the test account from it once.
 - Optionally a group with the test account and the peer in it.
 
-| Variable               | Meaning                                                           |
-| ---------------------- | ----------------------------------------------------------------- |
-| `GOSIGNAL_IT_DATA_DIR` | data dir of the test account (the suite skips without it)         |
-| `GOSIGNAL_IT_ACCOUNT`  | the account in it, by number or ACI; empty selects the first      |
-| `GOSIGNAL_IT_PEER`     | the peer's number (required)                                      |
-| `GOSIGNAL_IT_GROUP`    | the test group's ID or master key (`go-signal groups list`)       |
-| `GOSIGNAL_IT_LINK`     | `1` to run `TestIntegrationLink` too                              |
-| `GOSIGNAL_IT_TIMEOUT`  | how long to wait for the queue and delivery receipts (default 2m) |
-| `GOSIGNAL_IT_LOG`      | log level of the client (default `warn`)                          |
+| Variable                   | Meaning                                                           |
+| -------------------------- | ----------------------------------------------------------------- |
+| `GOSIGNAL_IT_DATA_DIR`     | data dir of the test account (the suite skips without it)         |
+| `GOSIGNAL_IT_ACCOUNT`      | the account in it, by number or ACI; empty selects the first      |
+| `GOSIGNAL_IT_PEER`         | the peer's number (required)                                      |
+| `GOSIGNAL_IT_GROUP`        | the test group's ID or master key (`go-signal groups list`)       |
+| `GOSIGNAL_IT_CREATE_GROUP` | `1` to create a reusable test group (one-time setup only)         |
+| `GOSIGNAL_IT_RENAME_GROUP` | `1` to rename the dedicated test group and restore its title      |
+| `GOSIGNAL_IT_LINK`         | `1` to run `TestIntegrationLink` too                              |
+| `GOSIGNAL_IT_TIMEOUT`      | how long to wait for the queue and delivery receipts (default 2m) |
+| `GOSIGNAL_IT_LOG`          | log level of the client (default `warn`)                          |
 
 `just test-integration` runs the suite with the cgo backend and then with `libsignal_go` on the
 same account, which also checks that each backend picks up the other's sessions. The peer gets
 one set of messages from each run. With `GOSIGNAL_IT_LINK=1` there are two QR codes to scan.
+Have the test account's phone ready: the provisioning connection can expire after about
+60 seconds without a scan, even though the test's overall timeout is longer.
+
+To create the group from the linked test account, set `GOSIGNAL_IT_DATA_DIR` and
+`GOSIGNAL_IT_PEER` first, then run:
+
+```sh
+GOSIGNAL_IT_CREATE_GROUP=1 CGO_ENABLED=0 go test -count=1 -v -timeout 5m \
+  -tags integration,libsignal_go -run '^TestIntegrationCreateGroup$' ./internal/signal/
+```
+
+This creates **go-signal integration test** with the linked account as administrator and the
+peer as a full member, with invite links disabled. Both accounts need available profile keys
+and credentials; send a message from the peer first to share its key. Creation sends a group
+update to the peer. The test prints `GOSIGNAL_IT_GROUP`; export that value and leave
+`GOSIGNAL_IT_CREATE_GROUP` unset for subsequent runs. The group is retained for reuse on both
+backends. The Group step requires the peer to be a full member and online for its receipt.
+
+If creation fails after printing a group ID, inspect that group with `groups show` before
+retrying: the server may have created it even if the member notification failed. The setup
+test refuses to create another group while `GOSIGNAL_IT_GROUP` is set.
+
+To verify renaming, set `GOSIGNAL_IT_DATA_DIR`, `GOSIGNAL_IT_PEER` and `GOSIGNAL_IT_GROUP`, then run:
+
+```sh
+GOSIGNAL_IT_RENAME_GROUP=1 CGO_ENABLED=0 go test -count=1 -v -timeout 5m \
+  -tags integration,libsignal_go -run '^TestIntegrationRenameGroup$' ./internal/signal/
+```
+
+The test requires the two-member fixture above, checks the server's title and revision, checks
+that an unchanged title sends no update, and restores and verifies the original title in cleanup.
+Members receive two group updates. For cgo, use `CGO_ENABLED=1`, `-tags integration` and
+`CGO_LDFLAGS="-L $PWD/third_party/lib"`. This check is opt-in separately from ordinary group sends.
 
 ## CI
 

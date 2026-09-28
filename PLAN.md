@@ -111,6 +111,7 @@ go-signal react <recipient>... --target <author>:<ts> --emoji 👍 [--remove] [-
 go-signal delete <recipient>... --target <ts> [--group <id>]   # remote delete of our own message
 go-signal contacts list [--blocked] [--query <q>] | show <recipient> | block <recipient>... | unblock <recipient>...
 go-signal groups list | show <group> | leave <group> --yes [--promote <member>]...   # <group>: ID, master key or title
+go-signal groups rename <group> <title>
 go-signal devices list
 go-signal identities list [<recipient>] | show <recipient> | trust <recipient> [--safety-number <n>]
 go-signal account show | sync [--timeout 60s] | unlink   # unlink = remove local data
@@ -426,8 +427,11 @@ same-timestamp sync transcripts across several chats well.
       ACI, `@username` or `self`; each becomes U+FFFC with a mention range in UTF-16 units.
       Anything else in `@{…}`, like git's `HEAD@{1}` or a group, stays text; a mentioned user who
       isn't on Signal fails the send before anything is uploaded)
-- [ ] Text styles (bold/italic/…) — optional, only if cheap (deferred: a markup syntax or
-      signal-cli's `start:length:STYLE` offsets both need more design than they are worth now)
+- [ ] Text styles (bold/italic/…) — optional and deferred; only pursue if cheap.
+  - [ ] Choose the input syntax: markup or explicit `start:length:STYLE` offsets. Neither is
+        decided; both currently need more design than they are worth.
+  - [ ] Convert styles to Signal body ranges alongside mentions, preserving UTF-16 offsets.
+  - [ ] Test overlapping ranges and non-ASCII text, document the syntax, and verify phone rendering.
 
 **Done when:** attachments and quotes render correctly on the phone. (Done with the fake and unit
 tests; not yet verified against the live server.)
@@ -1463,9 +1467,8 @@ tampered or truncated messages and a wrong static key. The shim wiring is 9.3.
 
 #### 9.3 CDSI client state
 
-- [ ] `SGXClientState`/`CDS2ClientState`: initial request, `CompleteHandshake`,
-      `EstablishedSend`/`EstablishedRecv`, wired into the shim. Split into the subtasks below; it
-      is done when all of them are.
+- [x] `SGXClientState`/`CDS2ClientState`: initial request, `CompleteHandshake`,
+      `EstablishedSend`/`EstablishedRecv`, wired into the shim. All subtasks below are complete.
   - [x] Fork: `attest/enclave` client state on DCAP (9.2) and Noise NK (9.1)
         (2026-09-27 — released in libsignal-go `v0.7.1-cw.4`. The fork's `attest/enclave` tests
         complete the `cds2_test` handshake against a Go Noise responder; see the ported tests below.)
@@ -1487,14 +1490,16 @@ tampered or truncated messages and a wrong static key. The shim wiring is 9.3.
         the known enclave key, exchanges empty/single/multiple-chunk messages at exact size
         boundaries, rejects tampering/truncation/wrong-channel messages and replays, and checks
         nonce recovery, failed-handshake state and Destroy. Runs in `just test-fork` and with
-        `-race` in `just test-diff`/CI. The CGO shim still needs live acceptance for this path;
+        `-race` in `just test-diff`/CI. The CGO shim uses the live acceptance below for this path;
         its compiled attestation verifier cannot enable the fixture exception.
   - [x] go-signal: the CDSI lookup path is compiled in purego builds
         (2026-09-27 — `internal/signal/meow_resolve.go` is `cgo || purego` and calls
         signalmeow's `LookupPhone`; `go list -tags purego` includes it, and `just check-purego`
         passes on `purego.5`.)
-  - [ ] Live acceptance: a purego build resolves a phone number through CDSI against Signal's
-        servers (the Done when below). Needs a linked account that the MCP server isn't holding.
+  - [x] Live acceptance: contact discovery against Signal's production servers on both backends.
+        `TestIntegration/CDSI` passed on 2026-09-27 and again on 2026-09-29 (see 10.2).
+        The uncached lookup completes the enclave handshake and returns the peer's PNI;
+        ACI is not required without its access key. `Resolve` also succeeds for the known peer.
 - [x] Port the handshake-level attestation tests on the recorded blobs: `sgx_session.rs`
       `test_clock_skew` with `SKEW_ADJUSTMENT` in the session, `test_happy_path`,
       `test_mismatched_keys` and `test_invalid_private_key` on `cds2_test`, and `cds2.rs`
@@ -1638,16 +1643,31 @@ main, as on pushes.)
       `TestPKCS7UnpadMatchesReference` covers all 256 final bytes, correct and with each padding
       position corrupted. Callers are unchanged, so they still authenticate first. Optimized amd64
       and arm64 output uses only SETcc/CMOV/CSEL on the pad byte.)
-- [ ] Opt-in integration suite (`-tags integration,libsignal_go`): link, 1:1, group send,
-      profile fetch, CDSI. Production with a dedicated test account, not staging: signalmeow is
-      hard-wired to production hosts, zkgroup parameters and the CDSI enclave.
-      (2026-09-27 — `internal/signal/integration_test.go`, `just test-integration` (cgo, then
-      libsignal_go on the same account), docs/dev.md "Integration tests". First live run, test
-      account linked with the purego binary: Receive, CDSI, Profile (own and peer, with the
-      zkgroup credential), NoteToSelf and Direct (with the peer's delivery receipt) pass on both
-      backends. CDSI returns only the PNI for a number whose access key we don't send; the step
-      accepts that. Still open: a live Group run (needs a test group, `GOSIGNAL_IT_GROUP`) and
-      `TestIntegrationLink` (`GOSIGNAL_IT_LINK=1`). Found IT-01 below.)
+- [ ] Opt-in integration suite (`-tags integration,libsignal_go`) against production with a
+      dedicated test account. signalmeow is hard-wired to production hosts, zkgroup parameters
+      and the CDSI enclave; there is no staging variant.
+  - [x] Implement the opt-in suite, `just test-integration` (cgo, then pure Go on the same
+        account), and setup documentation in docs/dev.md (2026-09-27).
+  - [x] Manual linking: the initial test account was linked with the pure-Go binary; the user
+        confirmed successful prior linking on 2026-09-29. No repeat manual run is needed.
+  - [x] Live Receive: drain the incoming queue on both backends; check for decryption failures.
+  - [x] Live CDSI: uncached contact discovery and peer resolution pass on both backends.
+        CDSI returns only the PNI without the peer's access key; the test accepts that (see 9.3).
+  - [x] Live Profile: fetch own and peer profiles with the zkgroup credential on both backends.
+  - [x] Live NoteToSelf and Direct: sends pass on both backends, including the peer's direct
+        delivery receipt. Receive, CDSI, Profile and these sends passed on 2026-09-27 and 2026-09-29.
+  - [x] Reusable group fixture: `TestIntegrationCreateGroup` (`GOSIGNAL_IT_CREATE_GROUP=1`)
+        creates a two-member group with invite links disabled and verifies full membership.
+        Live creation with pure Go passed on 2026-09-29; keep its ID in `GOSIGNAL_IT_GROUP`.
+  - [x] Live Group: send through the same account and group on cgo and pure Go, requiring the
+        peer as a full member and waiting for its delivery receipt (2026-09-29).
+  - [x] Correct `TestIntegrationLink` cleanup: close the connected client, reopen the temporary
+        account, then Unlink with an independent timeout. Builds and lint pass (2026-09-29).
+  - [ ] Live automated Link on cgo: QR provisioning, connect, device listing, note to self,
+        and successful unlink cleanup. The 2026-09-29 attempt reached the QR step but expired
+        without a scan (60-second idle timeout); it did not exercise provisioning or cleanup.
+  - [ ] Live automated Link on pure Go: the same full lifecycle with `GOSIGNAL_IT_LINK=1`.
+        This remains separate from the successful manual linking above.
 - [x] IT-01: the cgo libsignalgo passes `time.Now().Unix()` (seconds) as `now` to
       `SessionCipher_EncryptMessage` and `SessionBuilder_ProcessPreKeyBundle`, which take epoch
       milliseconds (`message.go`, `prekeybundle.go`; upstream mautrix too). Unacknowledged
@@ -1663,7 +1683,13 @@ main, as on pushes.)
       it failed on cgo before the fix (stored `1790575`). Sessions stored before the fix count as
       stale once. `just test-diff`, `check-purego` and the live suite on both backends pass.
       Not yet reported upstream.)
-- [ ] Consider an external review of the zkgroup and attestation ports before flipping the default
+- [ ] Consider an external review of the zkgroup and attestation ports. The default already
+      flipped (10.3); this is an outstanding follow-up, not a completed review.
+  - [x] Establish the internal review baseline and resolve CT-01/CT-02/CT-03 (above).
+        This source review is not an independent audit.
+  - [ ] Decide whether to commission an external review; record scope and the decision.
+  - [ ] If commissioned, obtain the review and track findings through fixes and verification.
+        Otherwise, record the deferral explicitly rather than claiming an audit was completed.
 
 **Done when:** fuzzers run in CI (short budget), the integration suite passes against production
 with the test account (signalmeow can't reach staging),
@@ -1709,14 +1735,51 @@ don't exist yet; their jobs skip until the secrets are set, and the README no lo
 
 ### Later / on demand
 
-- [ ] Daemon mode: long-running `receive --follow` with a local API (unix socket / HTTP + SSE)
-      for scripts and bots. Our own API; no signal-cli JSON-RPC compatibility required. Build it
-      on the `internal/app` layer and the inbox from Phase 5.
-- [ ] Group management (create, add/remove members, rename), profile updates
-- [ ] Stickers, stories, polls, pinned messages
-- [ ] Import of an existing signal-cli account, to avoid re-linking
-- [ ] Primary registration (`register`/`verify`/PIN). signalmeow doesn't cover it; it would be built
-      on `libsignalgo` + `web`.
+These remain optional/on demand. Checked foundations do not imply the user-facing feature is done.
+
+- [ ] Daemon mode: long-running receiving with our own local API for scripts and bots;
+      no signal-cli JSON-RPC compatibility required.
+  - [x] Shared `internal/app` use cases and persistent inbox (Phase 5).
+  - [x] Long-running MCP server with authenticated loopback HTTP (5.6); this provides an
+        existing transport but is not the proposed general-purpose daemon API.
+  - [ ] Define the local API and choose unix socket and/or HTTP + SSE transport.
+  - [ ] Implement the daemon API on the existing use cases and inbox, with account locking,
+        authentication where needed, and graceful shutdown.
+  - [ ] Test client reconnects and inbox delivery; document operation and provide a script example.
+- [ ] Group management and profile updates.
+  - [x] Existing group list/show/leave commands and group title resolution (4.2).
+  - [x] Integration-only two-member group creation, verified live (10.2); not a public command.
+  - [ ] Expose general group creation through the facade, use cases and CLI.
+  - [ ] Add group members, including invited/pending membership handling.
+  - [ ] Remove group members with administrator and membership checks.
+  - [x] Rename a group and update its cached title (`groups rename <group> <title>`,
+        2026-09-29). Fetches current membership and edit permissions, rejects blank/invalid
+        titles, skips unchanged titles and reports revision conflicts for a retry.
+  - [ ] Define and implement own-profile updates.
+  - [x] Rename: facade/use-case tests, plain/JSON command goldens and documentation. Opt-in
+        `TestIntegrationRenameGroup` passed on cgo and pure Go (2026-09-29): server title and
+        revision, unchanged-title no-op and cached title checked; original title restored and
+        verified on the server after each run.
+  - [ ] Add command/output tests, documentation and live verification for the remaining operations.
+- [ ] Stickers, stories, polls and pinned messages.
+  - [x] Receive and render sticker metadata (pack ID, sticker ID and emoji), with conversion
+        tests (3.5); sticker images and sending are not implemented.
+  - [ ] Receive sticker images and send stickers.
+  - [ ] Define and implement story send/receive support.
+  - [ ] Implement poll creation, voting, closing and received poll state.
+  - [ ] Implement pin/unpin operations and received pinned-message state.
+  - [ ] Add facade/command/output tests, documentation and live checks for each supported feature.
+- [ ] Import an existing signal-cli account to avoid re-linking.
+  - [ ] Map the source account format and cryptographic/session state to the local store;
+        identify supported source versions and incompatible data before writing an importer.
+  - [ ] Implement import without modifying the source or overwriting an existing account.
+  - [ ] Test fixtures and failure recovery; document limitations and verify live send/receive.
+- [ ] Primary registration (`register`/`verify`/PIN). signalmeow doesn't cover it; build on
+      `libsignalgo` + `web` if demanded.
+  - [ ] Design the registration flow, persistent state and required server operations.
+  - [ ] Implement the registration request and verification commands.
+  - [ ] Implement PIN/registration-lock handling.
+  - [ ] Test interrupted/failed registration, document setup and verify with a dedicated account.
 - Out of scope: voice/video calls (RingRTC), DBus
 
 ## 5. Testing strategy

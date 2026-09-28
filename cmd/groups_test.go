@@ -14,6 +14,7 @@ import (
 const (
 	groupsCmd   = "groups"
 	leaveCmd    = "leave"
+	renameCmd   = "rename"
 	familyTitle = "Family"
 	clubID      = "Y2x1Yi1pZC1jbHViLWlkLWNsdWItaWQtY2x1Yi1pZC0="
 	goneID      = "Z29uZS1pZC1nb25lLWlkLWdvbmUtaWQtZ29uZS1pZC0="
@@ -79,6 +80,8 @@ func TestGroupsGolden(t *testing.T) {
 		{"groups_show", []string{groupsCmd, showCmd, familyTitle}},
 		{"groups_show_json", append(jsonFlag, groupsCmd, showCmd, "group:"+groupID)},
 		{"groups_show_invited", []string{groupsCmd, showCmd, clubID}},
+		{"groups_rename", []string{groupsCmd, renameCmd, familyTitle, "Family 🐶"}},
+		{"groups_rename_json", append(jsonFlag, groupsCmd, renameCmd, familyTitle, "Family 🐶")},
 		{"groups_leave", leaveFamily},
 		{"groups_leave_json", append(jsonFlag, leaveFamily...)},
 		{"groups_leave_invited", []string{groupsCmd, leaveCmd, "Club", yes}},
@@ -138,12 +141,35 @@ func TestGroupsErrors(t *testing.T) {
 		{[]string{groupsCmd, showCmd, "Nobody Here"}, signal.ErrUnknownGroup},
 		{[]string{groupsCmd, showCmd, goneID}, signal.ErrNotAMember},
 		{[]string{groupsCmd, leaveCmd, goneID, yes}, signal.ErrNotAMember},
+		{[]string{groupsCmd, renameCmd, clubID, "New title"}, signal.ErrNotAMember},
+		{[]string{groupsCmd, renameCmd, "Nobody Here", "New title"}, signal.ErrUnknownGroup},
 	}
 
 	for _, test := range tests {
 		_, err := run(t, groupsFake(), test.args...)
 		if !errors.Is(err, test.want) {
 			t.Errorf("%v: got %v, want %v", test.args, err, test.want)
+		}
+	}
+}
+
+func TestGroupsRenameInvalidInput(t *testing.T) {
+	t.Parallel()
+
+	for _, args := range [][]string{
+		{groupsCmd, renameCmd, familyTitle},
+		{groupsCmd, renameCmd, familyTitle, " "},
+		{groupsCmd, renameCmd, familyTitle, "New", "extra"},
+	} {
+		fake := groupsFake()
+
+		_, err := run(t, fake, args...)
+		if err == nil {
+			t.Errorf("%v: expected error", args)
+		}
+
+		if len(fake.Opened()) != 0 {
+			t.Error("invalid input opened the client")
 		}
 	}
 }
