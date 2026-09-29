@@ -347,6 +347,11 @@ func TestGroupsNeedConnect(t *testing.T) {
 	if !errors.Is(err, signal.ErrNotConnected) {
 		t.Errorf("RenameGroup: %v, want ErrNotConnected", err)
 	}
+
+	_, err = client.CreateGroup(t.Context(), signal.CreateGroupOptions{Title: renameTitle})
+	if !errors.Is(err, signal.ErrNotConnected) {
+		t.Errorf("CreateGroup: %v, want ErrNotConnected", err)
+	}
 }
 
 func randomKey(t *testing.T) []byte {

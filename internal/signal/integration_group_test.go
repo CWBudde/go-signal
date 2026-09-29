@@ -113,16 +113,19 @@ func TestIntegrationCreateGroup(t *testing.T) { //nolint:paralleltest // creates
 		t.Fatalf("Resolve: %v", err)
 	}
 
-	groupID, err := signal.CreateIntegrationGroup(t.Context(), env.client, peers[0].ACI)
+	created, err := env.client.CreateGroup(t.Context(), signal.CreateGroupOptions{
+		Title: "go-signal integration test", Members: peers,
+	})
+	groupID := created.ID
 	if groupID != "" {
 		t.Logf("GOSIGNAL_IT_GROUP=%s (retain for both backends; inspect before retrying creation)", groupID)
 	}
 
 	if err != nil {
-		t.Fatalf("CreateIntegrationGroup: %v", err)
+		t.Fatalf("CreateGroup: %v", err)
 	}
 
-	group, err := env.client.Group(t.Context(), groupID)
+	group, err := signal.FreshIntegrationGroup(t.Context(), env.client, groupID)
 	if err != nil {
 		t.Fatalf("Group: %v", err)
 	}

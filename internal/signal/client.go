@@ -184,6 +184,13 @@ type Client interface { //nolint:interfacebloat // the one facade over signalmeo
 	// ErrUnknownGroup; one the server doesn't show us with ErrNotAMember.
 	Group(ctx context.Context, ref string) (Group, error)
 
+	// CreateGroup creates a group with us as administrator and opts.Members as ordinary
+	// members (or invited members when their profile credentials are unavailable). It needs
+	// Connect; SendOnly is enough. It stores the master key and caches the returned title.
+	// On a creation/notification failure, Group.ID is returned when available: inspect that
+	// group before retrying, since the server may already have created it.
+	CreateGroup(ctx context.Context, opts CreateGroupOptions) (Group, error)
+
 	// LeaveGroup leaves the group ref (as for Group): it removes us as a member, declines an
 	// invitation or cancels a join request, and tells the other members. See Group.CheckLeave
 	// for when that is refused (ErrNotAMember, ErrLastAdmin, ErrInvalidPromotion); opts.Promote
@@ -198,8 +205,8 @@ type Client interface { //nolint:interfacebloat // the one facade over signalmeo
 	RenameGroup(ctx context.Context, ref, title string) (Group, error)
 
 	// GroupTitles returns what the title cache knows about the groups fetched before (by Groups,
-	// Group, RenameGroup or LeaveGroup), by group ID, from the store: it needs no Connect. Groups never fetched
-	// are missing. It fails with ErrClosed after Close.
+	// Group, CreateGroup, RenameGroup or LeaveGroup), by group ID, from the store: it needs no
+	// Connect. Groups never fetched are missing. It fails with ErrClosed after Close.
 	GroupTitles(ctx context.Context) (map[string]CachedGroup, error)
 
 	// InboxAdd stores entry in the account's inbox, where `mcp serve` keeps the events it

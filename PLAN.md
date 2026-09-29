@@ -112,6 +112,7 @@ go-signal react <recipient>... --target <author>:<ts> --emoji 👍 [--remove] [-
 go-signal delete <recipient>... --target <ts> [--group <id>]   # remote delete of our own message
 go-signal contacts list [--blocked] [--query <q>] | show <recipient> | block <recipient>... | unblock <recipient>...
 go-signal groups list | show <group> | leave <group> --yes [--promote <member>]...   # <group>: ID, master key or title
+go-signal groups create <title> [--member <number|ACI|@username>]...
 go-signal groups rename <group> <title>
 go-signal devices list
 go-signal identities list [<recipient>] | show <recipient> | trust <recipient> [--safety-number <n>]
@@ -1763,7 +1764,15 @@ These remain optional/on demand. Checked foundations do not imply the user-facin
 - [ ] Group management and profile updates.
   - [x] Existing group list/show/leave commands and group title resolution (4.2).
   - [x] Integration-only two-member group creation, verified live (10.2); not a public command.
-  - [ ] Expose general group creation through the facade, use cases and CLI.
+  - [x] Expose general group creation through the facade, use cases and CLI
+        (`groups create <title> [--member <recipient>]...`, 2026-09-29). Creator is admin;
+        repeated/self members are deduplicated, empty lists create a self-only group,
+        unavailable peer credentials fall back to invitations. Caches the server-returned
+        title; errors retain the prepared ID for inspection before retrying.
+  - [x] Creation: validation, membership/defaults, use-case failure/no-retry tests, plain/JSON
+        command goldens and documentation. The opt-in fixture now calls the public facade.
+  - [ ] Creation: run the refactored fixture live on both backends; verify a pending invitation
+        and acceptance on the peer's phone. Previous live fixture creation predates this API.
   - [ ] Add group members, including invited/pending membership handling.
   - [ ] Remove group members with administrator and membership checks.
   - [x] Rename a group and update its cached title (`groups rename <group> <title>`,

@@ -7,6 +7,7 @@ import (
 
 	"github.com/cwbudde/mautrix-signal/pkg/signalmeow"
 	"github.com/cwbudde/mautrix-signal/pkg/signalmeow/types"
+	"github.com/google/uuid"
 )
 
 // ConvertGroup exposes convertGroup to the signal_test package.
@@ -57,4 +58,9 @@ func ResolveGroupRef(ctx context.Context, client Client, ref string) (string, er
 // RenameChange exposes renameChange to the signal_test package.
 func RenameChange(group Group, self, title string) (*signalmeow.GroupChange, error) {
 	return renameChange(group, self, title)
+}
+
+// NewGroup exposes the group creation defaults to signal_test.
+func NewGroup(opts CreateGroupOptions, self uuid.UUID) *signalmeow.Group {
+	return newGroup(opts, self)
 }

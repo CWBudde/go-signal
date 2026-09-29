@@ -204,9 +204,10 @@ GOSIGNAL_IT_CREATE_GROUP=1 CGO_ENABLED=0 go test -count=1 -v -timeout 5m \
   -tags integration,libsignal_go -run '^TestIntegrationCreateGroup$' ./internal/signal/
 ```
 
-This creates **go-signal integration test** with the linked account as administrator and the
-peer as a full member, with invite links disabled. Both accounts need available profile keys
-and credentials; send a message from the peer first to share its key. Creation sends a group
+This uses the public `Client.CreateGroup` operation to create **go-signal integration test**
+with the linked account as administrator and the peer as a full member, with invite links
+disabled. Both accounts need available profile keys and credentials for the full-membership
+assertion; send a message from the peer first to share its key. Creation sends a group
 update to the peer. The test prints `GOSIGNAL_IT_GROUP`; export that value and leave
 `GOSIGNAL_IT_CREATE_GROUP` unset for subsequent runs. The group is retained for reuse on both
 backends. The Group step requires the peer to be a full member and online for its receipt.
@@ -214,6 +215,12 @@ backends. The Group step requires the peer to be a full member and online for it
 If creation fails after printing a group ID, inspect that group with `groups show` before
 retrying: the server may have created it even if the member notification failed. The setup
 test refuses to create another group while `GOSIGNAL_IT_GROUP` is set.
+
+The CLI exposes the same operation as `groups create <title> --member <recipient>` (repeat
+`--member` as needed). The facade permits pending invitations when peer profile credentials
+are unavailable, but this fixture requires full membership for subsequent group-send tests.
+To check the invitation path manually, use a dedicated peer that has not shared its profile
+key, inspect the `pending` output, accept on its phone, then refresh with `groups show <id>`.
 
 To verify renaming, set `GOSIGNAL_IT_DATA_DIR`, `GOSIGNAL_IT_PEER` and `GOSIGNAL_IT_GROUP`, then run:
 

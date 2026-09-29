@@ -85,6 +85,20 @@ test covers text edits. Signal normally permits 10 edits within 24 hours; Note t
 time limit. Recipients enforce eligibility, and a successful send only confirms transport.
 See [Signal's editing rules](https://support.signal.org/hc/en-us/articles/6255134251546-Edit-Message).
 
+Create a group with yourself as administrator and one or more members:
+
+```sh
+go-signal groups create "Weekend" --member +4915112345678 --member @alice.42
+go-signal groups create "Private notes"   # a group containing only you
+```
+
+Members can be numbers, ACIs or usernames. Duplicates are ignored; users without available
+profile credentials receive invitations. The output lists the group ID, members and pending
+invitations. Members may edit group information and add members; invite links start disabled.
+Each invocation creates a new group. If creation fails with a group ID, inspect it with
+`groups show <id>` before retrying: the server may have created the group already. Success
+confirms creation; individual notification failures may only be logged by signalmeow.
+
 To rename a group, list it first, then use its title or ID:
 
 ```sh

@@ -457,6 +457,13 @@ The document is `{"version": 1, "group": {…}}`, where `group` is one group obj
 [`groups list`](#groups-list), always without `error`: a group that can't be fetched fails the
 command instead.
 
+## `groups create`
+
+Returns the same document as [`groups show`](#groups-show), including the new group ID, creator
+as administrator, and members or pending invitations as returned by the server. The title is
+cached for subsequent commands. Master keys are never printed. On failure there is no success
+document; an error may include the ID to inspect before retrying a possibly completed creation.
+
 ## `groups rename`
 
 Returns the same document as [`groups show`](#groups-show), with the updated title and revision.
