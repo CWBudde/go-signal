@@ -64,3 +64,18 @@ func RenameChange(group Group, self, title string) (*signalmeow.GroupChange, err
 func NewGroup(opts CreateGroupOptions, self uuid.UUID) *signalmeow.Group {
 	return newGroup(opts, self)
 }
+
+// RemoveMembersChange exposes the removal change builder.
+func RemoveMembersChange(group Group, self string, members []Recipient) (*signalmeow.GroupChange, Group, error) {
+	return removeMembersChange(group, self, members)
+}
+
+// GroupRemovalSender is the transport used by RemoveGroupMembersOnce.
+type GroupRemovalSender = groupRemovalSender
+
+// RemoveGroupMembersOnce exposes the single-attempt group update transport.
+func RemoveGroupMembersOnce(ctx context.Context, cli GroupRemovalSender,
+	raw *signalmeow.Group, change *signalmeow.GroupChange, invalidate func(),
+) error {
+	return removeGroupMembersOnce(ctx, cli, raw, change, invalidate)
+}

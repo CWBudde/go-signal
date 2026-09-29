@@ -146,6 +146,15 @@ integration suite (see "Integration tests").
 The procedure for a mautrix-signal bump (rebase the fork, port the drift, re-pin libsignal-go,
 move the submodule) is in [maintenance.md](maintenance.md).
 
+## Coverage
+
+Run `just test-coverage` followed by `just coverage-report` to measure combined statement
+coverage across the repository. The profile includes application code exercised by command
+and MCP tests; it excludes the `signaltest` fake. Read the merged total in
+`coverage-results.md`, since each test binary's printed percentage covers only its own run.
+Aim for at least 80% overall, with behavior and failure-path tests for new features. The
+production integration suite is opt-in and is not needed for this measurement.
+
 ## Integration tests
 
 `internal/signal/integration_test.go` (`-tags integration`) runs the real client against Signal's

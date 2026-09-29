@@ -111,6 +111,8 @@ type Fake struct {
 	LeaveErr error
 	// RenameErr makes RenameGroup fail after validation, before changing the group.
 	RenameErr error
+	// RemoveGroupMembersErr makes removal fail after validation, before changing the group.
+	RemoveGroupMembersErr error
 	// CreateGroupErr makes CreateGroup fail before creating a group.
 	CreateGroupErr error
 	// LeaveTime is what LeaveGroup records as Group.LeftAt; zero means now.

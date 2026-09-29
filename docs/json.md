@@ -470,6 +470,12 @@ Returns the same document as [`groups show`](#groups-show), with the updated tit
 Renaming to the existing title leaves the revision unchanged. Validation, permission and
 conflict errors fail the command without printing a success document.
 
+## `groups remove-members`
+
+Returns the same document as [`groups show`](#groups-show), with the new revision and the
+removed recipients absent from `members`, `pending` or `requesting`. Duplicate recipients
+count once. Validation, permission and conflict errors fail without a success document.
+
 ## `groups leave`
 
 ```json

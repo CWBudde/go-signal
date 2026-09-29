@@ -19,7 +19,7 @@ one group listed before has it (ignoring case).`
 func newGroupsCmd(clients *clientOpener, printers *printerFactory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "groups",
-		Short: "Create, list, show, rename or leave groups",
+		Short: "Create, inspect and manage groups",
 		Args:  cobra.NoArgs,
 	}
 
@@ -28,6 +28,7 @@ func newGroupsCmd(clients *clientOpener, printers *printerFactory) *cobra.Comman
 		newGroupsListCmd(clients, printers),
 		newGroupsShowCmd(clients, printers),
 		newGroupsRenameCmd(clients, printers),
+		newGroupsRemoveMembersCmd(clients, printers),
 		newGroupsLeaveCmd(clients, printers),
 	)
 

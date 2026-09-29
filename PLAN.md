@@ -114,6 +114,7 @@ go-signal contacts list [--blocked] [--query <q>] | show <recipient> | block <re
 go-signal groups list | show <group> | leave <group> --yes [--promote <member>]...   # <group>: ID, master key or title
 go-signal groups create <title> [--member <number|ACI|@username>]...
 go-signal groups rename <group> <title>
+go-signal groups remove-members <group> <recipient>...
 go-signal devices list
 go-signal identities list [<recipient>] | show <recipient> | trust <recipient> [--safety-number <n>]
 go-signal account show | sync [--timeout 60s] | unlink   # unlink = remove local data
@@ -1774,7 +1775,17 @@ These remain optional/on demand. Checked foundations do not imply the user-facin
   - [ ] Creation: run the refactored fixture live on both backends; verify a pending invitation
         and acceptance on the peer's phone. Previous live fixture creation predates this API.
   - [ ] Add group members, including invited/pending membership handling.
-  - [ ] Remove group members with administrator and membership checks.
+  - [x] Remove group members with administrator and membership checks
+        (`groups remove-members <group> <recipient>...`, 2026-09-29). One change removes
+        full members, revokes ACI invitations or rejects join requests. Duplicates are
+        ignored; self and absent targets fail before submission. Fetches current state,
+        reports conflicts without automatic retry and preserves removed members as
+        notification recipients. Removal does not ban rejoining; PNI-only invitations
+        remain unsupported by the backend.
+  - [x] Removal: policy and backend failure-path tests, atomic/no-retry use-case tests,
+        plain/JSON command goldens and documentation.
+  - [ ] Removal: verify member removal, revoked invitations and rejected join requests
+        live on both backends with disposable test groups.
   - [x] Rename a group and update its cached title (`groups rename <group> <title>`,
         2026-09-29). Fetches current membership and edit permissions, rejects blank/invalid
         titles, skips unchanged titles and reports revision conflicts for a retry.
@@ -1810,6 +1821,10 @@ These remain optional/on demand. Checked foundations do not imply the user-facin
 - Unit tests: command wiring (`cmd.NewRootCmd()` + `SetArgs`) and renderers, with the
   `internal/signal` facade behind an interface so that most tests run without CGO against a fake
 - Golden files for JSON output
+- Aim for at least 80% combined statement coverage (`just test-coverage` then
+  `just coverage-report`); command/MCP tests count toward the application packages,
+  and the signaltest fake is excluded. Measured 86.1% with the race detector on
+  2026-09-29 after group removal and MCP regression tests. Keep live production tests opt-in.
 - Pure-Go backend (Phases 7–10): Rust-generated vectors and live Rust↔Go interop in the
   libsignal-go fork; differential CGO-vs-purego tests in go-signal
 - MCP server tests through the SDK's in-memory transport against the fake facade

@@ -151,7 +151,15 @@ func TestSupervisorTransitions(t *testing.T) {
 	t.Parallel()
 
 	ctx, cancel := context.WithCancel(t.Context())
-	fake := &loops{}
+	defer cancel()
+
+	transitions := 0
+	fake := &loops{emitted: func(_ *signal.Connection) {
+		transitions++
+		if transitions == 3 {
+			cancel()
+		}
+	}}
 	first := queue(
 		signal.LoopStatus{State: signal.StateConnected},
 		signal.LoopStatus{State: signal.StateConnected},
@@ -159,15 +167,6 @@ func TestSupervisorTransitions(t *testing.T) {
 		signal.LoopStatus{State: signal.StateDisconnected, Err: errFatal},
 		signal.LoopStatus{State: signal.StateConnected},
 	)
-
-	go func() {
-		for len(first) > 0 {
-			time.Sleep(time.Millisecond)
-		}
-
-		time.Sleep(10 * time.Millisecond)
-		cancel()
-	}()
 
 	got, logs := supervise(t, ctx, fake, fastPolicy(), first)
 

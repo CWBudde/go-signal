@@ -203,6 +203,12 @@ type Client interface { //nolint:interfacebloat // the one facade over signalmeo
 	// Connect, full membership and permission to edit attributes. An unchanged title is a
 	// no-op. The returned group includes the new revision; conflicts return ErrGroupChanged.
 	RenameGroup(ctx context.Context, ref, title string) (Group, error)
+	// RemoveGroupMembers removes full members, invitations or join requests from ref.
+	// It requires a full administrator membership and nonempty resolved ACIs. Duplicates
+	// are ignored; self and absent targets fail before any change. Use LeaveGroup for self.
+	// A conflict returns ErrGroupChanged without retrying. Members are not banned.
+	// Invitations known only by PNI cannot be removed through this ACI-based API.
+	RemoveGroupMembers(ctx context.Context, ref string, members []Recipient) (Group, error)
 
 	// GroupTitles returns what the title cache knows about the groups fetched before (by Groups,
 	// Group, CreateGroup, RenameGroup or LeaveGroup), by group ID, from the store: it needs no

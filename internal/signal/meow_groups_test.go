@@ -352,6 +352,11 @@ func TestGroupsNeedConnect(t *testing.T) {
 	if !errors.Is(err, signal.ErrNotConnected) {
 		t.Errorf("CreateGroup: %v, want ErrNotConnected", err)
 	}
+
+	_, err = client.RemoveGroupMembers(t.Context(), familyID, []signal.Recipient{{ACI: memberACI}})
+	if !errors.Is(err, signal.ErrNotConnected) {
+		t.Errorf("RemoveGroupMembers: %v, want ErrNotConnected", err)
+	}
 }
 
 func randomKey(t *testing.T) []byte {

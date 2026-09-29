@@ -111,6 +111,20 @@ updated group and remembers the new title for subsequent commands. An unchanged 
 no update; a concurrent change fails with a retry hint. A successful rename confirms the server
 update; failures notifying members are logged separately.
 
+Administrators can remove members, revoke invitations or reject join requests:
+
+```sh
+go-signal groups remove-members "Family" +4915112345678 @alice.42
+```
+
+Recipients can be numbers, ACIs or usernames; duplicates are ignored. Every recipient must
+currently be a member, invited or requesting to join. All recipients are checked before the
+change is submitted, and a concurrent group change fails with a retry hint. The output shows
+the updated group. Removal does not ban someone from rejoining; use `groups leave` to leave
+yourself. Success confirms the server update; member notification failures are logged.
+Invitations known only by phone-number identity (PNI), which the current backend cannot
+decrypt, cannot be removed with this command.
+
 ### Staying linked
 
 Signal removes a linked device that hasn't connected for about 30 days. Run `go-signal receive`
