@@ -8,13 +8,17 @@ import (
 	"github.com/google/uuid"
 )
 
-// ErrInvalidGroupMember means a removal names no members, ourselves, or someone absent
-// from the group. Use LeaveGroup to leave or decline our own invitation.
+// ErrInvalidGroupMember means a membership change names no members or an invalid target.
+// For removal, use LeaveGroup to leave or decline our own invitation.
 var ErrInvalidGroupMember = errors.New("invalid group member")
 
 // NormalizeGroupRemovalMembers validates nonempty resolved removal targets, canonicalizes
 // their ACIs and removes duplicates in input order without changing the input.
 func NormalizeGroupRemovalMembers(members []Recipient) ([]Recipient, error) {
+	return normalizeGroupMembers(members)
+}
+
+func normalizeGroupMembers(members []Recipient) ([]Recipient, error) {
 	if len(members) == 0 {
 		return nil, fmt.Errorf("%w: provide at least one member", ErrInvalidGroupMember)
 	}

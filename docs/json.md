@@ -470,6 +470,15 @@ Returns the same document as [`groups show`](#groups-show), with the updated tit
 Renaming to the existing title leaves the revision unchanged. Validation, permission and
 conflict errors fail the command without printing a success document.
 
+## `groups add-members`
+
+Returns the same document as [`groups show`](#groups-show), fetched after the change. New
+ordinary members appear in `members`; users invited because their profile credentials are
+unavailable appear in `pending`. Approved join requests move from `requesting` to `members`.
+Existing members, invitations and duplicates are skipped; when there are no changes the
+revision is unchanged. Errors produce no success document, including when the server accepted
+the change but fetching the resulting group failed.
+
 ## `groups remove-members`
 
 Returns the same document as [`groups show`](#groups-show), with the new revision and the

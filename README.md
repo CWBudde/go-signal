@@ -111,6 +111,21 @@ updated group and remembers the new title for subsequent commands. An unchanged 
 no update; a concurrent change fails with a retry hint. A successful rename confirms the server
 update; failures notifying members are logged separately.
 
+To add members or invite users to an existing group:
+
+```sh
+go-signal groups add-members "Family" +4915112345678 @alice.42
+```
+
+You must be a full member with permission to add members. Recipients without available
+profile credentials receive invitations; the output shows the server's actual members and
+pending invitations. Existing members, pending invitations, yourself and duplicates are
+skipped. Administrators can approve join requests with the same command. Banned ACIs are
+rejected. All recipients are resolved before a single change is submitted; conflicts fail
+without automatic retries. If a change succeeds but fetching the result fails, the error
+reports that it was accepted: inspect `groups show` before retrying. Notification failures
+after a confirmed change are logged separately.
+
 Administrators can remove members, revoke invitations or reject join requests:
 
 ```sh

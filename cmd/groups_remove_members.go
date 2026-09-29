@@ -1,7 +1,10 @@
 package cmd
 
 import (
+	"context"
+
 	"github.com/cwbudde/go-signal/internal/app"
+	"github.com/cwbudde/go-signal/internal/signal"
 	"github.com/spf13/cobra"
 )
 
@@ -23,32 +26,10 @@ the outcome uncertain. Notification failures after a confirmed change are logged
 		RunE: func(cmd *cobra.Command, args []string) error {
 			req := app.RemoveGroupMembersRequest{Group: args[0], Members: args[1:]}
 
-			err := req.Check()
-			if err != nil {
-				return err //nolint:wrapcheck // self-contained validation error
-			}
-
-			printer, err := printers.printer(cmd.OutOrStdout())
-			if err != nil {
-				return err
-			}
-
-			client, err := clients.open(cmd.Context())
-			if err != nil {
-				return err
-			}
-			defer closeClient(client)
-
-			use := app.New(client)
-
-			group, err := use.GroupsRemoveMembers(cmd.Context(), req)
-			if err != nil {
-				return err //nolint:wrapcheck // app wraps it
-			}
-
-			showNames(cmd.Context(), printer, use)
-
-			return printer.Group(group)
+			return changeGroupMembers(cmd, clients, printers, req.Check,
+				func(ctx context.Context, use *app.App) (signal.Group, error) {
+					return use.GroupsRemoveMembers(ctx, req)
+				})
 		},
 	}
 }

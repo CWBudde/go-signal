@@ -114,6 +114,7 @@ go-signal contacts list [--blocked] [--query <q>] | show <recipient> | block <re
 go-signal groups list | show <group> | leave <group> --yes [--promote <member>]...   # <group>: ID, master key or title
 go-signal groups create <title> [--member <number|ACI|@username>]...
 go-signal groups rename <group> <title>
+go-signal groups add-members <group> <recipient>...
 go-signal groups remove-members <group> <recipient>...
 go-signal devices list
 go-signal identities list [<recipient>] | show <recipient> | trust <recipient> [--safety-number <n>]
@@ -1774,7 +1775,17 @@ These remain optional/on demand. Checked foundations do not imply the user-facin
         command goldens and documentation. The opt-in fixture now calls the public facade.
   - [ ] Creation: run the refactored fixture live on both backends; verify a pending invitation
         and acceptance on the peer's phone. Previous live fixture creation predates this API.
-  - [ ] Add group members, including invited/pending membership handling.
+  - [x] Add group members, including invited/pending membership handling
+        (`groups add-members <group> <recipient>...`, 2026-09-29). Fetches current membership
+        and add-member permissions; skips duplicates, self, existing members and invitations.
+        Unavailable profile credentials fall back to pending invitations. Administrators can
+        approve join requests; banned ACIs are rejected. Submits one change without conflict
+        retries, notifies new members/requesters and fetches the accepted membership before
+        returning. A failed post-change fetch reports acceptance and asks for inspection.
+  - [x] Addition: policy/backend failure-path tests, atomic/no-retry use-case tests,
+        plain/JSON command goldens and documentation.
+  - [ ] Addition: verify full membership, pending invitations and acceptance, join-request
+        approval and permission failures live on both backends with disposable test groups.
   - [x] Remove group members with administrator and membership checks
         (`groups remove-members <group> <recipient>...`, 2026-09-29). One change removes
         full members, revokes ACI invitations or rejects join requests. Duplicates are

@@ -113,6 +113,12 @@ type Fake struct {
 	RenameErr error
 	// RemoveGroupMembersErr makes removal fail after validation, before changing the group.
 	RemoveGroupMembersErr error
+	// AddGroupMembersErr makes addition fail before changing the group.
+	AddGroupMembersErr error
+	// GroupInvitees identifies additions whose profile credentials are unavailable.
+	GroupInvitees map[string]bool
+	// GroupInviteTime is the time of new invitations; zero means now.
+	GroupInviteTime time.Time
 	// CreateGroupErr makes CreateGroup fail before creating a group.
 	CreateGroupErr error
 	// LeaveTime is what LeaveGroup records as Group.LeftAt; zero means now.
