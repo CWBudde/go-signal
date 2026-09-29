@@ -1805,7 +1805,8 @@ These remain optional/on demand. Checked foundations do not imply the user-facin
         preserving omitted text, avatar, payment, privacy and badges. V1 cannot
         prevent concurrent edits by another device; v2 and avatar upload are deferred.
         [Written design](docs/superpowers/specs/2026-09-30-own-profile-updates-design.md)
-        is awaiting review; implementation and live verification remain open.
+        was approved; the [implementation plan](docs/superpowers/plans/2026-09-30-own-profile-updates.md)
+        is awaiting review. Implementation and live verification remain open.
   - [x] Rename: facade/use-case tests, plain/JSON command goldens and documentation. Opt-in
         `TestIntegrationRenameGroup` passed on cgo and pure Go (2026-09-29): server title and
         revision, unchanged-title no-op and cached title checked; original title restored and

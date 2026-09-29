@@ -2,7 +2,7 @@
 
 Date: 2026-09-30
 
-Status: conversational design approved; written spec awaiting review.
+Status: written spec approved on 2026-09-30; implementation plan awaiting review.
 
 ## Intent and scope
 
@@ -113,8 +113,8 @@ Show also uses this fresh raw read so it preserves the name split and refuses an
 outdated local key. Facade-owned raw HTTP response bodies have a fixed maximum
 of 1 MiB. The dependency's forced cache-refresh reader has no equivalent bound.
 For facade responses, reject oversized, invalid or trailing JSON and invalid
-base64; do not print raw bodies,
-keys, credentials or authentication material in errors.
+base64; do not print raw bodies, keys, credentials or authentication material in
+errors.
 
 ## Text and crypto rules
 
