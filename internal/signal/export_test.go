@@ -145,3 +145,8 @@ func BeginOperation(client Client) (func(context.Context) error, func(), bool) {
 
 	return read, meow.sending.Done, true
 }
+
+// WrapOutgoing exposes the data/edit envelope selector.
+func WrapOutgoing(msg *signalpb.DataMessage, editTarget uint64) *signalpb.Content {
+	return wrapOutgoing(msg, editTarget)
+}

@@ -361,6 +361,7 @@ type content struct {
 	// reaction or deleteTarget replace the content above for React and Delete.
 	reaction     *signal.OutgoingReaction
 	deleteTarget uint64
+	editTarget   uint64
 }
 
 // buildContent resolves the quote author and the mentioned users of req to ACIs and uploads files.
@@ -381,7 +382,7 @@ func (a *App) buildContent(ctx context.Context, req SendRequest, files []signal.
 // resolveContent resolves the quote author and the mentioned users of req to ACIs.
 func (a *App) resolveContent(ctx context.Context, req SendRequest) (content, error) {
 	body, found := parseMentions(req.Body)
-	out := content{body: body}
+	out := content{body: body, editTarget: req.EditTarget}
 
 	targets := make([]Target, 0, len(found)+1)
 	for _, m := range found {

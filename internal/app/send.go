@@ -17,6 +17,8 @@ var (
 	// ErrSendFailed means that sending to at least one recipient (or group member) failed. The
 	// SendResult that comes with it is complete.
 	ErrSendFailed = errors.New("sending failed")
+	// ErrInvalidEdit means the target timestamp is invalid or the replacement text is empty.
+	ErrInvalidEdit = errors.New("invalid message edit")
 
 	errNoResult = errors.New("no result from the client")
 )
@@ -37,6 +39,9 @@ type SendRequest struct {
 	Quote string
 	// QuoteText is the quoted text that clients show when they don't have the quoted message.
 	QuoteText string
+	// EditTarget edits our own message at this timestamp (ms); zero sends a new message.
+	// The caller supplies the replacement content; no previous message is loaded.
+	EditTarget uint64
 }
 
 // SendResult is the output of Send.
@@ -101,6 +106,11 @@ func (r TargetResult) FailedMembers() int {
 // If sending fails for some targets, Send returns the complete result together with an error
 // wrapping ErrSendFailed (and signal.ErrDeviceUnlinked, if that was the cause).
 func (a *App) Send(ctx context.Context, req SendRequest) (SendResult, error) {
+	err := a.checkEdit(req)
+	if err != nil {
+		return SendResult{}, fmt.Errorf("send: %w", err)
+	}
+
 	req, files, err := prepare(req)
 	if err != nil {
 		return SendResult{}, fmt.Errorf("send: %w", err)
@@ -109,6 +119,21 @@ func (a *App) Send(ctx context.Context, req SendRequest) (SendResult, error) {
 	return a.sendContent(ctx, "send", req.Recipients, func(ctx context.Context) (content, error) {
 		return a.buildContent(ctx, req, files)
 	})
+}
+
+// checkEdit validates edits before connecting or reading attachments. Recipients enforce
+// ownership, edit age and edit-count limits, as they do for messages from other clients.
+func (a *App) checkEdit(req SendRequest) error {
+	if req.EditTarget == 0 {
+		return nil
+	}
+
+	now := uint64(a.now().UnixMilli()) //nolint:gosec // positive clock
+	if req.EditTarget >= now || strings.TrimSpace(req.Body) == "" {
+		return fmt.Errorf("%w: need a past message timestamp and non-blank replacement text", ErrInvalidEdit)
+	}
+
+	return nil
 }
 
 // sendContent runs action (send, react, delete): it connects in send-only mode, resolves the
@@ -226,6 +251,7 @@ func (msg content) request(timestamp uint64) signal.SendRequest {
 		Mentions:     msg.mentions,
 		Reaction:     msg.reaction,
 		DeleteTarget: msg.deleteTarget,
+		EditTarget:   msg.editTarget,
 	}
 }
 

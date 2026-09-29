@@ -9,6 +9,7 @@
 //	GOSIGNAL_IT_GROUP     group ID or master key of a test group (optional)
 //	GOSIGNAL_IT_CREATE_GROUP "1" to create a reusable two-member test group (one-time setup)
 //	GOSIGNAL_IT_RENAME_GROUP "1" to rename the test group and restore its original title
+//	GOSIGNAL_IT_EDIT "1" to send and edit fresh self/direct/group messages
 //	GOSIGNAL_IT_LINK      "1" to also link a new device by QR code and unlink it again
 //	GOSIGNAL_IT_TIMEOUT   how long to wait for delivery receipts (default 2m)
 //	GOSIGNAL_IT_LOG       log level of the client's logs (default warn)

@@ -25,6 +25,12 @@ attached with --attach (up to 100 MiB each) are uploaded once for all recipients
 for your own messages) and the timestamp is the message's time in ms, as receive -o json
 shows it. --quote-text is the quoted text shown when the recipient no longer has the message.
 
+--edit <timestamp> replaces one of your own sent messages in the same chats. Use the original
+message's timestamp in ms and provide the replacement text with -m or --stdin. Mentions and
+other supplied content form the replacement; previous content is not loaded automatically.
+Recipients enforce Signal's edit limits and may ignore an ineligible edit. The result reports
+delivery of the edit, with its new timestamp, not whether the recipient applied it.
+
 The message also shows up on your other devices (a sync transcript); a note to self only goes
 there. Incoming messages are left on the server for the next receive.
 
@@ -50,6 +56,10 @@ func newSendCmd(clients *clientOpener, printers *printerFactory, appOpts []app.O
   go-signal send +4915112345678 --attach photo.jpg -m "Look, @{@alice.42}"
   go-signal send +4915112345678 --quote +4915112345678:1790000000000 -m "Yes"`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if cmd.Flags().Changed("edit") && req.EditTarget == 0 {
+				return fmt.Errorf("%w: --edit must be a nonzero message timestamp in ms", app.ErrInvalidEdit)
+			}
+
 			req.Recipients = recipientArgs(args, groups)
 			req.Body = message
 
@@ -75,6 +85,7 @@ func newSendCmd(clients *clientOpener, printers *printerFactory, appOpts []app.O
 	flags.StringArrayVar(&req.Attachments, "attach", nil, "attach this file (repeatable)")
 	flags.StringVar(&req.Quote, "quote", "", "reply to the message `<author>:<timestamp>`")
 	flags.StringVar(&req.QuoteText, "quote-text", "", "the quoted text, shown if the recipient lacks the message")
+	flags.Uint64Var(&req.EditTarget, "edit", 0, "edit your message with this sent timestamp in ms")
 	cmd.MarkFlagsMutuallyExclusive("message", "stdin")
 	cmd.MarkFlagsOneRequired("message", "stdin", "attach")
 

@@ -67,6 +67,9 @@ go-signal account show
 go-signal send +4915112345678 -m "Hello from go-signal"
 go-signal send self -m "Note to self" --attach notes.pdf
 
+# Edit your own message, using the timestamp printed by its original send.
+go-signal send +4915112345678 --edit 1790000000000 -m "Corrected text"
+
 # 3. Receive what is waiting on the server, or keep streaming with --follow.
 go-signal receive
 go-signal receive --follow -o json   # one JSON document per event (docs/json.md)
@@ -74,6 +77,13 @@ go-signal receive --follow -o json   # one JSON document per event (docs/json.md
 
 `go-signal <command> --help` and the man pages (`man go-signal-send`) describe every command.
 [docs/json.md](docs/json.md) documents the JSON output.
+
+`send --edit <timestamp>` works for users, groups (`--group <id>`) and `self`, including messages
+sent from your other devices when you know their timestamp. Supply the replacement content;
+go-signal does not reload the original text, mentions, quote or attachments. The live integration
+test covers text edits. Signal normally permits 10 edits within 24 hours; Note to Self has no
+time limit. Recipients enforce eligibility, and a successful send only confirms transport.
+See [Signal's editing rules](https://support.signal.org/hc/en-us/articles/6255134251546-Edit-Message).
 
 To rename a group, list it first, then use its title or ID:
 

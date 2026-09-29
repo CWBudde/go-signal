@@ -135,7 +135,7 @@ func (c *meowClient) Send(ctx context.Context, req SendRequest) (SendResult, err
 	ctx = c.zlog.WithContext(ctx)
 
 	if req.GroupID != "" {
-		results, err := sendGroup(ctx, cli, req.GroupID, msg())
+		results, err := sendGroup(ctx, cli, req.GroupID, wrapOutgoing(msg(), req.EditTarget))
 		if err != nil {
 			return SendResult{}, err
 		}
@@ -156,11 +156,22 @@ func (c *meowClient) Send(ctx context.Context, req SendRequest) (SendResult, err
 		// SendMessage adds to the content (PNI signature), so every recipient gets its own. For
 		// our own ACI it only sends the sync transcript (note-to-self); otherwise it sends the
 		// sync transcript after the message.
-		sent := cli.SendMessage(ctx, serviceID, signalmeow.WrapDataMessage(msg()))
+		sent := cli.SendMessage(ctx, serviceID, wrapOutgoing(msg(), req.EditTarget))
 		res.Results = append(res.Results, recipientResult(rcpt, rcpt.ACI == c.ownACI, sent))
 	}
 
 	return res, nil
+}
+
+// wrapOutgoing selects the protocol envelope without losing the replacement's rich content.
+func wrapOutgoing(msg *signalpb.DataMessage, editTarget uint64) *signalpb.Content {
+	if editTarget != 0 {
+		return signalmeow.WrapEditMessage(&signalpb.EditMessage{
+			TargetSentTimestamp: new(editTarget), DataMessage: msg,
+		})
+	}
+
+	return signalmeow.WrapDataMessage(msg)
 }
 
 // message checks req and returns a function that builds a fresh DataMessage for it, since
@@ -295,7 +306,7 @@ func aciBytes(rcpt Recipient) ([]byte, error) {
 // sendGroup sends msg to the members of the group groupID (with sender keys where possible);
 // signalmeow adds the group context and sends the sync transcript.
 func sendGroup(
-	ctx context.Context, cli *signalmeow.Client, groupID string, msg *signalpb.DataMessage,
+	ctx context.Context, cli *signalmeow.Client, groupID string, msg *signalpb.Content,
 ) ([]RecipientResult, error) {
 	gid := types.GroupIdentifier(groupID)
 
@@ -304,7 +315,7 @@ func sendGroup(
 		return nil, fmt.Errorf("%w %q: %w", ErrUnknownGroup, groupID, err)
 	}
 
-	sent, err := cli.SendGroupMessage(ctx, gid, signalmeow.WrapDataMessage(msg))
+	sent, err := cli.SendGroupMessage(ctx, gid, msg)
 	if errors.Is(err, signalmeow.ErrGroupMasterKeyNotFound) {
 		return nil, fmt.Errorf("%w %s: go-signal knows a group only after receiving a message from it",
 			ErrUnknownGroup, groupID)

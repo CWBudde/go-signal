@@ -225,6 +225,10 @@ nothing was changed and no document is printed.
 
 ## `send`
 
+`send --edit <timestamp>` uses the same result format. The returned `timestamp` is the new
+edit's timestamp; the argument identifies the original message. A successful result means the
+edit was sent, not that the receiving app applied it. No fields or schema version change.
+
 ```json
 {
   "version": 1,

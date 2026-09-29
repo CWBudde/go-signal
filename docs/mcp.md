@@ -227,13 +227,18 @@ this device is still linked only with `checkServer: true`.
 These tools are left out with `--read-only`. They send only to allowed recipients, and ask for
 confirmation first with `--confirm`.
 
-| Tool             | Input                                                     | Returns                                                                       |
-| ---------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `send_message`   | `recipients`, `text`, `attachments`, `quote`, `quoteText` | The message's `timestamp` and a result per recipient ([`send`](json.md#send)) |
-| `react`          | `message`, `chat`, `emoji`, `remove`                      | As for `send` ([`react`](json.md#react))                                      |
-| `delete_message` | `chat`, `timestamp`                                       | As for `send` ([`delete`](json.md#delete))                                    |
+| Tool             | Input                                                                      | Returns                                                                       |
+| ---------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `send_message`   | `recipients`, `text`, `attachments`, `quote`, `quoteText`, `editTimestamp` | The message's `timestamp` and a result per recipient ([`send`](json.md#send)) |
+| `react`          | `message`, `chat`, `emoji`, `remove`                                       | As for `send` ([`react`](json.md#react))                                      |
+| `delete_message` | `chat`, `timestamp`                                                        | As for `send` ([`delete`](json.md#delete))                                    |
 
 - **`send_message`**
+  - Optional `editTimestamp` edits your own message at that sent timestamp (ms) in the same
+    chats. Supply replacement `text` and any other replacement content; the original content
+    is not loaded. The response timestamp is the new edit's timestamp. Signal apps enforce
+    edit eligibility; sending successfully does not prove application. The allowlist and
+    `--confirm` apply to edits too, and confirmation names the target timestamp.
   - Sends to users and groups: `recipients` take the same values as a `chat`.
   - In `text`, `@{<user>}` mentions a user.
   - `attachments` are paths inside `--attach-dir`, relative to it.

@@ -1,23 +1,41 @@
 package signal
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // Check reports whether req can be sent: it needs either recipients or a group
 // (ErrInvalidSendRequest), a reaction or remote delete comes without other content and with what
 // it needs (ErrInvalidContent), and a reaction's target author has an ACI (ErrUnresolvable). It
-// doesn't check recipients, attachments, the quote or mentions.
+// An edit needs replacement text and a timestamp newer than its target (ErrInvalidContent).
+// It doesn't check recipients, attachments, the quote or mentions.
 func (req SendRequest) Check() error {
 	if (req.GroupID == "") == (len(req.Recipients) == 0) {
 		return ErrInvalidSendRequest
 	}
 
 	switch {
+	case req.EditTarget != 0:
+		return req.checkEdit()
 	case req.Reaction != nil:
 		return req.checkReaction()
 	case req.DeleteTarget != 0:
 		if req.hasContent() {
 			return fmt.Errorf("%w: a remote delete has no other content", ErrInvalidContent)
 		}
+	}
+
+	return nil
+}
+
+func (req SendRequest) checkEdit() error {
+	if req.Reaction != nil || req.DeleteTarget != 0 || strings.TrimSpace(req.Body) == "" {
+		return fmt.Errorf("%w: an edit needs replacement text and cannot include a reaction or delete", ErrInvalidContent)
+	}
+
+	if req.Timestamp != 0 && req.EditTarget >= req.Timestamp {
+		return fmt.Errorf("%w: an edit must be newer than its target", ErrInvalidContent)
 	}
 
 	return nil

@@ -28,11 +28,12 @@ const allowlistNote = " The server only sends to the chats it was started to all
 	"other recipients are rejected."
 
 type sendMessageInput struct {
-	Recipients  []string `json:"recipients"            jsonschema:"users (number, ACI, @username, self) or groups"`
-	Text        string   `json:"text,omitempty"        jsonschema:"the message; @{<user>} mentions a user"`
-	Attachments []string `json:"attachments,omitempty" jsonschema:"files to attach, relative to the attachment directory"`
-	Quote       string   `json:"quote,omitempty"       jsonschema:"reply to a message: inbox id or <author>:<timestamp>"`
-	QuoteText   string   `json:"quoteText,omitempty"   jsonschema:"quoted text, shown if the recipient lost the message"`
+	Recipients    []string `json:"recipients"              jsonschema:"users (number, ACI, @username, self) or groups"`
+	Text          string   `json:"text,omitempty"          jsonschema:"the message; @{<user>} mentions a user"`
+	Attachments   []string `json:"attachments,omitempty"   jsonschema:"files relative to the attachment directory"`
+	Quote         string   `json:"quote,omitempty"         jsonschema:"reply to inbox id or <author>:<timestamp>"`
+	QuoteText     string   `json:"quoteText,omitempty"     jsonschema:"quoted text if the recipient lacks the message"`
+	EditTimestamp *uint64  `json:"editTimestamp,omitempty" jsonschema:"our message timestamp (ms) to edit"`
 }
 
 type reactInput struct {
@@ -54,8 +55,9 @@ func addWriteTools(server *sdk.Server, handlers *tools) {
 		Title: "Send message",
 		Description: "Send a text message, with optional attachments and a quoted reply, to users or groups. It " +
 			"also shows up on your other devices. The result has the message's timestamp (for delete_message) " +
-			"and the outcome per recipient." + allowlistNote,
-		Annotations: &sdk.ToolAnnotations{DestructiveHint: new(false), OpenWorldHint: new(true)},
+			"and the outcome per recipient. Set editTimestamp to edit your own earlier message in the same chats. " +
+			"Signal clients enforce edit limits; successful sending does not prove the edit was applied." + allowlistNote,
+		Annotations: &sdk.ToolAnnotations{DestructiveHint: new(true), OpenWorldHint: new(true)},
 	}, handlers.sendMessage)
 
 	sdk.AddTool(server, &sdk.Tool{
@@ -75,15 +77,32 @@ func addWriteTools(server *sdk.Server, handlers *tools) {
 	}, handlers.deleteMessage)
 }
 
-func (t *tools) sendMessage(
-	ctx context.Context, req *sdk.CallToolRequest, in sendMessageInput,
-) (*sdk.CallToolResult, output.SendJSON, error) {
-	if len(in.Attachments) > 0 && t.attachDir == "" {
-		return nil, output.SendJSON{}, errNoAttachDir
+// request validates optional fields before confirmation and builds the use-case input.
+func (in sendMessageInput) request(attachDir string) (app.SendRequest, error) {
+	if len(in.Attachments) > 0 && attachDir == "" {
+		return app.SendRequest{}, errNoAttachDir
 	}
 
 	send := app.SendRequest{
-		Body: in.Text, Attachments: in.Attachments, AttachDir: t.attachDir, QuoteText: in.QuoteText,
+		Body: in.Text, Attachments: in.Attachments, AttachDir: attachDir, QuoteText: in.QuoteText,
+	}
+	if in.EditTimestamp != nil {
+		if *in.EditTimestamp == 0 {
+			return app.SendRequest{}, fmt.Errorf("%w: editTimestamp must be nonzero", app.ErrInvalidEdit)
+		}
+
+		send.EditTarget = *in.EditTimestamp
+	}
+
+	return send, nil
+}
+
+func (t *tools) sendMessage(
+	ctx context.Context, req *sdk.CallToolRequest, in sendMessageInput,
+) (*sdk.CallToolResult, output.SendJSON, error) {
+	send, err := in.request(t.attachDir)
+	if err != nil {
+		return nil, output.SendJSON{}, err
 	}
 
 	names := t.names(ctx)
@@ -263,7 +282,11 @@ func (t *tools) messageRef(ctx context.Context, ref string) (string, string, err
 func sendSummary(in sendMessageInput) string {
 	var out strings.Builder
 
-	out.WriteString("Send")
+	if in.EditTimestamp != nil {
+		fmt.Fprintf(&out, "Edit our message at %d to", *in.EditTimestamp)
+	} else {
+		out.WriteString("Send")
+	}
 
 	if in.Quote != "" {
 		out.WriteString(" a reply")

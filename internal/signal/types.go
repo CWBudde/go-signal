@@ -69,6 +69,10 @@ type SendRequest struct {
 	// Timestamp is the sent timestamp (ms since epoch) that identifies the message; zero means
 	// now. Several requests with the same timestamp send the same message to more recipients.
 	Timestamp uint64
+	// EditTarget, if nonzero, edits our own message with this sent timestamp. Body and the
+	// other content describe the replacement; Timestamp is the new edit's timestamp.
+	// Reactions and remote deletes cannot be combined with an edit.
+	EditTarget uint64
 	// Attachments were uploaded with Upload on the same client.
 	Attachments []UploadedAttachment
 	// Quote makes the message a reply; the author needs their ACI.
@@ -76,7 +80,7 @@ type SendRequest struct {
 	// Mentions mark users mentioned in Body; they need their ACI.
 	Mentions []Mention
 	// Reaction makes the message an emoji reaction (or its removal) instead of content; Body,
-	// Attachments, Quote, Mentions and DeleteTarget must be empty then.
+	// Attachments, Quote, Mentions, EditTarget and DeleteTarget must be empty then.
 	Reaction *OutgoingReaction
 	// DeleteTarget, if not zero, makes the message a remote delete ("delete for everyone") of
 	// our own message with this sent timestamp; all other content must be empty then.

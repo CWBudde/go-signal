@@ -185,7 +185,7 @@ func checkAnnotations(t *testing.T, tool *sdk.Tool) {
 
 	// The tools that change something: attachment_get writes a file, the others send.
 	writes := map[string]hints{
-		"attachment_get": {}, "mark_read": {openWorld: true}, "send_message": {openWorld: true},
+		"attachment_get": {}, "mark_read": {openWorld: true}, "send_message": {destructive: true, openWorld: true},
 		"react": {openWorld: true}, "delete_message": {destructive: true, openWorld: true},
 	}
 

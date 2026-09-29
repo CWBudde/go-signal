@@ -106,6 +106,7 @@ Noun-verb subcommands with kebab-case names. Global flags: `-a/--account`, `-o/-
 go-signal link [--name <device-name>] [--sync-timeout 60s]   # print sgnl:// URI + terminal QR, wait for scan, sync
 go-signal send <recipient>... -m <text> [--attach <file>]... [--group <id>] [--quote <ts>]
 go-signal send --stdin <recipient>             # message body from stdin
+go-signal send <recipient>... --edit <timestamp> -m <replacement> [--group <id>]
 go-signal receive [--timeout 5s] [--max N] [--follow] [--download-attachments <dir>] [--send-read-receipts]
 go-signal react <recipient>... --target <author>:<ts> --emoji 👍 [--remove] [--group <id>]
 go-signal delete <recipient>... --target <ts> [--group <id>]   # remote delete of our own message
@@ -413,6 +414,19 @@ which the log bridge demotes to debug. Open: messages carry no disappearing-mess
 same-timestamp sync transcripts across several chats well.
 
 #### 3.4 Send: rich content
+
+- [x] Edit sent messages with `send --edit <timestamp>` and MCP `send_message.editTimestamp`
+      (2026-09-29). Sends a Signal `EditMessage` to users, groups and self, with a fresh
+      timestamp and sync transcripts. Replacement text and rich content use the normal send
+      path; the original content is not loaded. Rejects zero explicit targets, future targets,
+      blank text and mixed reaction/delete edits. MCP allowlisting and confirmation also apply.
+      Unit tests cover envelopes, validation, routing, partial failures and permissions;
+      plain/JSON command goldens document the unchanged output shape.
+- [x] Edit transport acceptance: opt-in `TestIntegrationEdit` passed on cgo and pure Go
+      (2026-09-29), with self sync sends and peer delivery receipts for both the original and
+      edited messages in direct and group chats.
+- [ ] Verify edit rendering on the peer's phone separately from delivery receipts; media/quote
+      edits are not yet verified live.
 
 - [x] `--attach <file>` (repeatable): MIME sniffing, upload, size limit check (`app` reads the
       files before connecting: regular files up to `app.MaxAttachmentSize` = 100 MiB, the official

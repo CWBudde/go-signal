@@ -177,17 +177,18 @@ Setup:
   It must be discoverable by number. For `Profile/Peer`, message the test account from it once.
 - Optionally a group with the test account and the peer in it.
 
-| Variable                   | Meaning                                                           |
-| -------------------------- | ----------------------------------------------------------------- |
-| `GOSIGNAL_IT_DATA_DIR`     | data dir of the test account (the suite skips without it)         |
-| `GOSIGNAL_IT_ACCOUNT`      | the account in it, by number or ACI; empty selects the first      |
-| `GOSIGNAL_IT_PEER`         | the peer's number (required)                                      |
-| `GOSIGNAL_IT_GROUP`        | the test group's ID or master key (`go-signal groups list`)       |
-| `GOSIGNAL_IT_CREATE_GROUP` | `1` to create a reusable test group (one-time setup only)         |
-| `GOSIGNAL_IT_RENAME_GROUP` | `1` to rename the dedicated test group and restore its title      |
-| `GOSIGNAL_IT_LINK`         | `1` to run `TestIntegrationLink` too                              |
-| `GOSIGNAL_IT_TIMEOUT`      | how long to wait for the queue and delivery receipts (default 2m) |
-| `GOSIGNAL_IT_LOG`          | log level of the client (default `warn`)                          |
+| Variable                   | Meaning                                                             |
+| -------------------------- | ------------------------------------------------------------------- |
+| `GOSIGNAL_IT_DATA_DIR`     | data dir of the test account (the suite skips without it)           |
+| `GOSIGNAL_IT_ACCOUNT`      | the account in it, by number or ACI; empty selects the first        |
+| `GOSIGNAL_IT_PEER`         | the peer's number (required)                                        |
+| `GOSIGNAL_IT_GROUP`        | the test group's ID or master key (`go-signal groups list`)         |
+| `GOSIGNAL_IT_CREATE_GROUP` | `1` to create a reusable test group (one-time setup only)           |
+| `GOSIGNAL_IT_RENAME_GROUP` | `1` to rename the dedicated test group and restore its title        |
+| `GOSIGNAL_IT_EDIT`         | `1` to send and edit fresh self, direct and optional group messages |
+| `GOSIGNAL_IT_LINK`         | `1` to run `TestIntegrationLink` too                                |
+| `GOSIGNAL_IT_TIMEOUT`      | how long to wait for the queue and delivery receipts (default 2m)   |
+| `GOSIGNAL_IT_LOG`          | log level of the client (default `warn`)                            |
 
 `just test-integration` runs the suite with the cgo backend and then with `libsignal_go` on the
 same account, which also checks that each backend picks up the other's sessions. The peer gets
@@ -225,6 +226,12 @@ The test requires the two-member fixture above, checks the server's title and re
 that an unchanged title sends no update, and restores and verifies the original title in cleanup.
 Members receive two group updates. For cgo, use `CGO_ENABLED=1`, `-tags integration` and
 `CGO_LDFLAGS="-L $PWD/third_party/lib"`. This check is opt-in separately from ordinary group sends.
+
+`TestIntegrationEdit` is separately opt-in with `GOSIGNAL_IT_EDIT=1` and the same test account,
+peer and optional group settings. Run it with `-run '^TestIntegrationEdit$'` and either backend's
+integration tags. It sends an original text and one edit per chat, checks self sync sending,
+and waits for the peer's delivery receipts for the direct/group originals and edits. Receipts
+verify transport; inspect the peer's phone separately to confirm the corrected text renders.
 
 ## CI
 
