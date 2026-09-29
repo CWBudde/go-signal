@@ -116,6 +116,7 @@ func TestIntegrationCreateGroup(t *testing.T) { //nolint:paralleltest // creates
 	created, err := env.client.CreateGroup(t.Context(), signal.CreateGroupOptions{
 		Title: "go-signal integration test", Members: peers,
 	})
+
 	groupID := created.ID
 	if groupID != "" {
 		t.Logf("GOSIGNAL_IT_GROUP=%s (retain for both backends; inspect before retrying creation)", groupID)

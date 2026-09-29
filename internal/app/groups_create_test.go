@@ -124,11 +124,14 @@ func TestGroupsCreatePartialFailure(t *testing.T) {
 
 func TestGroupsCreateIsNotIdempotent(t *testing.T) {
 	t.Parallel()
+
 	use := open(t, directory())
+
 	first, err := use.GroupsCreate(t.Context(), app.CreateGroupRequest{Title: familyTitle})
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	second, err := use.GroupsCreate(t.Context(), app.CreateGroupRequest{Title: familyTitle})
 	if err != nil || second.ID == first.ID {
 		t.Errorf("second creation = %+v, %v", second, err)
