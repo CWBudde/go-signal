@@ -203,6 +203,13 @@ type Client interface { //nolint:interfacebloat // the one facade over signalmeo
 	// Connect, full membership and permission to edit attributes. An unchanged title is a
 	// no-op. The returned group includes the new revision; conflicts return ErrGroupChanged.
 	RenameGroup(ctx context.Context, ref, title string) (Group, error)
+	// AddGroupMembers adds ordinary members or invites them when profile credentials
+	// are unavailable. It needs Connect, full membership and permission to add members.
+	// Administrators can approve join requests. Existing members, invitations and
+	// duplicates are skipped; an unchanged group is returned without a mutation.
+	// Conflicts are not retried. The result is fetched from the server after the change;
+	// a fetch failure returns the accepted ID/revision with an error. Banned ACIs are rejected.
+	AddGroupMembers(ctx context.Context, ref string, members []Recipient) (Group, error)
 	// RemoveGroupMembers removes full members, invitations or join requests from ref.
 	// It requires a full administrator membership and nonempty resolved ACIs. Duplicates
 	// are ignored; self and absent targets fail before any change. Use LeaveGroup for self.

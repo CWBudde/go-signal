@@ -362,6 +362,8 @@ func convertGroup(raw *signalmeow.Group, ownACI string) Group {
 	group.Membership, group.Role = group.MembershipOf(ownACI)
 	group.MembersCanEditAttributes = raw.AccessControl != nil &&
 		raw.AccessControl.Attributes == signalmeow.AccessControl_MEMBER
+	group.MembersCanAddMembers = raw.AccessControl != nil &&
+		raw.AccessControl.Members == signalmeow.AccessControl_MEMBER
 
 	return group
 }

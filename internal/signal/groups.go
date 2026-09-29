@@ -113,7 +113,10 @@ type Group struct {
 	// MembersCanEditAttributes allows ordinary members to change the title and description.
 	// Otherwise only administrators can edit them.
 	MembersCanEditAttributes bool
-	Members                  []GroupMember
+	// MembersCanAddMembers allows ordinary members to add or invite users.
+	// Approving join requests always requires an administrator.
+	MembersCanAddMembers bool
+	Members              []GroupMember
 	// Pending are the invited users who haven't accepted yet. Users invited by phone number
 	// (PNI) are missing: signalmeow can't decrypt them.
 	Pending []PendingMember

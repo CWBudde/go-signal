@@ -79,3 +79,18 @@ func RemoveGroupMembersOnce(ctx context.Context, cli GroupRemovalSender,
 ) error {
 	return removeGroupMembersOnce(ctx, cli, raw, change, invalidate)
 }
+
+// AddMembersChange exposes the addition change builder.
+func AddMembersChange(raw *signalmeow.Group, self string, members []Recipient) (*signalmeow.GroupChange, error) {
+	return addMembersChange(raw, self, members)
+}
+
+// GroupAdditionSender is the transport used by AddGroupMembersOnce.
+type GroupAdditionSender = groupAdditionSender
+
+// AddGroupMembersOnce exposes the single-attempt addition and authoritative refetch.
+func AddGroupMembersOnce(ctx context.Context, cli GroupAdditionSender,
+	raw *signalmeow.Group, change *signalmeow.GroupChange, invalidate func(),
+) (*signalmeow.Group, error) {
+	return addGroupMembersOnce(ctx, cli, raw, change, invalidate)
+}

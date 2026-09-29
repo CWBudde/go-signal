@@ -231,6 +231,17 @@ are unavailable, but this fixture requires full membership for subsequent group-
 To check the invitation path manually, use a dedicated peer that has not shared its profile
 key, inspect the `pending` output, accept on its phone, then refresh with `groups show <id>`.
 
+To verify member addition manually, create a disposable self-only group on the test account
+with `groups create "Member addition test"`, then use its printed ID with
+`groups add-members <id> <peer>`. Check the returned revision and full or pending membership
+with `groups show <id>`. Repeat the addition and confirm the revision is unchanged. For an
+invitation, use a dedicated peer that has not shared its profile key, accept on its phone,
+then refresh the group. Check administrator approval with a disposable group's join request;
+ordinary members must not be able to approve it, even when they can invite new users.
+Repeat on both backends using separate disposable groups. Remove the peer with
+`groups remove-members <id> <peer>`, then leave the self-only group with `groups leave <id> --yes`.
+These mutations and phone checks remain opt-in; ordinary tests never contact Signal.
+
 To verify renaming, set `GOSIGNAL_IT_DATA_DIR`, `GOSIGNAL_IT_PEER` and `GOSIGNAL_IT_GROUP`, then run:
 
 ```sh
