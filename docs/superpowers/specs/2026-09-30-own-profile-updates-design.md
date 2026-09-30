@@ -2,7 +2,7 @@
 
 Date: 2026-09-30
 
-Status: written spec approved on 2026-09-30; implementation plan awaiting review.
+Status: written spec and implementation plan approved on 2026-09-30; implemented, with independent review and offline checks passing. Live verification remains open.
 
 ## Intent and scope
 

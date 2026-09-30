@@ -140,6 +140,27 @@ yourself. Success confirms the server update; member notification failures are l
 Invitations known only by phone-number identity (PNI), which the current backend cannot
 decrypt, cannot be removed with this command.
 
+Read or update the selected account's own profile:
+
+```sh
+go-signal profile show
+go-signal profile update --given-name "Alice Mary" --family-name "Smith"
+go-signal profile update --about=""   # clear about; preserve omitted fields
+go-signal --account +4915112345678 profile show -o json
+```
+
+Supply at least one update flag. `--about-emoji` sets the profile emoji. Omitted flags preserve
+their current values; explicitly empty values clear them. Limits count UTF-8 bytes: the combined
+name is at most 257 bytes, including one separator byte for a nonempty family name; about is
+512 bytes and the emoji is 32 bytes. Spaces are retained; NUL and invalid UTF-8 are rejected.
+
+Updates reuse your profile key and preserve the fetched avatar, payment address, phone-number
+sharing preference and badges. Avatar changes and profiles v2 are not supported. The v1 server
+API cannot protect against concurrent edits from your phone or another device. An unchanged
+profile sends no write. Each changed update attempts one write; if an error reports acceptance
+or an unknown outcome, inspect `profile show` before retrying. Errors leave stdout empty.
+See [the live-check procedure](docs/dev.md#own-profile-live-check) for phone and metadata checks.
+
 ### Staying linked
 
 Signal removes a linked device that hasn't connected for about 30 days. Run `go-signal receive`

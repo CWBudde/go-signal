@@ -126,6 +126,65 @@ what the store holds afterwards, including what earlier syncs and received messa
 | `missing`     | string[] | What didn't arrive: `storage key`, `storage service`, `contact list`; _optional_ |
 | `error`       | string   | Why the sync is incomplete; _optional_ (only when `complete` is `false`)         |
 
+## `profile show`
+
+```json
+{
+  "version": 1,
+  "profile": {
+    "aci": "11111111-1111-1111-1111-111111111111",
+    "givenName": "Alice Mary",
+    "familyName": "Smith",
+    "about": "",
+    "aboutEmoji": "",
+    "avatarPath": "profiles/example"
+  }
+}
+```
+
+This reads the selected account's fresh server profile. The text fields remain present when
+empty; `avatarPath` identifies the existing avatar and is not an image download.
+
+| Field        | Type   | Description                                   |
+| ------------ | ------ | --------------------------------------------- |
+| `aci`        | string | Selected account identity                     |
+| `givenName`  | string | Given name, preserving spaces                 |
+| `familyName` | string | Family name                                   |
+| `about`      | string | About text                                    |
+| `aboutEmoji` | string | Profile emoji                                 |
+| `avatarPath` | string | Server path of the current avatar; _optional_ |
+
+## `profile update`
+
+```json
+{
+  "version": 1,
+  "profile": {
+    "aci": "11111111-1111-1111-1111-111111111111",
+    "givenName": "Alice Mary",
+    "familyName": "Smith",
+    "about": "Hello",
+    "aboutEmoji": ""
+  },
+  "changed": true,
+  "accepted": true,
+  "verified": true
+}
+```
+
+`profile` has the same fields as `profile show`. Omitted update flags preserve text; explicit
+empty values clear it. Successful output contains the fetched, verified profile.
+
+| Field      | Type    | Description                                               |
+| ---------- | ------- | --------------------------------------------------------- |
+| `changed`  | boolean | A changed profile write was confirmed accepted            |
+| `accepted` | boolean | The server confirmed accepting the write                  |
+| `verified` | boolean | A fresh read confirmed the profile and preserved metadata |
+
+For an unchanged request, `changed` and `accepted` are `false`, and `verified` is `true`.
+Failures print no JSON, including failures after acceptance. Read stderr for acceptance or
+unknown-outcome guidance and inspect `profile show` before retrying.
+
 ## `contacts list`
 
 ```json

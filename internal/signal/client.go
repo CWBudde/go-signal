@@ -128,6 +128,16 @@ type Client interface { //nolint:interfacebloat // the one facade over signalmeo
 	// with ErrUnknownContact.
 	Contact(ctx context.Context, rcpt Recipient) (Contact, error)
 
+	// OwnProfile fetches the selected account's fresh server profile, preserving the exact
+	// given/family name split. It needs Connect; SendOnly is enough.
+	OwnProfile(ctx context.Context) (Profile, error)
+
+	// UpdateOwnProfile merges supplied text with a fresh server profile, preserving other
+	// fields. It needs Connect; SendOnly is enough. A no-op is verified without a write.
+	// The write is attempted at most once. An accepted follow-up failure returns the result
+	// alongside an error; an unverified accepted result contains only the account ACI.
+	UpdateOwnProfile(ctx context.Context, update ProfileUpdate) (ProfileUpdateResult, error)
+
 	// SetBlocked blocks (or unblocks) the recipients, which need their ACI (see Resolve;
 	// ErrUnresolvable otherwise). It reads the current blocked list (users and groups) from the
 	// storage service (ErrStorageKeyUnknown if its key is unknown), applies the change and sends

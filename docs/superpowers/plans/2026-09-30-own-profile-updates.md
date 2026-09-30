@@ -1,6 +1,6 @@
 # Own-profile Text Updates Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Add own-profile inspection and single-attempt v1 text updates that preserve omitted fields and report accepted follow-up failures accurately.
 
@@ -10,7 +10,7 @@
 
 **Spec:** [Approved design](../specs/2026-09-30-own-profile-updates-design.md).
 
-**Status:** Written spec approved; implementation plan awaiting review. Execution method: parallel subagents where independent, as requested by the user.
+**Status:** Implemented with independent reviews, `just check` and `just check-purego` passing. PR publication is pending; live verification remains open. Execution used parallel subagents where independent, as requested by the user.
 
 ## Global Constraints
 
@@ -73,7 +73,7 @@ defers their commits until the integrated backend builds and required lint passe
 - Fake fields: `Profiles map[string]signal.Profile`, `OwnProfileErr`, `UpdateProfileErr`, `ProfileFollowUpErr error`, `ProfileVerificationFails bool`.
 - Fake `ProfileUpdates() []ProfileUpdateCall`; each call records `ACI string`, a cloned `Update signal.ProfileUpdate`, and `Result signal.ProfileUpdateResult`. Record each attempted mutation, including failures, for retry assertions. Protect state with the existing mutex.
 
-- [ ] Write `TestProfileUpdateCheck` for empty requests, invalid UTF-8/NUL, about 512/513 bytes, emoji 32/33, given 257/258, family 256/257 and fully supplied combined-name overflow. Representative assertions:
+- [x] Write `TestProfileUpdateCheck` for empty requests, invalid UTF-8/NUL, about 512/513 bytes, emoji 32/33, given 257/258, family 256/257 and fully supplied combined-name overflow. Representative assertions:
 
 ```go
 value := strings.Repeat("a", 257)
@@ -86,11 +86,11 @@ if err := (signal.ProfileUpdate{About: &value}).Check(); err != nil {
 }
 ```
 
-- [ ] Write `TestProfileUpdateApply`: omitted family survives changing a multiword given name; empty about clears; ACI/avatar remain identical; unchanged text returns false; a fetched omitted component can overflow the merged name; family-only encoding includes its leading delimiter.
-- [ ] Write fake tests `TestProfileFakeAccountIsolation`, `TestProfileFakeNoOpAndFailures`, `TestProfileFakeLifecycle`, and `TestProfileFakeCallCopies`. Assert selected-account changes only, one recorded attempt, no state change on rejection, persisted update plus accepted error on follow-up failure, ACI-only unverified result, lock/closed/unlinked/cancelled behavior, and snapshot independence from caller pointer mutation.
-- [ ] Run `CGO_ENABLED=0 go test -count=1 -run 'TestProfile' ./internal/signal ./internal/signal/signaltest`; record the failing assertions or undefined API before implementation.
-- [ ] Implement the contract, shared validation/merge and fake methods. Follow existing fake connection/unlink helpers; check cancellation before mutation. A missing seeded profile returns `ErrInvalidProfile`; do not fabricate a remote profile from contact display text.
-- [ ] Rerun the scoped command until all tests pass. The controller reviews this shared API before handing its files to dependent tasks; no worker mutates them during the parallel phase.
+- [x] Write `TestProfileUpdateApply`: omitted family survives changing a multiword given name; empty about clears; ACI/avatar remain identical; unchanged text returns false; a fetched omitted component can overflow the merged name; family-only encoding includes its leading delimiter.
+- [x] Write fake tests `TestProfileFakeAccountIsolation`, `TestProfileFakeNoOpAndFailures`, `TestProfileFakeLifecycle`, and `TestProfileFakeCallCopies`. Assert selected-account changes only, one recorded attempt, no state change on rejection, persisted update plus accepted error on follow-up failure, ACI-only unverified result, lock/closed/unlinked/cancelled behavior, and snapshot independence from caller pointer mutation.
+- [x] Run `CGO_ENABLED=0 go test -count=1 -run 'TestProfile' ./internal/signal ./internal/signal/signaltest`; record the failing assertions or undefined API before implementation.
+- [x] Implement the contract, shared validation/merge and fake methods. Follow existing fake connection/unlink helpers; check cancellation before mutation. A missing seeded profile returns `ErrInvalidProfile`; do not fabricate a remote profile from contact display text.
+- [x] Rerun the scoped command until all tests pass. The controller reviews this shared API before handing its files to dependent tasks; no worker mutates them during the parallel phase.
 
 ### Task 2: Raw-profile crypto, one-attempt transport and real backend
 
@@ -112,14 +112,14 @@ per-client profile-update mutex. Backend implementation/adapters/tests use
 - Private `profileUpdateHooks` has `fetch func(context.Context) (rawOwnProfile, Profile, error)`, `checkKey func(context.Context) error`, `write func(context.Context, profileWriteRequest) (bool, error)`, `refresh func(context.Context) error`, `persist func(context.Context, Profile) error`, `notify func(context.Context) error`.
 - Private `updateOwnProfileOnce(ctx context.Context, ownACI string, key libsignalgo.ProfileKey, update ProfileUpdate, hooks profileUpdateHooks) (ProfileUpdateResult, error)` orchestrates the spec stages. Export aliases/wrappers only from `profile_export_test.go` for external tests.
 
-- [ ] Write `TestProfileCryptoRoundTripAndBoundaries` and `TestProfileCryptoInvalidCiphertext` using fixed test keys and independently decrypted values. Cover 53/54/257-byte names, 128/129/254/255/512-byte about, 32-byte emoji, multibyte UTF-8, family-only/multiword names, independent random nonces, tampering, truncation and invalid padded lengths. Assert ciphertext lengths include 28 bytes overhead and no data is returned on authentication failure.
-- [ ] Write `TestDecodeOwnProfilePreflight` and `TestPrepareOwnProfilePreservation`: missing/wrong-sized credential, wrong ACI, v2, missing/malformed capabilities, malformed JSON/base64, invalid/multiple delimiters and ciphertext sizes fail. Omitted name/about/emoji/payment/privacy stay byte-identical; avatar flags are true and the marshaled request has no `badgeIds`. Empty optional text clears; no-op does not encrypt or write.
-- [ ] Run `CGO_ENABLED=0 go test -tags libsignal_go -count=1 -run 'Test(ProfileCrypto|DecodeOwnProfile|PrepareOwnProfile)' ./internal/signal` and record the red result before implementation. Initial compilation can also fail because real facade methods are still absent.
-- [ ] Implement the crypto/wire functions. Never use flattened `types.Profile` to prepare a write. Their green run follows the real entry-point implementation below; do not add product stubs to make intermediate builds pass.
-- [ ] Write serial transport tests `TestProfileHTTPRequestOnce`, `TestProfileHTTPRequestAcceptance`, `TestProfileHTTPRequestLimits`, `TestProfileHTTPRequestRejectsRedirect`: check Basic auth/path/headers; one PUT on network/5xx errors; no second host/request on 301/302/307/308; 200 acceptance survives response-read error; GET success never marks acceptance; 1 MiB limit and trailing JSON refusal; 401/403/412 map correctly. Use existing `SetSignalTransport` and a copied HTTP client with redirect refusal, retaining transport/timeout.
-- [ ] Run `CGO_ENABLED=0 go test -tags libsignal_go -count=1 -run '^TestProfileHTTPRequest' ./internal/signal` and record the red result; missing real methods can still prevent compilation at this point.
-- [ ] Implement `profileHTTPRequest`. Do not call `web.SendHTTPRequest` or the websocket helper for the PUT. Its green run follows the real entry-point implementation below.
-- [ ] Write `TestUpdateOwnProfileOnce` with injected hooks. Count fetch/write/check/refresh/persist/notify calls. Cover initial fetch/check failures, post-read key changes on show/no-op, pre-write key change, no-op, rejected/uncertain PUT, accepted body error, verification read error/mismatch, independent cache/persistence failures, notification failure and cancellation. Core accepted-error assertions:
+- [x] Write `TestProfileCryptoRoundTripAndBoundaries` and `TestProfileCryptoInvalidCiphertext` using fixed test keys and independently decrypted values. Cover 53/54/257-byte names, 128/129/254/255/512-byte about, 32-byte emoji, multibyte UTF-8, family-only/multiword names, independent random nonces, tampering, truncation and invalid padded lengths. Assert ciphertext lengths include 28 bytes overhead and no data is returned on authentication failure.
+- [x] Write `TestDecodeOwnProfilePreflight` and `TestPrepareOwnProfilePreservation`: missing/wrong-sized credential, wrong ACI, v2, missing/malformed capabilities, malformed JSON/base64, invalid/multiple delimiters and ciphertext sizes fail. Omitted name/about/emoji/payment/privacy stay byte-identical; avatar flags are true and the marshaled request has no `badgeIds`. Empty optional text clears; no-op does not encrypt or write.
+- [x] Run `CGO_ENABLED=0 go test -tags libsignal_go -count=1 -run 'Test(ProfileCrypto|DecodeOwnProfile|PrepareOwnProfile)' ./internal/signal` and record the red result before implementation. Initial compilation can also fail because real facade methods are still absent.
+- [x] Implement the crypto/wire functions. Never use flattened `types.Profile` to prepare a write. Their green run follows the real entry-point implementation below; do not add product stubs to make intermediate builds pass.
+- [x] Write serial transport tests `TestProfileHTTPRequestOnce`, `TestProfileHTTPRequestAcceptance`, `TestProfileHTTPRequestLimits`, `TestProfileHTTPRequestRejectsRedirect`: check Basic auth/path/headers; one PUT on network/5xx errors; no second host/request on 301/302/307/308; 200 acceptance survives response-read error; GET success never marks acceptance; 1 MiB limit and trailing JSON refusal; 401/403/412 map correctly. Use existing `SetSignalTransport` and a copied HTTP client with redirect refusal, retaining transport/timeout.
+- [x] Run `CGO_ENABLED=0 go test -tags libsignal_go -count=1 -run '^TestProfileHTTPRequest' ./internal/signal` and record the red result; missing real methods can still prevent compilation at this point.
+- [x] Implement `profileHTTPRequest`. Do not call `web.SendHTTPRequest` or the websocket helper for the PUT. Its green run follows the real entry-point implementation below.
+- [x] Write `TestUpdateOwnProfileOnce` with injected hooks. Count fetch/write/check/refresh/persist/notify calls. Cover initial fetch/check failures, post-read key changes on show/no-op, pre-write key change, no-op, rejected/uncertain PUT, accepted body error, verification read error/mismatch, independent cache/persistence failures, notification failure and cancellation. Core accepted-error assertions:
 
 ```go
 if !result.Accepted || !result.Changed || result.Verified || result.Profile.ACI != ownACI || result.Profile.GivenName != "" {
@@ -130,11 +130,11 @@ if writes != 1 || notifications != 1 || !errors.Is(err, io.ErrUnexpectedEOF) {
 }
 ```
 
-- [ ] Write `TestOwnProfileFreshnessAndLifecycle`, `TestProfilePersistencePreservesRecipient`, and `TestProfileSyncFailureWithoutCause`. Use narrow test adapters/seeded SQLite to prove raw reads bypass stale display caches, stored unrelated contact data survives, rejected PUT 403 does not record unlink, PUT 401 does, and missing self-sync cause becomes an explicit error. The fake offline connection needs a signalmeow client initialized from the seeded device; do not dereference the nil client left by `ConnectOffline`.
-- [ ] Run `CGO_ENABLED=0 go test -tags libsignal_go -count=1 -run 'Test(Profile|DecodeOwnProfile|PrepareOwnProfile|UpdateOwnProfile|OwnProfile)' ./internal/signal` and record the red result before implementing orchestration.
-- [ ] Implement `updateOwnProfileOnce` and the two real facade methods. Derive the version from the key without double hex encoding; obtain the credential request through the backend helper and recheck the captured key after preparation/read and before submission. Refresh uses `RetrieveProfileByID(ctx,self,0)`; persist verified raw text even if refresh fails; notification is attempted after every confirmed acceptance, with all errors retained.
-- [ ] Rerun `CGO_ENABLED=0 go test -tags libsignal_go -count=1 -run 'Test(Profile|DecodeOwnProfile|PrepareOwnProfile|UpdateOwnProfile|OwnProfile)' ./internal/signal` until all crypto, wire, transport, orchestration and lifecycle tests pass without stubs.
-- [ ] Run `CGO_LDFLAGS="-L $PWD/third_party/lib" go test -race -count=1 -run 'Test(Profile|DecodeOwnProfile|PrepareOwnProfile|UpdateOwnProfile|OwnProfile)' ./internal/signal`. Return changed files, both backend commands/output, red-green evidence and any remaining criteria. The controller reviews the complete backend before accepting this task.
+- [x] Write `TestOwnProfileFreshnessAndLifecycle`, `TestProfilePersistencePreservesRecipient`, and `TestProfileSyncFailureWithoutCause`. Use narrow test adapters/seeded SQLite to prove raw reads bypass stale display caches, stored unrelated contact data survives, rejected PUT 403 does not record unlink, PUT 401 does, and missing self-sync cause becomes an explicit error. The fake offline connection needs a signalmeow client initialized from the seeded device; do not dereference the nil client left by `ConnectOffline`.
+- [x] Run `CGO_ENABLED=0 go test -tags libsignal_go -count=1 -run 'Test(Profile|DecodeOwnProfile|PrepareOwnProfile|UpdateOwnProfile|OwnProfile)' ./internal/signal` and record the red result before implementing orchestration.
+- [x] Implement `updateOwnProfileOnce` and the two real facade methods. Derive the version from the key without double hex encoding; obtain the credential request through the backend helper and recheck the captured key after preparation/read and before submission. Refresh uses `RetrieveProfileByID(ctx,self,0)`; persist verified raw text even if refresh fails; notification is attempted after every confirmed acceptance, with all errors retained.
+- [x] Rerun `CGO_ENABLED=0 go test -tags libsignal_go -count=1 -run 'Test(Profile|DecodeOwnProfile|PrepareOwnProfile|UpdateOwnProfile|OwnProfile)' ./internal/signal` until all crypto, wire, transport, orchestration and lifecycle tests pass without stubs.
+- [x] Run `CGO_LDFLAGS="-L $PWD/third_party/lib" go test -race -count=1 -run 'Test(Profile|DecodeOwnProfile|PrepareOwnProfile|UpdateOwnProfile|OwnProfile)' ./internal/signal`. Return changed files, both backend commands/output, red-green evidence and any remaining criteria. The controller reviews the complete backend before accepting this task.
 
 ### Task 3: Typed application use cases
 
@@ -145,7 +145,7 @@ Produces `(a *App) ProfileShow(ctx context.Context) (signal.Profile, error)` and
 `(a *App) ProfileUpdate(ctx context.Context, update signal.ProfileUpdate) (signal.ProfileUpdateResult, error)`.
 No Cobra, printing or backend types.
 
-- [ ] Write `TestProfileShow`, `TestProfileUpdate`, `TestProfileUpdateInvalidBeforeConnect`, `TestProfileUpdateAcceptedError`, `TestProfileUseExistingConnection`, and `TestProfileAccountSelection`. Use the frozen fake. Assert exactly one mutation attempt, merged omitted/empty values, accepted result retained on wrapped follow-up errors, no connect on invalid input, reuse of connected clients and only the selected account modified.
+- [x] Write `TestProfileShow`, `TestProfileUpdate`, `TestProfileUpdateInvalidBeforeConnect`, `TestProfileUpdateAcceptedError`, `TestProfileUseExistingConnection`, and `TestProfileAccountSelection`. Use the frozen fake. Assert exactly one mutation attempt, merged omitted/empty values, accepted result retained on wrapped follow-up errors, no connect on invalid input, reuse of connected clients and only the selected account modified.
 
 ```go
 out, err := use.ProfileUpdate(t.Context(), signal.ProfileUpdate{About: &about})
@@ -154,9 +154,9 @@ if !errors.Is(err, followUpErr) || !out.Accepted || !out.Verified || len(fake.Pr
 }
 ```
 
-- [ ] Run `CGO_ENABLED=0 go test -count=1 -run '^TestProfile' ./internal/app` red.
-- [ ] Implement the exact two app methods: validate update before connecting, use `connectSendOnly`, delegate once, return partial accepted results and wrap the error with command context.
-- [ ] Rerun the scoped backend-free tests green. When Task 2 is ready, the controller reruns app tests with cgo/race and pure-Go tags and reviews the diff. Return files, red-green commands and test output; no shared/fake/plan edits.
+- [x] Run `CGO_ENABLED=0 go test -count=1 -run '^TestProfile' ./internal/app` red.
+- [x] Implement the exact two app methods: validate update before connecting, use `connectSendOnly`, delegate once, return partial accepted results and wrap the error with command context.
+- [x] Rerun the scoped backend-free tests green. When Task 2 is ready, the controller reruns app tests with cgo/race and pure-Go tags and reviews the diff. Return files, red-green commands and test output; no shared/fake/plan edits.
 
 ### Task 4: CLI and plain/JSON rendering
 
@@ -176,7 +176,7 @@ if !errors.Is(err, followUpErr) || !out.Accepted || !out.Verified || len(fake.Pr
 `output.ProfileJSON` with `aci`, `givenName`, `familyName`, `about`,
 `aboutEmoji`, optional `avatarPath`. Root wires the parent command once.
 
-- [ ] Write `TestProfileCommandsGolden`, `TestProfileClearAndOmittedFlags`, `TestProfileCommandValidationBeforeOpen`, `TestProfileCommandFailures`, `TestProfileCommandTree` and output tests `TestProfileRenderingEscapesControls`, `TestProfileJSONEmptyTextFields`. Cover all planned goldens, no positional args, no-flags update, combined-name byte overflow, family-only/multiword names, invalid UTF-8/NUL, unknown flag, unchanged update, account flags and empty stdout on all errors.
+- [x] Write `TestProfileCommandsGolden`, `TestProfileClearAndOmittedFlags`, `TestProfileCommandValidationBeforeOpen`, `TestProfileCommandFailures`, `TestProfileCommandTree` and output tests `TestProfileRenderingEscapesControls`, `TestProfileJSONEmptyTextFields`. Cover all planned goldens, no positional args, no-flags update, combined-name byte overflow, family-only/multiword names, invalid UTF-8/NUL, unknown flag, unchanged update, account flags and empty stdout on all errors.
 
 ```go
 out, err := run(t, fake, "profile", "update", "--about=")
@@ -185,10 +185,10 @@ if err != nil || fake.Profiles[ownACI].About != "" || fake.Profiles[ownACI].Fami
 }
 ```
 
-- [ ] Run `CGO_ENABLED=0 go test -count=1 -run '^TestProfile' ./cmd ./internal/output` red.
-- [ ] Implement constructors and printers. Use `Flags().Changed()` to build pointer updates and `Check()` before opening an account. JSON envelopes are `{version,profile}` and `{version,profile,changed,accepted,verified}`; empty text fields remain present and schema version stays 1. Plain text quotes user-controlled values with `strconv.Quote` to prevent control-character injection. Return app errors before printing, including accepted and uncertain errors.
-- [ ] Generate only the named profile goldens with `UPDATE_GOLDEN=1 CGO_ENABLED=0 go test -count=1 -run '^TestProfile' ./cmd`; inspect each fixture, then rerun without the environment variable. Do not rewrite unrelated fixtures.
-- [ ] Return changed files and test evidence. The controller reviews app/CLI/output integration and runs affected suites on both backends after the real implementation is ready.
+- [x] Run `CGO_ENABLED=0 go test -count=1 -run '^TestProfile' ./cmd ./internal/output` red.
+- [x] Implement constructors and printers. Use `Flags().Changed()` to build pointer updates and `Check()` before opening an account. JSON envelopes are `{version,profile}` and `{version,profile,changed,accepted,verified}`; empty text fields remain present and schema version stays 1. Plain text quotes user-controlled values with `strconv.Quote` to prevent control-character injection. Return app errors before printing, including accepted and uncertain errors.
+- [x] Generate only the named profile goldens with `UPDATE_GOLDEN=1 CGO_ENABLED=0 go test -count=1 -run '^TestProfile' ./cmd`; inspect each fixture, then rerun without the environment variable. Do not rewrite unrelated fixtures.
+- [x] Return changed files and test evidence. The controller reviews app/CLI/output integration and runs affected suites on both backends after the real implementation is ready.
 
 ### Task 5: Documentation, roadmap and live-check procedure
 
@@ -198,11 +198,11 @@ plan's progress checkboxes. Update the spec status only to reflect actual approv
 **Interfaces:** Documents the implemented public commands/output; no new code or
 integration environment is created. Depends on confirmed behavior from Tasks 2–4.
 
-- [ ] Add README examples for show, setting given/family names and clearing about. Explain byte limits, omission semantics, account selection, avatar preservation, v1/v2 limit, concurrent edits and inspect-before-retry errors.
-- [ ] Document both JSON envelopes and fields, including `changed`, `accepted`, `verified`, explicit empty text and no output on failure. Keep schema version 1.
-- [ ] Add a separately enabled manual live-check procedure in `docs/dev.md`: dedicated disposable linked account, both backends, capture original profile/text/metadata, verify update and phone refresh, verify avatar/payment/privacy/badges, restore original text and verify restoration. Require explicit opt-in; do not run mutations here because credentials are absent. Explain the backend's incoming LOCAL_PROFILE/storage/cache limitations.
-- [ ] Re-read the live roadmap. Close implementation, offline tests and documentation only after controller verification, with a distinct unchecked live-verification child. Retain all earlier pending group live checks. Do not close the “Group management and profile updates” heading or unrelated Later items.
-- [ ] Run `just fmt` and `git diff --check`; inspect docs against command help and the inspected goldens. Update planning records once after final verified behavior is known.
+- [x] Add README examples for show, setting given/family names and clearing about. Explain byte limits, omission semantics, account selection, avatar preservation, v1/v2 limit, concurrent edits and inspect-before-retry errors.
+- [x] Document both JSON envelopes and fields, including `changed`, `accepted`, `verified`, explicit empty text and no output on failure. Keep schema version 1.
+- [x] Add a separately enabled manual live-check procedure in `docs/dev.md`: dedicated disposable linked account, both backends, capture original profile/text/metadata, verify update and phone refresh, verify avatar/payment/privacy/badges, restore original text and verify restoration. Require explicit opt-in; do not run mutations here because credentials are absent. Explain the backend's incoming LOCAL_PROFILE/storage/cache limitations.
+- [x] Re-read the live roadmap. Close implementation, offline tests and documentation only after controller verification, with a distinct unchecked live-verification child. Retain all earlier pending group live checks. Do not close the “Group management and profile updates” heading or unrelated Later items.
+- [x] Run `just fmt` and `git diff --check`; inspect docs against command help and the inspected goldens. Update planning records once after final verified behavior is known.
 
 ### Task 6: Integrated verification, independent review and PR
 
@@ -212,9 +212,9 @@ pins or database schema.
 **Interfaces:** Consumes the complete implemented CLI; produces verified commits
 and a PR targeting `main`, without merging.
 
-- [ ] Inspect `git status --short`, every changed path and complete diff; reconcile worker reports against allowed ownership and the spec. Run affected tests locally on both backends, including serial transport failure paths.
-- [ ] Run `just fmt`, then `just lint`. Request fresh code review for spec compliance, accepted/uncertain outcomes, encrypted preservation, mutation retries, key checks, lifecycle and test coverage. Resume each owner for fixes; controller resolves shared-file changes and records rulings in the execution ledger.
-- [ ] Run fresh `just check` and `just check-purego`. Use `bin/check-tmp` for both `TMPDIR` and `GOTMPDIR` when the default temp filesystem is too small. Inspect exit codes and output. Do not ship failing checks or mark live acceptance passed based on offline tests.
-- [ ] Mark completed plan tasks and roadmap items using controller evidence. If review/fixes changed code, rerun affected checks and full checks before claiming success.
+- [x] Inspect `git status --short`, every changed path and complete diff; reconcile worker reports against allowed ownership and the spec. Run affected tests locally on both backends, including serial transport failure paths.
+- [x] Run `just fmt`, then `just lint`. Request fresh code review for spec compliance, accepted/uncertain outcomes, encrypted preservation, mutation retries, key checks, lifecycle and test coverage. Resume each owner for fixes; controller resolves shared-file changes and records rulings in the execution ledger.
+- [x] Run fresh `just check` and `just check-purego`. Use `bin/check-tmp` for both `TMPDIR` and `GOTMPDIR` when the default temp filesystem is too small. Inspect exit codes and output. Do not ship failing checks or mark live acceptance passed based on offline tests.
+- [x] Mark completed plan tasks and roadmap items using controller evidence. If review/fixes changed code, rerun affected checks and full checks before claiming success.
 - [ ] Stage only task-owned files and make conventional logical commits once the repository's formatting/lint requirements pass. Preserve the existing design commit. Inspect branch history and any existing PR; push normally and create/update the PR to main using a temporary body file.
 - [ ] Verify PR URL/base/head/status, remove task-owned temporary files, and report delivered commands, passed checks, v1 concurrency/v2 limits and pending live verification. Do not merge or push directly to main.

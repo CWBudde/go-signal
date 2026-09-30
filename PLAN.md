@@ -1800,13 +1800,24 @@ These remain optional/on demand. Checked foundations do not imply the user-facin
   - [x] Rename a group and update its cached title (`groups rename <group> <title>`,
         2026-09-29). Fetches current membership and edit permissions, rejects blank/invalid
         titles, skips unchanged titles and reports revision conflicts for a retry.
-  - [ ] Define and implement own-profile updates.
-        Approved initial scope (2026-09-30): own-profile show and v1 text updates,
-        preserving omitted text, avatar, payment, privacy and badges. V1 cannot
-        prevent concurrent edits by another device; v2 and avatar upload are deferred.
+  - [x] Define and implement own-profile text updates (`profile show`, `profile update`,
+        2026-09-30). Omitted text is preserved; explicit empty flags clear fields.
+        Fresh authenticated current-version reads preserve the name split and encrypted
+        payment/privacy fields, avatar and badges. One HTTP write is attempted, with
+        verification and independent local-state/device-notification follow-up errors.
+        Accepted and uncertain errors request inspection before retrying. V1 cannot
+        prevent concurrent edits by another device; v2, avatar changes and remote
+        storage writing are deferred.
         [Written design](docs/superpowers/specs/2026-09-30-own-profile-updates-design.md)
-        was approved; the [implementation plan](docs/superpowers/plans/2026-09-30-own-profile-updates.md)
-        is awaiting review. Implementation and live verification remain open.
+        and [implementation plan](docs/superpowers/plans/2026-09-30-own-profile-updates.md)
+        are approved and implemented.
+  - [x] Profile: crypto/byte-limit/preflight/preservation tests, backend HTTP and accepted
+        failure-path tests, cancellation/lifecycle regressions, account-aware fake/use-case
+        tests, plain/JSON command goldens and documentation. Independent review, `just check`
+        and `just check-purego` passed; fixture cleanup isolates a disclosed pre-existing
+        websocket shutdown race in the pinned dependency, without fixing production code.
+  - [ ] Profile: verify text mutations, omitted/empty fields, no-op, avatar/payment/privacy/
+        badges, phone refresh and restoration live on both backends with a disposable account.
   - [x] Rename: facade/use-case tests, plain/JSON command goldens and documentation. Opt-in
         `TestIntegrationRenameGroup` passed on cgo and pure Go (2026-09-29): server title and
         revision, unchanged-title no-op and cached title checked; original title restored and

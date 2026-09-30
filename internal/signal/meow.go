@@ -103,6 +103,9 @@ type meowClient struct {
 	uploadsMu sync.Mutex
 	uploads   map[string]*signalpb.AttachmentPointer
 
+	// profileMu serializes own-profile reads and updates with cancellable waiting.
+	profileMu profileMutex
+
 	// overridesMu serializes changes to the block overrides (see SetBlocked).
 	overridesMu sync.Mutex
 
