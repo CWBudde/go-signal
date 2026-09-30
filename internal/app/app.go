@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/cwbudde/go-signal/internal/signal"
@@ -16,6 +17,9 @@ import (
 type App struct {
 	client signal.Client
 	now    func() time.Time
+	// Outgoing timestamps identify messages; separate sends must not reuse one.
+	timestampMu   sync.Mutex
+	lastTimestamp uint64
 	// allow restricts the chats that Send, React and Delete go to; nil doesn't restrict.
 	allow *Allowlist
 }

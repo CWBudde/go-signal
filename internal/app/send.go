@@ -164,7 +164,7 @@ func (a *App) sendContent(
 	}
 
 	res := SendResult{
-		Timestamp: uint64(a.now().UnixMilli()), //nolint:gosec // the clock is after 1970
+		Timestamp: a.nextTimestamp(),
 		Results:   make([]TargetResult, len(targets)),
 	}
 
@@ -176,6 +176,17 @@ func (a *App) sendContent(
 	a.sendToGroups(ctx, msg, &res)
 
 	return res, res.err(action)
+}
+
+// nextTimestamp keeps message identities unique within this App, including during clock rollback.
+func (a *App) nextTimestamp() uint64 {
+	a.timestampMu.Lock()
+	defer a.timestampMu.Unlock()
+
+	now := uint64(a.now().UnixMilli()) //nolint:gosec // the clock is after 1970
+	a.lastTimestamp = max(now, a.lastTimestamp+1)
+
+	return a.lastTimestamp
 }
 
 // prepare checks req without connecting and reads its attachments. An empty body is fine with
