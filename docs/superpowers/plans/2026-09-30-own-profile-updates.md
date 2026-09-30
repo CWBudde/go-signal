@@ -10,7 +10,7 @@
 
 **Spec:** [Approved design](../specs/2026-09-30-own-profile-updates-design.md).
 
-**Status:** Implemented with independent reviews, `just check` and `just check-purego` passing. PR publication is pending; live verification remains open. Execution used parallel subagents where independent, as requested by the user.
+**Status:** Implemented with independent reviews, `just check` and `just check-purego` passing. Published as [PR #9](https://github.com/CWBudde/go-signal/pull/9) targeting `main`; live verification remains open. Execution used parallel subagents where independent, as requested by the user.
 
 ## Global Constraints
 
@@ -216,5 +216,5 @@ and a PR targeting `main`, without merging.
 - [x] Run `just fmt`, then `just lint`. Request fresh code review for spec compliance, accepted/uncertain outcomes, encrypted preservation, mutation retries, key checks, lifecycle and test coverage. Resume each owner for fixes; controller resolves shared-file changes and records rulings in the execution ledger.
 - [x] Run fresh `just check` and `just check-purego`. Use `bin/check-tmp` for both `TMPDIR` and `GOTMPDIR` when the default temp filesystem is too small. Inspect exit codes and output. Do not ship failing checks or mark live acceptance passed based on offline tests.
 - [x] Mark completed plan tasks and roadmap items using controller evidence. If review/fixes changed code, rerun affected checks and full checks before claiming success.
-- [ ] Stage only task-owned files and make conventional logical commits once the repository's formatting/lint requirements pass. Preserve the existing design commit. Inspect branch history and any existing PR; push normally and create/update the PR to main using a temporary body file.
-- [ ] Verify PR URL/base/head/status, remove task-owned temporary files, and report delivered commands, passed checks, v1 concurrency/v2 limits and pending live verification. Do not merge or push directly to main.
+- [x] Stage only task-owned files and make conventional logical commits once the repository's formatting/lint requirements pass. Preserve the existing design commit. Inspect branch history and any existing PR; push normally and create/update the PR to main using a temporary body file.
+- [x] Verify PR URL/base/head/status, remove task-owned temporary files, and report delivered commands, passed checks, v1 concurrency/v2 limits and pending live verification. Do not merge or push directly to main.
