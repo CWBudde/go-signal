@@ -87,6 +87,18 @@ type Fake struct {
 	// ContactsErr makes Contacts and Contact fail; SetBlockedErr makes SetBlocked fail.
 	ContactsErr   error
 	SetBlockedErr error
+	// Profiles are own server profiles by account ACI; missing entries fail with ErrInvalidProfile.
+	Profiles map[string]signal.Profile
+	// OwnProfileErr makes profile reads (including update preflight) fail.
+	OwnProfileErr error
+	// UpdateProfileErr makes a changed update fail before acceptance, without changing state.
+	UpdateProfileErr error
+	// ProfileFollowUpErr fails a follow-up after acceptance. The result stays verified unless
+	// ProfileVerificationFails is set, in which case only its ACI is returned.
+	ProfileFollowUpErr error
+	// ProfileVerificationFails simulates accepted writes whose raw read cannot be verified.
+	// Without ProfileFollowUpErr, the error is ErrProfileVerification.
+	ProfileVerificationFails bool
 	// ResolveHangs makes Resolve wait until its context ends, like a lookup that stalls.
 	ResolveHangs bool
 
@@ -127,22 +139,23 @@ type Fake struct {
 	// InboxErr makes the inbox methods fail. The inbox itself is kept in memory (see Inbox).
 	InboxErr error
 
-	mu        sync.Mutex
-	opened    []signal.Options
-	sent      []signal.SendRequest
-	uploaded  []signal.OutgoingAttachment
-	connects  []string
-	unlinks   []UnlinkCall
-	receipts  []ReceiptCall
-	syncs     []string
-	delivered int
-	nextTS    uint64
-	clients   []*client
-	blocks    []BlockCall
-	leaves    []LeaveCall
-	left      map[string]time.Time // groups left with LeaveGroup, by ID
-	inbox     []signal.InboxEntry
-	inboxID   int64
+	mu             sync.Mutex
+	opened         []signal.Options
+	sent           []signal.SendRequest
+	uploaded       []signal.OutgoingAttachment
+	connects       []string
+	unlinks        []UnlinkCall
+	receipts       []ReceiptCall
+	syncs          []string
+	delivered      int
+	nextTS         uint64
+	clients        []*client
+	blocks         []BlockCall
+	profileUpdates []ProfileUpdateCall
+	leaves         []LeaveCall
+	left           map[string]time.Time // groups left with LeaveGroup, by ID
+	inbox          []signal.InboxEntry
+	inboxID        int64
 }
 
 // Factory is a signal.Factory that opens clients on f.

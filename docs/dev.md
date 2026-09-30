@@ -260,6 +260,48 @@ integration tags. It sends an original text and one edit per chat, checks self s
 and waits for the peer's delivery receipts for the direct/group originals and edits. Receipts
 verify transport; inspect the peer's phone separately to confirm the corrected text renders.
 
+### Own-profile live check
+
+Profile mutation checks are manual and separately opt-in. Use a dedicated disposable account
+linked to go-signal, with its phone online. Ordinary tests use encrypted fixtures and never
+change a live profile. Do not use a personal or production account for this procedure.
+
+1. Build the pure-Go backend with `just build`; after completing its checks and restoration,
+   rebuild with `just build-cgo` for the second run. Both write `bin/go-signal`. Use explicit
+   `--data-dir` and `--account` flags for the disposable account; keep other clients from
+   editing the profile during the check.
+2. Save `profile show -o json` before changing anything. Also record the avatar, payment
+   address, phone-number-sharing preference and badge visibility/order from the phone.
+   These values are preserved internally but are not all exposed by `profile show`.
+3. Set a multiword given name and family name, then set about text and an emoji. Check a
+   fresh `profile show` and the phone's profile screen. Repeat the same update and confirm
+   the result says `Profile unchanged` (`changed:false`, `accepted:false` in JSON).
+4. Clear about with `--about=""`, then test a family-only name with `--given-name=""`.
+   Confirm omitted fields stay unchanged, and check avatar, payment, privacy and badges on
+   the phone. Wait for the other devices to refresh their profiles.
+5. Restore all four original text fields using explicit flags, including empty values.
+   Verify restoration with a fresh server read and on the phone. Complete restoration
+   before testing the second backend; repeat the same checks and restoration with it.
+
+If an update reports acceptance or an unknown outcome, inspect `profile show` and the phone
+before deciding whether another write is needed. A profiles-v2 account is refused; do not
+try to work around that refusal. V1 has no conditional write to prevent concurrent edits.
+
+After an accepted update, go-signal verifies a fresh raw server profile, refreshes signalmeow's
+cache, persists verified local display data and sends other devices a `LOCAL_PROFILE` notice.
+The pinned backend does not process incoming `LOCAL_PROFILE` notices and this feature does
+not write remote storage records. Later storage syncs may therefore show older display text
+elsewhere. A failed cache refresh can also leave signalmeow's cache stale; `profile show`
+bypasses it. Canceling a blocked refresh reconnects the anonymous websocket; canceling a
+blocked self-notification reconnects the authenticated websocket. These reconnects can
+briefly interrupt other requests on the same client. The facade limits its own
+HTTP responses to 1 MiB; the dependency's forced-cache reader has no equivalent bound.
+
+The real websocket cache fixture synchronizes its cleanup to avoid a known race in the pinned
+dependency: `connectLoop` clears a captured request channel while the handler can still read
+it. This fixture ordering leaves production dependency code unchanged; passing race tests
+do not establish that the dependency's ordinary websocket shutdown is free of that race.
+
 ## CI
 
 `.github/workflows/tests.yaml` runs these jobs:
