@@ -10,10 +10,15 @@ import (
 // it needs (ErrInvalidContent), and a reaction's target author has an ACI (ErrUnresolvable). It
 // An edit needs replacement text and a timestamp newer than its target (ErrInvalidContent).
 // Poll operations are standalone, require one canonical group ID and validate their typed payload
-// (ErrInvalidPoll). It doesn't check recipients, attachments, the quote or mentions.
+// (ErrInvalidPoll). Pin and unpin operations are standalone (ErrInvalidPin).
+// It doesn't check recipients, attachments, the quote or mentions.
 func (req SendRequest) Check() error {
 	if (req.GroupID == "") == (len(req.Recipients) == 0) {
 		return ErrInvalidSendRequest
+	}
+
+	if req.hasPin() {
+		return req.checkPin()
 	}
 
 	if req.hasPoll() {

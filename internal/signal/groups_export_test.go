@@ -94,3 +94,23 @@ func AddGroupMembersOnce(ctx context.Context, cli GroupAdditionSender,
 ) (*signalmeow.Group, error) {
 	return addGroupMembersOnce(ctx, cli, raw, change, invalidate)
 }
+
+// InstallGroupClient gives an offline client a real signalmeow client for group retrieval.
+// Restore it before closing the offline client, which has no receive loops to stop.
+func InstallGroupClient(client Client, cli *signalmeow.Client) func() {
+	meow, ok := client.(*meowClient)
+	if !ok {
+		panic("InstallGroupClient: not a signalmeow-backed client")
+	}
+
+	meow.cliMu.Lock()
+	previous := meow.cli
+	meow.cli = cli
+	meow.cliMu.Unlock()
+
+	return func() {
+		meow.cliMu.Lock()
+		meow.cli = previous
+		meow.cliMu.Unlock()
+	}
+}

@@ -18,6 +18,16 @@ func clonePoll(p *signal.Poll) *signal.Poll {
 }
 
 func clonePollRequest(req signal.SendRequest) signal.SendRequest {
+	if req.Pin != nil {
+		pin := *req.Pin
+		req.Pin = &pin
+	}
+
+	if req.Unpin != nil {
+		unpin := *req.Unpin
+		req.Unpin = &unpin
+	}
+
 	req.PollCreate = clonePoll(req.PollCreate)
 	if req.PollVote != nil {
 		vote := *req.PollVote
@@ -35,6 +45,12 @@ func clonePollRequest(req signal.SendRequest) signal.SendRequest {
 
 func clonePollEntry(entry signal.InboxEntry) signal.InboxEntry {
 	switch evt := entry.Event.(type) {
+	case *signal.Pin:
+		pin := *evt
+		entry.Event = &pin
+	case *signal.Unpin:
+		unpin := *evt
+		entry.Event = &unpin
 	case *signal.Message:
 		if evt.Poll == nil {
 			return entry

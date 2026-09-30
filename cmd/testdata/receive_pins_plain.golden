@@ -1,0 +1,3 @@
+[2026-09-20 12:30:02 UTC] aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa → group:Z3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXA=: [pin aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa:1789907401000; 86400 seconds]
+[2026-09-20 12:30:03 UTC] me → group:Z3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXA=: [pin aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa:1789907401001; forever]
+[2026-09-20 12:30:04 UTC] aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa → group:Z3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXA=: [unpin aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa:1789907401000]

@@ -81,6 +81,8 @@ type storedFailure struct {
 
 // Stored event types.
 const (
+	storedPin               = "pin"
+	storedUnpin             = "unpin"
 	storedMessage           = "message"
 	storedEdit              = "edit"
 	storedDelete            = "delete"
@@ -106,6 +108,10 @@ func marshalEvent(evt Event, chat Chat) ([]byte, error) {
 	)
 
 	switch evt := evt.(type) {
+	case *Pin:
+		typ = storedPin
+	case *Unpin:
+		typ = storedUnpin
 	case *PollVote:
 		typ = "pollVote"
 	case *PollClose:
@@ -167,7 +173,7 @@ func unmarshalEvent(data []byte) (Event, Chat) {
 	return evt, stored.Chat
 }
 
-//nolint:cyclop // one case per event type
+//nolint:cyclop,funlen // one case per event type
 func decodeEvent(stored storedEvent) (Event, error) {
 	var (
 		evt Event
@@ -175,6 +181,10 @@ func decodeEvent(stored storedEvent) (Event, error) {
 	)
 
 	switch stored.Type {
+	case storedPin:
+		evt = &Pin{}
+	case storedUnpin:
+		evt = &Unpin{}
 	case "pollVote":
 		evt = &PollVote{}
 	case "pollClose":

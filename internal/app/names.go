@@ -232,6 +232,10 @@ func EventRecipients(evt signal.Event) []signal.Recipient {
 		return envelope(evt.Envelope, evt.TargetAuthor)
 	case *signal.PollClose:
 		return envelope(evt.Envelope)
+	case *signal.Pin:
+		return envelope(evt.Envelope, evt.TargetAuthor)
+	case *signal.Unpin:
+		return envelope(evt.Envelope, evt.TargetAuthor)
 	case *signal.Edit:
 		return envelope(evt.Envelope)
 	case *signal.Delete:

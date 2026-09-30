@@ -192,7 +192,8 @@ type Client interface { //nolint:interfacebloat // the one facade over signalmeo
 	// ErrDeviceUnlinked).
 	Groups(ctx context.Context) ([]Group, error)
 
-	// Group fetches the state of one group from the server, like Groups. ref is the group's ID
+	// Group fetches fresh state of one group from the server, bypassing in-memory group state.
+	// It has the connection requirements and title-cache updates of Groups. ref is the group's ID
 	// or its master key, both 32 bytes in standard base64: it is looked up as an ID first, then
 	// as a master key. A group whose master key the store doesn't hold fails with
 	// ErrUnknownGroup; one the server doesn't show us with ErrNotAMember.

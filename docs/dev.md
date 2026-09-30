@@ -435,3 +435,26 @@ just smoke-image                 # ldd check, then `version` and `account show` 
 `just docs-gen` writes the man pages and completions (`scripts/gendocs`) that `scripts/package.sh`
 puts in the archives. The static musl build of the cgo backend (Phase 6.2, `just build-static`) was
 retired when the default flipped (PLAN.md 10.3); the git history has it.
+
+## Pin live check
+
+This procedure is separately opt-in and contacts Signal production. Use disposable linked
+accounts, an online peer phone and a disposable group. Ordinary offline suites do not run it.
+Perform it with both the pure-Go and cgo binaries, recording app versions and each outcome.
+
+1. Send fresh direct, group and Note to Self messages; record author ACIs and sent timestamps.
+2. Pin each with `pins add` using `--duration 86400`; verify phone pin rendering and other-device
+   sync. Repeat with `--forever` on a different target. Verify `pins remove` removes each pin.
+3. Use a short positive duration to observe expiry. Receipt time can differ on each client;
+   delivery alone is not acceptance. Confirm target deletion and disappearing-message expiry
+   remove phone pins even for forever mode.
+4. In the disposable group, verify admin and permitted full-member pin/unpin, restricted
+   ordinary-member failure and absent/pending-member failure. When sending to a direct chat
+   and a forbidden group together, verify the command sends to neither.
+5. While daemon/MCP receiving runs, pin and unpin from the peer/another own device. Stop the
+   receiver, then inspect `pins list --chat ... -o json`. Compare retained targets, operations,
+   receipt-based expiry, deletion flags and scan metadata; completeness must remain unknown.
+   Also inspect ordinary `receive -o json` typed pin/unpin controls.
+6. Remove all pins made by the procedure and restore any permission/timer changes. Record
+   backend, commands, transport results, phone results and cleanup. Leave PLAN.md live checks
+   open until both backend runs and phone observations are complete.

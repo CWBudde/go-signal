@@ -434,6 +434,42 @@ entry per chat given on the command line. The other fields describe the reaction
 A remote delete is a message of its own, too: `timestamp` and `results` are as in
 [`send`](#send). `targetTimestamp` (number) is the sent timestamp of our message that was deleted.
 
+## `pins add` and `pins remove`
+
+These return `{"version":1,"pin":{...}}`. `timestamp` and `results` have the normal
+[`send`](#send) meaning, including partial failures; delivery does not prove application on a phone.
+
+| Field                             | Type              | Description                                                                    |
+| --------------------------------- | ----------------- | ------------------------------------------------------------------------------ |
+| `operation`                       | string            | `pin` for add, `unpin` for remove                                              |
+| `targetAuthor`, `targetTimestamp` | recipient, number | Resolved target author and original sent timestamp in milliseconds             |
+| `durationSeconds`                 | number            | Positive uint32 seconds for finite pin, zero for forever; present for pin only |
+| `forever`                         | boolean           | Explicit duration mode; present for pin only                                   |
+
+## `pins list`
+
+Returns `{"version":1,"pinState":{...}}` from one bounded offline inbox snapshot.
+History comes from daemon/MCP receiving. Ordinary receive and outgoing sends do not populate it.
+The account lock is required; stop the receiver before listing.
+
+| Field                         | Type    | Description                                                                                                         |
+| ----------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------- |
+| `chat`                        | chat    | Canonical chat reference                                                                                            |
+| `observations`                | array   | Latest distinct retained pin/unpin per target, sorted by target author then target timestamp; empty array when none |
+| `completeness`                | string  | Always `unknown`; never an authoritative active phone pin set                                                       |
+| `scanned`                     | number  | Number of retained chat entries examined, including unrelated events                                                |
+| `firstEntryId`, `lastEntryId` | number  | Retained scan bounds, zero when empty                                                                               |
+| `truncated`                   | boolean | Whether older retained entries were excluded by the scan limit                                                      |
+| `ignoredInvalid`, `conflicts` | number  | Invalid controls ignored and conflicting payloads with the same sender/timestamp identity                           |
+
+Each observation includes `operation` (`pin` or `unpin`), `targetAuthor`, `targetTimestamp`,
+`sender`, `timestamp` (control's sender timestamp), `entryId`, `receivedAt` (UTC timestamp),
+and `targetDeleted` (creator deletion retained). Pin observations also include `durationSeconds`
+and `forever`. Finite pins add `expiresAt` and `expiryReached`, calculated from local receipt time.
+Forever pins and unpins omit expiry fields. Unpins, reached expiry and deletion flags stay visible.
+Events are reduced by local inbox ID order; duplicates within the snapshot keep first receipt time.
+Missing/pruned events, eligibility, phone limits and timers prevent inferring current phone state.
+
 ## `polls create`, `polls vote` and `polls close`
 
 These commands return `{"version":1,"poll":{...}}`. Its `timestamp` and `results` have the
@@ -740,6 +776,7 @@ any release, so scripts should skip types they don't know.
 | `message`           | A message, received or sent from another of our devices (`sync`) |
 | `edit`              | An earlier message was edited                                    |
 | `delete`            | An earlier message was deleted for everyone (remote delete)      |
+| `pin`, `unpin`      | A message pin or unpin was observed                              |
 | `reaction`          | An emoji reaction was added or removed                           |
 | `typing`            | A typing indicator                                               |
 | `receipt`           | A delivery, read or viewed receipt for messages we sent          |
@@ -775,7 +812,7 @@ when the event isn't about a single conversation.
 | `groupTitle` | string    | The group's title, if go-signal has fetched the group before (`groups`); _optional_ |
 | `recipient`  | recipient | The other party of a 1:1 chat (see `sync`); _optional_                              |
 
-The **envelope fields** appear at the top level of `message`, `edit`, `delete`, `reaction`,
+The **envelope fields** appear at the top level of `message`, `edit`, `delete`, `reaction`, `pin`, `unpin`,
 `typing` and `unsupported`:
 
 | Field        | Type      | Description                                                                                                                                                                            |
@@ -882,6 +919,14 @@ Receipts carry no time of their own.
 | `time`      | string | `timestamp` as a time; _optional_                                           |
 | `messages`  | array  | The messages marked as read, each with `sender` (recipient) and `timestamp` |
 
+### `pin` and `unpin`
+
+Both carry the common envelope plus `targetAuthor` (recipient) and `targetTimestamp` (number).
+`pin` also carries `durationSeconds` (uint32 seconds, zero for forever) and `forever` (boolean).
+These are controls, not unread messages. Their sender timestamp identifies the control, while
+the target timestamp identifies the pinned message. Finite expiry is receipt-based and is
+reported only by retained list observations. These additions keep schema version 1.
+
 ### `pollVote` and `pollClose`
 
 Both carry the common envelope. `pollVote` adds `targetAuthor` (recipient),
@@ -895,21 +940,22 @@ These fields and event types are additive; schema version remains 1.
 
 The envelope fields, plus `content` (string), which names what was received:
 
-| `content`                                   | Meaning                                                                     |
-| ------------------------------------------- | --------------------------------------------------------------------------- |
-| `call`                                      | A 1:1 call offer or hangup, or a group call update                          |
-| `groupUpdate`                               | A group change (members, title, settings, …)                                |
-| `expirationTimerUpdate`                     | The disappearing-messages timer of a 1:1 chat changed                       |
-| `profileKeyUpdate`                          | The sender shared their profile key                                         |
-| `endSession`                                | The sender reset the session                                                |
-| `contact`                                   | A shared contact card                                                       |
-| `payment`, `giftBadge`                      | A payment or a gift badge                                                   |
-| `invalidPoll`                               | Malformed or incompatible poll creation/vote/closure content                |
-| `pinMessage`, `unpinMessage`, `adminDelete` | A message was pinned, unpinned, or deleted by a group admin                 |
-| `storyReply`                                | Only in a `message`'s `unsupported`: the message replies to a story         |
-| `deleteForMe`                               | Sync: messages were deleted on another of our devices only (`chat` is `{}`) |
-| `messageRequestResponse`                    | Sync: a message request was accepted, blocked or deleted on another device  |
-| `dataMessage`                               | A data message go-signal didn't recognise                                   |
+| `content`                | Meaning                                                                     |
+| ------------------------ | --------------------------------------------------------------------------- |
+| `call`                   | A 1:1 call offer or hangup, or a group call update                          |
+| `groupUpdate`            | A group change (members, title, settings, …)                                |
+| `expirationTimerUpdate`  | The disappearing-messages timer of a 1:1 chat changed                       |
+| `profileKeyUpdate`       | The sender shared their profile key                                         |
+| `endSession`             | The sender reset the session                                                |
+| `contact`                | A shared contact card                                                       |
+| `payment`, `giftBadge`   | A payment or a gift badge                                                   |
+| `invalidPin`             | Malformed or incompatible pin/unpin content                                 |
+| `invalidPoll`            | Malformed or incompatible poll creation/vote/closure content                |
+| `adminDelete`            | A message was deleted by a group admin                                      |
+| `storyReply`             | Only in a `message`'s `unsupported`: the message replies to a story         |
+| `deleteForMe`            | Sync: messages were deleted on another of our devices only (`chat` is `{}`) |
+| `messageRequestResponse` | Sync: a message request was accepted, blocked or deleted on another device  |
+| `dataMessage`            | A data message go-signal didn't recognise                                   |
 
 New names can be added, and some may become event types of their own, in any release.
 

@@ -1876,7 +1876,24 @@ These remain optional/on demand. Checked foundations do not imply the user-facin
   - [ ] Polls: verify phone rendering, voting/withdrawal, closure and device sync live on
         both backends with disposable accounts/groups, using the separately opt-in
         [live procedure](docs/dev.md#poll-live-check). No production mutations were run.
-  - [ ] Implement pin/unpin operations and received pinned-message state.
+  - [x] Pin/unpin operations and received pinned-message controls (2026-09-30).
+        `pins add|remove` sends standalone controls to users/groups/self with an explicit
+        positive uint32 seconds duration or forever mode. All destination allowlists and
+        fresh group membership/attribute-edit permissions are checked before any sends;
+        delivery outcomes preserve partial failures without retries. Received `pin`/`unpin`
+        controls retain target author/timestamp and duration, including device sync.
+        `pins list` reads one bounded retained inbox snapshot offline in local inbox order,
+        preserving unpins, receipt-based expiry and creator deletions with always unknown
+        completeness. It does not reconstruct the phone's three-pin eviction or eligibility.
+  - [x] Pins: exact wire/malformed-content and clone ownership tests; inbox codec/reopen and
+        legacy compatibility; application preflight, policy, partial outcomes, reducer and
+        unread semantics; command and plain/JSON goldens; documentation and independent
+        reviews, including the fresh-group-cache regression. `just check`, `just check-purego` and the no-cgo/no-backend-tag
+        suite passed. [Implementation plan](docs/superpowers/plans/2026-09-30-pins.md)
+        records the batch and receive-boundary limitation.
+  - [ ] Pins: verify phone rendering, expiry, permissions, target deletion and device sync
+        live on both backends with disposable accounts/groups, using the separately opt-in
+        [live procedure](docs/dev.md#pin-live-check). No production mutations were run.
   - [ ] Add facade/command/output tests, documentation and live checks for each supported feature.
 - [ ] Import an existing signal-cli account to avoid re-linking.
   - [ ] Map the source account format and cryptographic/session state to the local store;

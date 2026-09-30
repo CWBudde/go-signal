@@ -266,6 +266,8 @@ func checkRequest(req SendRequest) error {
 // request returns the signal.SendRequest of msg with timestamp.
 func (msg content) request(timestamp uint64) signal.SendRequest {
 	return signal.SendRequest{
+		Pin:          msg.pin,
+		Unpin:        msg.unpin,
 		PollCreate:   msg.pollCreate,
 		PollVote:     msg.pollVote,
 		PollClose:    msg.pollClose,

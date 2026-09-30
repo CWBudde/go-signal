@@ -1,0 +1,5 @@
+Pin retained observations in group:Z3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXA=; completeness: unknown.
+Finite expiry is receipt-based on this client's local observations.
+Scanned 3 entries (IDs 1–3); truncated: false; ignored invalid: 0; conflicts: 0.
+unpin aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa:1789907401000; sender: aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa; timestamp: 1789907404000; entry ID: 3; received: 2026-09-21 14:13:20 UTC; target deleted: false
+pin aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa:1789907401001; sender: me; timestamp: 1789907403000; entry ID: 2; received: 2026-09-21 14:13:20 UTC; target deleted: false; duration: forever
