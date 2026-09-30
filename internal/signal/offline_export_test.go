@@ -101,3 +101,8 @@ var ErrInvalidNumber = errInvalidNumber
 func SyncErrors(errs ...error) error {
 	return syncErrors(errs)
 }
+
+// BuildMessage exercises upload ownership and fresh message construction on an offline client.
+func BuildMessage(ctx context.Context, client Client, req SendRequest) (func() *signalpb.DataMessage, error) {
+	return client.(*meowClient).message(ctx, req) //nolint:forcetypeassert // test helper
+}

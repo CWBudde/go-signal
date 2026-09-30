@@ -75,6 +75,8 @@ type SendRequest struct {
 	EditTarget uint64
 	// Attachments were uploaded with Upload on the same client.
 	Attachments []UploadedAttachment
+	// Sticker is standalone sticker content instead of text or ordinary attachments.
+	Sticker *OutgoingSticker
 	// Quote makes the message a reply; the author needs their ACI.
 	Quote *Quote
 	// Mentions mark users mentioned in Body; they need their ACI.

@@ -52,6 +52,10 @@ type Client interface { //nolint:interfacebloat // the one facade over signalmeo
 	// fails verification; nothing unverified is returned. The whole content is held in memory.
 	Download(ctx context.Context, att Attachment) ([]byte, error)
 
+	// FetchSticker fetches and verifies a pack's selected image and metadata. It needs
+	// no Connect, respects ctx and fails with ErrClosed after Close.
+	FetchSticker(ctx context.Context, ref StickerReference) (StickerData, error)
+
 	// Resolve returns recipients with their ACI filled in, in the same order. Recipients that
 	// already have one are returned as they are. A number is looked up in the store first and
 	// otherwise through contact discovery, which needs Connect (ErrNotConnected); the result is

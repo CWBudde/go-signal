@@ -55,6 +55,8 @@ func extension(contentType string) string {
 		return ".mp3"
 	case "audio/ogg":
 		return ".ogg"
+	case "image/apng":
+		return ".apng"
 	case "image/gif":
 		return ".gif"
 	case "image/heic":
@@ -90,6 +92,13 @@ type SavedAttachment struct {
 	Path string
 	// Err says why the attachment wasn't saved, e.g. signal.ErrAttachmentNotFound.
 	Err error
+}
+
+// MessageMediaResult keeps regular attachment outcomes separate from the sticker image.
+type MessageMediaResult struct {
+	Attachments []SavedAttachment
+	// Sticker is nil when the message has no embedded sticker image pointer.
+	Sticker *SavedAttachment
 }
 
 // PrepareDownloadDir creates dir (mode 0700) if it is missing and checks that it is a

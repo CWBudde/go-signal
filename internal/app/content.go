@@ -354,6 +354,7 @@ func utf16Len(s string) int {
 
 // content is the resolved rich content of a message.
 type content struct {
+	sticker     *signal.OutgoingSticker
 	body        string
 	quote       *signal.Quote
 	mentions    []signal.Mention
@@ -366,6 +367,10 @@ type content struct {
 
 // buildContent resolves the quote author and the mentioned users of req to ACIs and uploads files.
 func (a *App) buildContent(ctx context.Context, req SendRequest, files []signal.OutgoingAttachment) (content, error) {
+	if req.Sticker != nil {
+		return a.buildSticker(ctx, *req.Sticker)
+	}
+
 	out, err := a.resolveContent(ctx, req)
 	if err != nil || len(files) == 0 {
 		return out, err

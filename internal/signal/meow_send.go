@@ -4,6 +4,7 @@ package signal
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
@@ -182,7 +183,12 @@ func (c *meowClient) message(ctx context.Context, req SendRequest) (func() *sign
 		return nil, err
 	}
 
-	pointers, err := c.uploadedPointers(req.Attachments)
+	uploads := req.Attachments
+	if req.Sticker != nil {
+		uploads = []UploadedAttachment{req.Sticker.Image}
+	}
+
+	pointers, err := c.uploadedPointers(uploads)
 	if err != nil {
 		return nil, err
 	}
@@ -219,6 +225,11 @@ func dataMessage(req SendRequest, attachments []*signalpb.AttachmentPointer, pro
 		Attachments: attachments,
 	}
 
+	err := addSticker(msg, req.Sticker, attachments)
+	if err != nil {
+		return nil, err
+	}
+
 	if req.Body != "" {
 		msg.Body = new(req.Body)
 	}
@@ -240,7 +251,7 @@ func dataMessage(req SendRequest, attachments []*signalpb.AttachmentPointer, pro
 		})
 	}
 
-	err := addReactionOrDelete(msg, req)
+	err = addReactionOrDelete(msg, req)
 	if err != nil {
 		return nil, err
 	}
@@ -435,4 +446,30 @@ func (c *meowClient) connectionLost() error {
 	defer c.lostMu.Unlock()
 
 	return c.lost
+}
+
+func addSticker(msg *signalpb.DataMessage, sticker *OutgoingSticker, pointers []*signalpb.AttachmentPointer) error {
+	if sticker == nil {
+		return nil
+	}
+
+	if len(pointers) != 1 || pointers[0] == nil {
+		return ErrUnknownAttachment
+	}
+
+	packID, err := hex.DecodeString(sticker.Reference.PackID)
+	if err != nil {
+		return ErrInvalidSticker
+	}
+
+	msg.Attachments = nil
+	msg.Sticker = &signalpb.DataMessage_Sticker{
+		PackId:    packID,
+		PackKey:   append([]byte(nil), sticker.Reference.PackKey...),
+		StickerId: new(sticker.Reference.StickerID),
+		Emoji:     new(sticker.Emoji),
+		Data:      pointers[0],
+	}
+
+	return nil
 }

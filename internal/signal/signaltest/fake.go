@@ -49,6 +49,11 @@ type Fake struct {
 	SendFailures map[string]error
 	// InUse simulates another process holding the account lock: Connect and Unlink fail.
 	InUse bool
+	// Stickers contains verified pack items, keyed by "<hex pack ID>:<decimal sticker ID>".
+	Stickers map[string]signal.StickerData
+	// FetchStickerErr fails a valid fetch before returning fixture data.
+	FetchStickerErr error
+	fetchedStickers []signal.StickerReference
 	// Attachments is the CDN for Download: content by RemoteAttachment.CDNKey. Other
 	// attachments fail with signal.ErrAttachmentNotFound.
 	Attachments map[string][]byte
@@ -190,7 +195,16 @@ func (f *Fake) Sent() []signal.SendRequest {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	return append([]signal.SendRequest(nil), f.sent...)
+	out := slices.Clone(f.sent)
+	for i := range out {
+		if out[i].Sticker != nil {
+			sticker := *out[i].Sticker
+			sticker.Reference.PackKey = slices.Clone(sticker.Reference.PackKey)
+			out[i].Sticker = &sticker
+		}
+	}
+
+	return out
 }
 
 // Uploaded returns the attachments of all successful Upload calls, in order.
@@ -198,7 +212,12 @@ func (f *Fake) Uploaded() []signal.OutgoingAttachment {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	return append([]signal.OutgoingAttachment(nil), f.uploaded...)
+	out := slices.Clone(f.uploaded)
+	for i := range out {
+		out[i].Data = slices.Clone(out[i].Data)
+	}
+
+	return out
 }
 
 // Connects returns the ACI of the account each successful Connect used.
@@ -516,6 +535,7 @@ func (c *client) Upload(
 
 	for _, att := range attachments {
 		id := fmt.Sprintf("upload-%d", len(c.fake.uploaded)+1)
+		att.Data = slices.Clone(att.Data)
 		c.fake.uploaded = append(c.fake.uploaded, att)
 		c.uploads = append(c.uploads, id)
 		out = append(out, signal.UploadedAttachment{
@@ -541,6 +561,12 @@ func (c *client) Send(_ context.Context, req signal.SendRequest) (signal.SendRes
 	recipients, err := c.sendTo(req)
 	if err != nil {
 		return signal.SendResult{}, err
+	}
+
+	if req.Sticker != nil {
+		copySticker := *req.Sticker
+		copySticker.Reference.PackKey = slices.Clone(req.Sticker.Reference.PackKey)
+		req.Sticker = &copySticker
 	}
 
 	c.fake.sent = append(c.fake.sent, req)
@@ -746,6 +772,10 @@ func (c *client) checkContent(req signal.SendRequest) error {
 	err := req.Check()
 	if err != nil {
 		return fmt.Errorf("%w (fake)", err)
+	}
+
+	if req.Sticker != nil && !slices.Contains(c.uploads, req.Sticker.Image.ID) {
+		return signal.ErrUnknownAttachment
 	}
 
 	for _, att := range req.Attachments {

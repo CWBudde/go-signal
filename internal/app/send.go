@@ -32,6 +32,8 @@ type SendRequest struct {
 	Body string
 	// Attachments are paths of files to attach, each at most MaxAttachmentSize.
 	Attachments []string
+	// Sticker sends one item from an existing pack, without other message content.
+	Sticker *signal.StickerReference
 	// AttachDir, if set, confines Attachments to this directory: their paths are relative to it,
 	// and files outside it (also through symlinks) fail with ErrOutsideAttachDir.
 	AttachDir string
@@ -106,7 +108,12 @@ func (r TargetResult) FailedMembers() int {
 // If sending fails for some targets, Send returns the complete result together with an error
 // wrapping ErrSendFailed (and signal.ErrDeviceUnlinked, if that was the cause).
 func (a *App) Send(ctx context.Context, req SendRequest) (SendResult, error) {
-	err := a.checkEdit(req)
+	err := checkStickerRequest(req)
+	if err != nil {
+		return SendResult{}, fmt.Errorf("send: %w", err)
+	}
+
+	err = a.checkEdit(req)
 	if err != nil {
 		return SendResult{}, fmt.Errorf("send: %w", err)
 	}
@@ -192,6 +199,10 @@ func (a *App) nextTimestamp() uint64 {
 // prepare checks req without connecting and reads its attachments. An empty body is fine with
 // attachments; one of only white space is dropped then.
 func prepare(req SendRequest) (SendRequest, []signal.OutgoingAttachment, error) {
+	if req.Sticker != nil {
+		return req, nil, checkRequest(req)
+	}
+
 	if strings.TrimSpace(req.Body) == "" {
 		if len(req.Attachments) == 0 {
 			return req, nil, ErrEmptyMessage
@@ -256,6 +267,7 @@ func checkRequest(req SendRequest) error {
 func (msg content) request(timestamp uint64) signal.SendRequest {
 	return signal.SendRequest{
 		Body:         msg.body,
+		Sticker:      msg.sticker,
 		Timestamp:    timestamp,
 		Attachments:  msg.attachments,
 		Quote:        msg.quote,

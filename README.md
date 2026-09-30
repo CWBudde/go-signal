@@ -67,16 +67,28 @@ go-signal account show
 go-signal send +4915112345678 -m "Hello from go-signal"
 go-signal send self -m "Note to self" --attach notes.pdf
 
+# Send a sticker using a pack's share link and the sticker's numeric ID (0 is valid).
+go-signal send self --sticker-pack 'https://signal.art/addstickers/#pack_id=...&pack_key=...' --sticker-id 0
+
 # Edit your own message, using the timestamp printed by its original send.
 go-signal send +4915112345678 --edit 1790000000000 -m "Corrected text"
 
 # 3. Receive what is waiting on the server, or keep streaming with --follow.
 go-signal receive
 go-signal receive --follow -o json   # one JSON document per event (docs/json.md)
+go-signal receive --download-attachments ./downloads   # includes embedded sticker images
 ```
 
 `go-signal <command> --help` and the man pages (`man go-signal-send`) describe every command.
 [docs/json.md](docs/json.md) documents the JSON output.
+
+Sticker sends contain only the sticker: text, stdin, attachments, replies and edits cannot be
+combined with `--sticker-pack` and `--sticker-id`. The pack link supplies its ID and key; only
+the selected image is fetched and uploaded, once for all recipients. Use a sticker ID from
+that pack's author or another source that lists its IDs. Pack installation/listing is deferred.
+WebP, PNG/APNG and GIF bytes are preserved, including animation. Received sticker images are
+downloaded only with `--download-attachments`; failures appear per image and receiving continues.
+Downloads use the image embedded in the message, without fallback if it has expired on the CDN.
 
 `send --edit <timestamp>` works for users, groups (`--group <id>`) and `self`, including messages
 sent from your other devices when you know their timestamp. Supply the replacement content;

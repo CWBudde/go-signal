@@ -46,6 +46,8 @@ type Sticker struct {
 	StickerID uint32
 	// Emoji is the emoji the sticker stands for, if the sender set one.
 	Emoji string
+	// Image locates the image embedded in the message; older inbox entries may lack it.
+	Image *Attachment
 }
 
 // Edit replaces the body of an earlier message.
