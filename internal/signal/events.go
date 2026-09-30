@@ -1,7 +1,7 @@
 package signal
 
 // Event is an incoming event. It is a closed sum type; switch on the concrete pointer types:
-// *Message, *PollVote, *PollClose, *Edit, *Delete, *Reaction, *Typing, *Receipt, *ReadSync, *Unsupported,
+// *Message, *PollVote, *PollClose, *Pin, *Unpin, *Edit, *Delete, *Reaction, *Typing, *Receipt, *ReadSync, *Unsupported,
 // *DecryptionFailure, *IdentityChanged, *QueueEmpty and *Connection.
 type Event interface {
 	isEvent()
@@ -132,7 +132,7 @@ type ReadSync struct {
 //   - "call" (1:1 call offer or hangup, or a group call update)
 //   - data messages without body, attachments or sticker: "groupUpdate", "expirationTimerUpdate",
 //     "profileKeyUpdate", "endSession", "contact", "payment", "giftBadge", "invalidPoll",
-//     "pinMessage", "unpinMessage", "adminDelete", or
+//     "invalidPin", "adminDelete", or
 //     "dataMessage" when nothing is recognised
 //   - sync messages from our other devices: "deleteForMe" (messages deleted locally there) and
 //     "messageRequestResponse" (a message request accepted, blocked, …)

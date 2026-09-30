@@ -71,6 +71,9 @@ func (c *meowClient) Group(ctx context.Context, ref string) (Group, error) {
 		return Group{}, err
 	}
 
+	// Callers may authorize an operation from this state, so bypass prior cached permissions.
+	cli.GroupCache.Delete(gid)
+
 	group, err := c.fetchGroup(ctx, cli, gid)
 	if err != nil {
 		return Group{}, c.lostOr(err)

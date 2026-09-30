@@ -354,6 +354,8 @@ func utf16Len(s string) int {
 
 // content is the resolved rich content of a message.
 type content struct {
+	pin         *signal.OutgoingPin
+	unpin       *signal.OutgoingUnpin
 	pollCreate  *signal.Poll
 	pollVote    *signal.OutgoingPollVote
 	pollClose   *signal.OutgoingPollClose

@@ -279,6 +279,21 @@ func (p *Printer) eventDoc(evt signal.Event) any {
 	switch evt := evt.(type) {
 	case *signal.Message:
 		return p.messageDocOf(evt, nil)
+	case *signal.Pin:
+		return pinDoc{
+			eventHead: head(typePin), envelopeJSON: p.envelope(evt.Envelope),
+			pinTargetJSON: pinTargetJSON{
+				TargetAuthor: p.recipient(evt.TargetAuthor), TargetTimestamp: evt.TargetTimestamp,
+			},
+			pinDurationJSON: pinDuration(typePin, evt.DurationSeconds, evt.Forever),
+		}
+	case *signal.Unpin:
+		return pinDoc{
+			eventHead: head(typeUnpin), envelopeJSON: p.envelope(evt.Envelope),
+			pinTargetJSON: pinTargetJSON{
+				TargetAuthor: p.recipient(evt.TargetAuthor), TargetTimestamp: evt.TargetTimestamp,
+			},
+		}
 	case *signal.PollVote:
 		return pollVoteDoc{
 			eventHead: head("pollVote"), envelopeJSON: p.envelope(evt.Envelope),
@@ -421,6 +436,10 @@ func (p *Printer) eventLine(evt signal.Event) string {
 	switch evt := evt.(type) {
 	case *signal.Message:
 		return p.envelopeLine(evt.Envelope, p.messageText(evt, nil))
+	case *signal.Pin:
+		return p.envelopeLine(evt.Envelope, p.pinText(evt))
+	case *signal.Unpin:
+		return p.envelopeLine(evt.Envelope, fmt.Sprintf("[unpin %s:%d]", p.who(evt.TargetAuthor), evt.TargetTimestamp))
 	case *signal.PollVote:
 		return p.envelopeLine(evt.Envelope, fmt.Sprintf("[poll vote for %s:%d; options %v; counter %d]",
 			p.who(evt.TargetAuthor), evt.TargetTimestamp, pollIndexes(evt.OptionIndexes), evt.VoteCount))

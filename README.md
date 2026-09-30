@@ -97,6 +97,11 @@ test covers text edits. Signal normally permits 10 edits within 24 hours; Note t
 time limit. Recipients enforce eligibility, and a successful send only confirms transport.
 See [Signal's editing rules](https://support.signal.org/hc/en-us/articles/6255134251546-Edit-Message).
 
+Pin/unpin messages in users, groups or Note to Self with `pins add` and `pins remove`.
+Supply `--target <author>:<timestamp>` and, for adding, explicit `--duration <seconds>` or
+`--forever`. `pins list --chat <ACI|group:ID>` inspects retained inbox observations offline,
+with completeness always unknown. See [pinned messages](docs/pins.md) for permissions and history limits.
+
 Create a group with yourself as administrator and one or more members:
 
 ```sh
