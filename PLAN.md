@@ -1856,8 +1856,26 @@ These remain optional/on demand. Checked foundations do not imply the user-facin
   - [ ] Stickers: verify image/emoji rendering, animation, device sync and received downloads
         live on both backends with disposable accounts/groups, using the separately opt-in
         [live procedure](docs/dev.md#sticker-live-check). No production mutations were run.
-  - [ ] Define and implement story send/receive support.
-  - [ ] Implement poll creation, voting, closing and received poll state.
+  - [ ] Define and implement story send/receive support. Requires separate fork transport
+        work: pinned signalmeow drops story receive payloads and has no story-send API.
+  - [x] Group polls: creation, voting/withdrawal, creator closure and received poll state
+        (2026-09-30). `polls create|vote|close` sends standalone content to one canonical
+        group ID; votes use zero-based indexes and an explicit increasing uint32 counter.
+        Partial member outcomes reuse normal sending, without automatic retries. Received
+        creation is `message.poll`; `pollVote` and `pollClose` are stored controls.
+        `polls show` reconstructs one bounded retained inbox snapshot offline, reporting
+        missing creation, conflicts, truncation and always unknown completeness. Ordinary
+        `receive` and outgoing sends do not populate this history. Direct-chat sends,
+        automatic counters, durable projections and MCP/daemon poll write tools are deferred.
+  - [x] Polls: exact wire/malformed-content tests, clone ownership, inbox codec/reopen and
+        legacy compatibility; application policy, partial outcomes, reducer timelines and
+        unread semantics; command preflight and plain/JSON goldens; documentation and
+        independent reviews. `just check`, `just check-purego` and the no-cgo/no-backend-tag
+        suite passed. [Implementation plan](docs/superpowers/plans/2026-09-30-polls.md)
+        records the batch and receive-boundary limitation.
+  - [ ] Polls: verify phone rendering, voting/withdrawal, closure and device sync live on
+        both backends with disposable accounts/groups, using the separately opt-in
+        [live procedure](docs/dev.md#poll-live-check). No production mutations were run.
   - [ ] Implement pin/unpin operations and received pinned-message state.
   - [ ] Add facade/command/output tests, documentation and live checks for each supported feature.
 - [ ] Import an existing signal-cli account to avoid re-linking.

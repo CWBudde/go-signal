@@ -47,7 +47,12 @@ func (f *Fake) Inbox() []signal.InboxEntry {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	return slices.Clone(f.inbox)
+	out := slices.Clone(f.inbox)
+	for i := range out {
+		out[i] = clonePollEntry(out[i])
+	}
+
+	return out
 }
 
 // checkInbox fails like the real client's inbox methods; the caller holds c.fake.mu.
@@ -82,9 +87,9 @@ func (c *client) InboxAdd(_ context.Context, entry signal.InboxEntry) (signal.In
 	entry.ID = c.fake.inboxID
 	entry.ReceivedAt = entry.ReceivedAt.UTC().Truncate(time.Millisecond)
 	entry.Time = entry.Time.UTC().Truncate(time.Millisecond)
-	c.fake.inbox = append(c.fake.inbox, entry)
+	c.fake.inbox = append(c.fake.inbox, clonePollEntry(entry))
 
-	return entry, nil
+	return clonePollEntry(entry), nil
 }
 
 func (c *client) InboxList(_ context.Context, query signal.InboxQuery) ([]signal.InboxEntry, error) {
@@ -100,7 +105,7 @@ func (c *client) InboxList(_ context.Context, query signal.InboxQuery) ([]signal
 
 	for _, entry := range c.fake.inbox {
 		if inboxMatches(entry, query) {
-			out = append(out, entry)
+			out = append(out, clonePollEntry(entry))
 		}
 	}
 
@@ -153,7 +158,7 @@ func (c *client) InboxChats(context.Context) ([]signal.InboxChat, error) {
 			chats[key] = chat
 		}
 
-		chat.Chat, chat.Last = entry.Chat, entry
+		chat.Chat, chat.Last = entry.Chat, clonePollEntry(entry)
 		chat.Entries++
 
 		if entry.Unread {

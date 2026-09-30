@@ -1,0 +1,3 @@
+[2026-09-20 12:30:01 UTC] aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa → group:Z3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXA=: [poll When?; 0: Today; 1: Tomorrow]
+[2026-09-20 12:30:02 UTC] bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb → group:Z3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXA=: [poll vote for aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa:1789907401000; options [0]; counter 1]
+[2026-09-20 12:30:03 UTC] aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa → group:Z3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXA=: [poll close for 1789907401000]

@@ -110,7 +110,7 @@ func contentTests(alice, bob uuid.UUID, groupID string) []convertTest {
 		{
 			name: "poll",
 			in:   dataMessage(&signalpb.DataMessage{PollCreate: &signalpb.DataMessage_PollCreate{}}),
-			want: unsupported(direct, "pollCreate"),
+			want: unsupported(direct, "invalidPoll"),
 		},
 		{
 			name: "end session",

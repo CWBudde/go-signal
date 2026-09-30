@@ -197,6 +197,7 @@ func (f *Fake) Sent() []signal.SendRequest {
 
 	out := slices.Clone(f.sent)
 	for i := range out {
+		out[i] = clonePollRequest(out[i])
 		if out[i].Sticker != nil {
 			sticker := *out[i].Sticker
 			sticker.Reference.PackKey = slices.Clone(sticker.Reference.PackKey)
@@ -569,7 +570,7 @@ func (c *client) Send(_ context.Context, req signal.SendRequest) (signal.SendRes
 		req.Sticker = &copySticker
 	}
 
-	c.fake.sent = append(c.fake.sent, req)
+	c.fake.sent = append(c.fake.sent, clonePollRequest(req))
 
 	res := signal.SendResult{Timestamp: req.Timestamp}
 	if res.Timestamp == 0 {

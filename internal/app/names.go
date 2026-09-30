@@ -228,6 +228,10 @@ func EventRecipients(evt signal.Event) []signal.Recipient {
 		}
 
 		return envelope(evt.Envelope)
+	case *signal.PollVote:
+		return envelope(evt.Envelope, evt.TargetAuthor)
+	case *signal.PollClose:
+		return envelope(evt.Envelope)
 	case *signal.Edit:
 		return envelope(evt.Envelope)
 	case *signal.Delete:

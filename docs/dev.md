@@ -332,6 +332,37 @@ dependency: `connectLoop` clears a captured request channel while the handler ca
 it. This fixture ordering leaves production dependency code unchanged; passing race tests
 do not establish that the dependency's ordinary websocket shutdown is free of that race.
 
+### Poll live check
+
+Poll acceptance is separately opt-in and never part of ordinary tests or CI. Use a dedicated
+linked account/data dir, its online phone, an online peer and a disposable test group. Use
+explicit `--data-dir` and `--account` on every command; stop other receivers for that data dir.
+
+1. Build with `just build` (pure Go). Create a multiple-choice poll and a single-choice poll
+   using `polls create --group <id> --question <text> --option <text> --option <text>` with
+   `--single-choice` for the second. Record creator ACI/timestamp from JSON and delivery per
+   member. Verify the phone's question, option order and selection policy.
+2. Vote on a peer-created group poll using `polls vote --group <id> --target <peer-aci>:<ts>
+--vote-count 1 --option 0`. Change selections with a higher counter, then use `--clear`
+   with another higher counter. Verify selection and withdrawal on the peer's phone and
+   sync to the linked account's phone. Coordinate counters with other-device activity.
+3. Close a CLI-created poll using `polls close --group <id> --target <ts>`. Verify the phone
+   treats it as closed. Send a new creation, vote, withdrawal and closure from the peer's
+   phone while `receive -o json` runs; verify typed fields and target identity. Inspect
+   own-device transcripts for all three operations too.
+4. Collect another peer poll through daemon/MCP receiving, including votes and closure.
+   Stop the server, run `polls show` with the canonical creator ACI, and compare retained
+   tally/closure with observed phone activity. Repeat with a small scan limit: missing
+   creation must omit tally and completeness must remain unknown. The old ordinary receive
+   events are not expected in this inbox. Delivery receipts alone do not prove rendering.
+5. Rebuild with `just build-cgo` and repeat with fresh polls in the disposable group. Record
+   backend, poll identity, phone results, sync and received-state evidence. Only then tick
+   the separately open roadmap live-acceptance item.
+
+Poll sends are group-only. Direct-chat sending, inferred counters and durable poll projections
+are deferred. Tests cover exact payload construction and retained observations on both
+backends offline; they do not establish phone acceptance.
+
 ## CI
 
 `.github/workflows/tests.yaml` runs these jobs:

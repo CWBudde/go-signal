@@ -434,6 +434,48 @@ entry per chat given on the command line. The other fields describe the reaction
 A remote delete is a message of its own, too: `timestamp` and `results` are as in
 [`send`](#send). `targetTimestamp` (number) is the sent timestamp of our message that was deleted.
 
+## `polls create`, `polls vote` and `polls close`
+
+These commands return `{"version":1,"poll":{...}}`. Its `timestamp` and `results` have the
+same shape as [`send`](#send), including per-member failures for the selected group.
+
+| Field             | Type      | Description                                                      |
+| ----------------- | --------- | ---------------------------------------------------------------- |
+| `operation`       | string    | `create`, `vote` or `close`                                      |
+| `targetAuthor`    | recipient | Poll creator; our account for creation and closure               |
+| `targetTimestamp` | number    | Creation timestamp; equals `timestamp` for creation              |
+| `creation`        | object    | Creation only: `question`, ordered `options` and `allowMultiple` |
+| `optionIndexes`   | number[]  | Vote only; zero-based selections, `[]` for withdrawal            |
+| `voteCount`       | number    | Vote only; explicit counter ordering this account's changes      |
+
+## `polls show`
+
+Returns `{"version":1,"pollState":{...}}` from one bounded local inbox query without
+connecting. The history was collected by daemon/MCP receiving; ordinary `receive` and
+outgoing sends do not populate it. Stop the active receiver to release the account lock.
+
+| Field                         | Type                    | Description                                                                               |
+| ----------------------------- | ----------------------- | ----------------------------------------------------------------------------------------- |
+| `chat`, `author`, `timestamp` | chat, recipient, number | Poll identity: group, creator ACI and creation timestamp                                  |
+| `creationPresent`             | boolean                 | Whether a valid creation was retained within the scan                                     |
+| `creation`                    | object                  | Optional question/options/allowMultiple, when retained                                    |
+| `tally`                       | number[]                | Optional observed counts by zero-based option; omitted without creation or after deletion |
+| `votes`                       | object[]                | Latest retained valid votes, sorted by voter ACI; `[]` when none                          |
+| `closureObserved`             | boolean                 | Whether a matching creator closure was observed; false does not establish an open poll    |
+| `closedAt`                    | number                  | Optional observed closure timestamp                                                       |
+| `deleted`                     | boolean                 | Whether a matching creator remote deletion was observed                                   |
+| `completeness`                | string                  | Always `unknown`                                                                          |
+| `scanned`                     | number                  | Number of retained chat entries examined, including non-poll events                       |
+| `firstEntryId`, `lastEntryId` | number                  | Retained scan bounds; zero for an empty scan                                              |
+| `truncated`                   | boolean                 | More retained chat entries existed outside the scan limit                                 |
+| `ignoredInvalid`, `conflicts` | number                  | Invalid matching observations and conflicting creations/equal-counter selections          |
+
+Each vote has `voter` (recipient), `optionIndexes` (number array, empty for withdrawal),
+`voteCount` (number) and `timestamp` (number). Older counters are ignored; equal counters
+retain the first observation unless a later own-device sync timestamp replaces it.
+No tally or absence claim is authoritative: history may have been pruned or never received.
+The scan limit defaults to 1,000 chat entries and is capped at 10,000.
+
 ## `groups list`
 
 ```json
@@ -749,16 +791,17 @@ The **envelope fields** appear at the top level of `message`, `edit`, `delete`, 
 
 The envelope fields, plus:
 
-| Field         | Type     | Description                                                                                          |
-| ------------- | -------- | ---------------------------------------------------------------------------------------------------- |
-| `body`        | string   | Message text; _optional_. Mentions are U+FFFC placeholders for now                                   |
-| `attachments` | array    | _optional_. See below                                                                                |
-| `sticker`     | object   | _optional_. `packId` (hex), `stickerId` (number), _optional_ `emoji` and `image` (see below)         |
-| `quote`       | object   | The message this one replies to; _optional_. `author` (recipient), `timestamp` and _optional_ `text` |
-| `viewOnce`    | boolean  | `true` for a view-once message; _optional_ (left out when `false`)                                   |
-| `unsupported` | string[] | Parts of the message go-signal can't show yet (names as in `unsupported` below); _optional_          |
+| Field         | Type     | Description                                                                                            |
+| ------------- | -------- | ------------------------------------------------------------------------------------------------------ |
+| `body`        | string   | Message text; _optional_. Mentions are U+FFFC placeholders for now                                     |
+| `attachments` | array    | _optional_. See below                                                                                  |
+| `sticker`     | object   | _optional_. `packId` (hex), `stickerId` (number), _optional_ `emoji` and `image` (see below)           |
+| `poll`        | object   | _optional_. Creation: `question` (string), ordered `options` (string array), `allowMultiple` (boolean) |
+| `quote`       | object   | The message this one replies to; _optional_. `author` (recipient), `timestamp` and _optional_ `text`   |
+| `viewOnce`    | boolean  | `true` for a view-once message; _optional_ (left out when `false`)                                     |
+| `unsupported` | string[] | Parts of the message go-signal can't show yet (names as in `unsupported` below); _optional_            |
 
-A message has a `body`, an attachment or a sticker; data messages with none of these are reported
+A message has a `body`, an attachment, a sticker or poll creation; data messages with none of these are reported
 as `unsupported`.
 
 Each entry of `attachments` has:
@@ -839,6 +882,15 @@ Receipts carry no time of their own.
 | `time`      | string | `timestamp` as a time; _optional_                                           |
 | `messages`  | array  | The messages marked as read, each with `sender` (recipient) and `timestamp` |
 
+### `pollVote` and `pollClose`
+
+Both carry the common envelope. `pollVote` adds `targetAuthor` (recipient),
+`targetTimestamp` (number), `optionIndexes` (number array, empty for withdrawal) and
+`voteCount` (number). The counter orders selections per voter, not total votes.
+`pollClose` adds `targetTimestamp`; its `sender` identifies the creator of the target poll.
+Incoming direct/group events and own-device transcripts use the same format.
+These fields and event types are additive; schema version remains 1.
+
 ### `unsupported`
 
 The envelope fields, plus `content` (string), which names what was received:
@@ -852,7 +904,7 @@ The envelope fields, plus `content` (string), which names what was received:
 | `endSession`                                | The sender reset the session                                                |
 | `contact`                                   | A shared contact card                                                       |
 | `payment`, `giftBadge`                      | A payment or a gift badge                                                   |
-| `pollCreate`, `pollVote`, `pollTerminate`   | A poll, a vote, or the end of a poll                                        |
+| `invalidPoll`                               | Malformed or incompatible poll creation/vote/closure content                |
 | `pinMessage`, `unpinMessage`, `adminDelete` | A message was pinned, unpinned, or deleted by a group admin                 |
 | `storyReply`                                | Only in a `message`'s `unsupported`: the message replies to a story         |
 | `deleteForMe`                               | Sync: messages were deleted on another of our devices only (`chat` is `{}`) |

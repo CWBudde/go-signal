@@ -77,6 +77,10 @@ type SendRequest struct {
 	Attachments []UploadedAttachment
 	// Sticker is standalone sticker content instead of text or ordinary attachments.
 	Sticker *OutgoingSticker
+	// PollCreate, PollVote and PollClose are standalone group poll operations.
+	PollCreate *Poll
+	PollVote   *OutgoingPollVote
+	PollClose  *OutgoingPollClose
 	// Quote makes the message a reply; the author needs their ACI.
 	Quote *Quote
 	// Mentions mark users mentioned in Body; they need their ACI.
