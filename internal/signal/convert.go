@@ -144,6 +144,10 @@ func convertDataMessage(env Envelope, msg *signalpb.DataMessage) Event {
 			StickerID: sticker.GetStickerId(),
 			Emoji:     sticker.GetEmoji(),
 		}
+		if sticker.GetData() != nil {
+			image := convertAttachment(sticker.GetData())
+			out.Sticker.Image = &image
+		}
 	}
 
 	if quote := msg.GetQuote(); quote != nil {

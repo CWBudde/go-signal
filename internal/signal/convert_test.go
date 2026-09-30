@@ -77,10 +77,20 @@ func contentTests(alice, bob uuid.UUID, groupID string) []convertTest {
 			name: "sticker",
 			in: dataMessage(&signalpb.DataMessage{Sticker: &signalpb.DataMessage_Sticker{
 				PackId: []byte{0xca, 0xfe}, StickerId: new(uint32(3)), Emoji: new("😀"),
+				Data: &signalpb.AttachmentPointer{
+					ContentType:          new(stickerWebPType),
+					AttachmentIdentifier: &signalpb.AttachmentPointer_CdnKey{CdnKey: "embedded-sticker"},
+				},
 			}}),
 			want: &signal.Message{
 				Envelope: direct,
-				Sticker:  &signal.Sticker{PackID: "cafe", StickerID: 3, Emoji: "😀"},
+				Sticker: &signal.Sticker{
+					PackID: "cafe", StickerID: 3, Emoji: "😀",
+					Image: &signal.Attachment{
+						ContentType: stickerWebPType,
+						Remote:      signal.RemoteAttachment{CDNKey: "embedded-sticker"},
+					},
+				},
 			},
 		},
 		{

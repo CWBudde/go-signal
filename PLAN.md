@@ -529,8 +529,9 @@ exits. It also panics on a CDN number past its host list, so such pointers are r
 are pointers without size (signalmeow would cut the content to zero bytes). The whole attachment
 is held in memory (up to 100 MiB). The idle timeout of a one-shot `receive` now restarts after an
 event is handled, so a slow download doesn't end it. A message delivered twice saves its
-attachments again under numbered names. Thumbnails, blurhash, voice-note/borderless flags,
-width/height and received stickers' images aren't handled.
+attachments again under numbered names. Thumbnails, blurhash, voice-note/borderless flags and
+width/height aren't handled. Embedded sticker images are supported by the Later / on demand
+sticker feature (2026-09-30), using the same download flag and verification path.
 
 #### 3.8 Receipts, reactions, remote delete
 
@@ -1837,8 +1838,24 @@ These remain optional/on demand. Checked foundations do not imply the user-facin
   - [ ] Add command/output tests, documentation and live verification for the remaining operations.
 - [ ] Stickers, stories, polls and pinned messages.
   - [x] Receive and render sticker metadata (pack ID, sticker ID and emoji), with conversion
-        tests (3.5); sticker images and sending are not implemented.
-  - [ ] Receive sticker images and send stickers.
+        tests (3.5).
+  - [x] Receive embedded sticker images and send stickers (2026-09-30).
+        `send --sticker-pack <Signal share link> --sticker-id <number>` sends a sticker alone,
+        including ID 0. Recipient resolution and allowlists precede one selected-image fetch
+        and upload shared by users/groups/self. Fixed-CDN fetching bounds encrypted responses
+        and verifies HMAC, ciphertext and padding. WebP, PNG/APNG and GIF bytes are preserved.
+        `receive --download-attachments` saves embedded images separately from ordinary
+        attachments, with private collision-safe files and per-image errors. The inbox retains
+        image pointers; JSON adds optional `sticker.image` fields without a schema bump.
+        Pack installation/caching, MCP sticker tools and expired-image fallback remain deferred.
+  - [x] Stickers: facade crypto/HTTP/cancellation/size/redirect tests, upload ownership and
+        message clone regressions, inbox compatibility, fake/use-case policy and partial-outcome
+        tests, safe-download tests, plain/JSON command goldens and documentation. Independent
+        reviews, `just check`, `just check-purego` and the no-cgo/no-backend-tag suite passed.
+        [Implementation plan](docs/superpowers/plans/2026-09-30-stickers.md) records the batch.
+  - [ ] Stickers: verify image/emoji rendering, animation, device sync and received downloads
+        live on both backends with disposable accounts/groups, using the separately opt-in
+        [live procedure](docs/dev.md#sticker-live-check). No production mutations were run.
   - [ ] Define and implement story send/receive support.
   - [ ] Implement poll creation, voting, closing and received poll state.
   - [ ] Implement pin/unpin operations and received pinned-message state.

@@ -47,6 +47,8 @@ profile name, as "contacts list" shows them), else by number or ACI. With -o jso
 to dir, which is created if missing, as "<timestamp>-<n>-<name>", where name is the sender's file
 name reduced to safe characters. Existing files are kept; a taken name gets a number. The output
 shows each file's path; a failed download is reported there and does not stop receive.
+Embedded sticker images are also saved, as "<timestamp>-sticker-<id><extension>"; sticker
+downloads use the message's image pointer without a permanent-pack fallback.
 
 With --send-read-receipts, the sender of each incoming message (not your own messages from other
 devices) gets a read receipt once the message was printed, collected for about a second into one
@@ -104,7 +106,7 @@ func newReceiveCmd(clients *clientOpener, printers *printerFactory) *cobra.Comma
 		"exit after this long without events (one-shot mode)")
 	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "stream events until interrupted")
 	cmd.Flags().IntVar(&maxEvts, "max", 0, "exit after this many events with content (0: no limit)")
-	cmd.Flags().StringVar(&dlDir, "download-attachments", "", "save attachments to this directory")
+	cmd.Flags().StringVar(&dlDir, "download-attachments", "", "save attachments and sticker images to this directory")
 	cmd.Flags().BoolVar(&rcpts, "send-read-receipts", false, "send read receipts for received messages")
 	cmd.MarkFlagsMutuallyExclusive("timeout", "follow")
 

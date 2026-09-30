@@ -4,6 +4,7 @@ package signal
 
 import (
 	"context"
+	"net/http"
 	"time"
 
 	"github.com/cwbudde/mautrix-signal/pkg/libsignalgo"
@@ -149,4 +150,9 @@ func BeginOperation(client Client) (func(context.Context) error, func(), bool) {
 // WrapOutgoing exposes the data/edit envelope selector.
 func WrapOutgoing(msg *signalpb.DataMessage, editTarget uint64) *signalpb.Content {
 	return wrapOutgoing(msg, editTarget)
+}
+
+// FetchStickerWithHTTP exercises the bounded protocol fetch with a local HTTP client.
+func FetchStickerWithHTTP(ctx context.Context, ref StickerReference, client *http.Client) (StickerData, error) {
+	return fetchSticker(ctx, ref, client)
 }

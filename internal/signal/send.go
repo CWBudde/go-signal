@@ -15,6 +15,10 @@ func (req SendRequest) Check() error {
 		return ErrInvalidSendRequest
 	}
 
+	if req.Sticker != nil {
+		return req.checkSticker()
+	}
+
 	switch {
 	case req.EditTarget != 0:
 		return req.checkEdit()
@@ -61,4 +65,12 @@ func (req SendRequest) checkReaction() error {
 // hasContent reports whether req has a body, attachments, a quote or mentions.
 func (req SendRequest) hasContent() bool {
 	return req.Body != "" || len(req.Attachments) > 0 || req.Quote != nil || len(req.Mentions) > 0
+}
+
+func (req SendRequest) checkSticker() error {
+	if req.hasContent() || req.Reaction != nil || req.DeleteTarget != 0 || req.EditTarget != 0 {
+		return ErrInvalidSticker
+	}
+
+	return req.Sticker.Reference.Check()
 }

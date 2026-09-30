@@ -60,13 +60,13 @@ func (p eventPrinter) print(ctx context.Context, evt signal.Event) error {
 	}
 
 	msg, ok := evt.(*signal.Message)
-	if !ok || p.dir == "" || len(msg.Attachments) == 0 {
+	if !ok || p.dir == "" || !messageHasMedia(msg) {
 		return p.out.Event(evt) //nolint:wrapcheck // the caller wraps it
 	}
 
-	saved := p.app.SaveAttachments(ctx, app.SaveAttachmentsRequest{Dir: p.dir, Message: msg})
+	saved := p.app.SaveMessageMedia(ctx, app.SaveAttachmentsRequest{Dir: p.dir, Message: msg})
 
-	for i, outcome := range saved {
+	for i, outcome := range saved.Attachments {
 		if outcome.Err != nil {
 			slog.Warn("attachment not saved", "sender", msg.Sender.String(), "timestamp", msg.Timestamp,
 				"attachment", i+1, "error", outcome.Err)
@@ -77,5 +77,14 @@ func (p eventPrinter) print(ctx context.Context, evt signal.Event) error {
 		slog.Debug("attachment saved", "path", outcome.Path)
 	}
 
-	return p.out.SavedMessage(msg, saved) //nolint:wrapcheck // the caller wraps it
+	if saved.Sticker != nil && saved.Sticker.Err != nil {
+		slog.Warn("sticker image not saved", "sender", msg.Sender.String(), "timestamp", msg.Timestamp,
+			"error", saved.Sticker.Err)
+	}
+
+	return p.out.SavedMessageMedia(msg, saved) //nolint:wrapcheck // the caller wraps it
+}
+
+func messageHasMedia(msg *signal.Message) bool {
+	return len(msg.Attachments) > 0 || (msg.Sticker != nil && msg.Sticker.Image != nil)
 }

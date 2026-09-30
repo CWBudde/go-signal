@@ -39,6 +39,21 @@ func (p *Printer) SavedMessage(msg *signal.Message, saved []app.SavedAttachment)
 	return p.writeLine(p.envelopeLine(msg.Envelope, p.messageText(msg, saved)))
 }
 
+// SavedMessageMedia prints a message with independent regular attachment and sticker outcomes.
+func (p *Printer) SavedMessageMedia(msg *signal.Message, saved app.MessageMediaResult) error {
+	if p.format == JSON {
+		doc := p.messageDocOf(msg, saved.Attachments)
+		if doc.Sticker != nil && doc.Sticker.Image != nil && saved.Sticker != nil {
+			doc.Sticker.Image.Path = saved.Sticker.Path
+			doc.Sticker.Image.DownloadError = errorText(saved.Sticker.Err)
+		}
+
+		return p.writeJSON(doc)
+	}
+
+	return p.writeLine(p.envelopeLine(msg.Envelope, p.messageMediaText(msg, saved)))
+}
+
 func (p *Printer) writeLine(line string) error {
 	_, err := fmt.Fprintln(p.w, line)
 	if err != nil {
@@ -149,9 +164,10 @@ type attachmentJSON struct {
 }
 
 type stickerJSON struct {
-	PackID    string `json:"packId"`
-	StickerID uint32 `json:"stickerId"`
-	Emoji     string `json:"emoji,omitempty"`
+	PackID    string          `json:"packId"`
+	StickerID uint32          `json:"stickerId"`
+	Emoji     string          `json:"emoji,omitempty"`
+	Image     *attachmentJSON `json:"image,omitempty"`
 }
 
 type quoteJSON struct {
@@ -342,6 +358,11 @@ func (p *Printer) messageDocOf(msg *signal.Message, saved []app.SavedAttachment)
 
 	if msg.Sticker != nil {
 		doc.Sticker = &stickerJSON{PackID: msg.Sticker.PackID, StickerID: msg.Sticker.StickerID, Emoji: msg.Sticker.Emoji}
+		if att := msg.Sticker.Image; att != nil {
+			doc.Sticker.Image = &attachmentJSON{
+				ContentType: att.ContentType, Filename: att.Filename, Size: att.Size, Caption: att.Caption,
+			}
+		}
 	}
 
 	if msg.Quote != nil {
@@ -442,6 +463,12 @@ func (p *Printer) envelopeLine(env signal.Envelope, text string) string {
 
 // messageText renders msg; saved is nil or has one entry per attachment.
 func (p *Printer) messageText(msg *signal.Message, saved []app.SavedAttachment) string {
+	return p.messageMediaText(msg, app.MessageMediaResult{Attachments: saved})
+}
+
+func (p *Printer) messageMediaText(msg *signal.Message, media app.MessageMediaResult) string {
+	saved := media.Attachments
+
 	var parts []string
 
 	if msg.Quote != nil {
@@ -467,12 +494,7 @@ func (p *Printer) messageText(msg *signal.Message, saved []app.SavedAttachment) 
 	}
 
 	if msg.Sticker != nil {
-		sticker := "[sticker"
-		if msg.Sticker.Emoji != "" {
-			sticker += " " + oneLine(msg.Sticker.Emoji)
-		}
-
-		parts = append(parts, sticker+"]")
+		parts = append(parts, stickerText(msg.Sticker, media.Sticker))
 	}
 
 	for _, name := range msg.Unsupported {
@@ -480,6 +502,23 @@ func (p *Printer) messageText(msg *signal.Message, saved []app.SavedAttachment) 
 	}
 
 	return strings.Join(parts, " ")
+}
+
+func stickerText(sticker *signal.Sticker, saved *app.SavedAttachment) string {
+	text := "[sticker"
+	if sticker.Emoji != "" {
+		text += " " + oneLine(sticker.Emoji)
+	}
+
+	if sticker.Image == nil || saved == nil {
+		return text + "]"
+	}
+
+	if saved.Err != nil {
+		return text + " (download failed: " + oneLine(saved.Err.Error()) + ")]"
+	}
+
+	return text + " → " + oneLine(saved.Path) + "]"
 }
 
 // quoteLength is how many characters of a quoted message plain output shows.

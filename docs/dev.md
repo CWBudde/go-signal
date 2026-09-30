@@ -297,6 +297,36 @@ blocked self-notification reconnects the authenticated websocket. These reconnec
 briefly interrupt other requests on the same client. The facade limits its own
 HTTP responses to 1 MiB; the dependency's forced-cache reader has no equivalent bound.
 
+### Sticker live check
+
+Sticker send/receive acceptance remains separately opt-in. Use a dedicated linked test
+account/data dir, its online phone, an online peer and a disposable test group. Stop other
+receivers for that data dir. Obtain an existing Signal pack share link and a valid numeric
+sticker ID; `0` is a valid ID. No live sticker checks run in ordinary tests or CI.
+
+1. Build with `just build`. Use explicit `--data-dir` and `--account` for every command.
+   Send the sticker to `self`, the peer and the disposable group using
+   `send <recipient> --sticker-pack '<link>' --sticker-id <id>` (or `--group <id>`).
+   Check per-recipient results and inspect the phone/peer for the actual sticker, its emoji
+   and device sync. Delivery results alone do not prove correct image rendering.
+2. Send the same sticker from the peer's phone to the test account. Run
+   `receive -o json --download-attachments <private-dir>`. Verify `sticker.image.path`,
+   image contents and animation when applicable, while confirming ordinary attachment
+   numbering and key-free JSON. Send another sticker and receive without the flag;
+   metadata should appear without a local file, path or download error.
+3. Repeat with a static WebP and an available animated PNG/APNG or GIF pack. File bytes
+   are preserved; go-signal performs no conversion. Missing images are reported per item,
+   without stopping receive, and have no permanent-pack fallback.
+4. Rebuild with `just build-cgo` and repeat on the same dedicated account. Record backend,
+   pack ID/sticker ID, actual phone rendering, sync and downloaded file evidence. Do not
+   record pack keys in the roadmap. Leave live acceptance open if either backend or phone
+   checks were not performed.
+
+Outgoing pack fetching accepts only Signal share links, then requests fixed Signal CDN paths;
+it never contacts the link's supplied host. Manifest and image encrypted responses are limited
+to 1 MiB and 100 MiB respectively, verified before upload. Pack installation, caching, MCP
+sticker tools and uploading new packs are deferred.
+
 The real websocket cache fixture synchronizes its cleanup to avoid a known race in the pinned
 dependency: `connectLoop` clears a captured request channel while the handler can still read
 it. This fixture ordering leaves production dependency code unchanged; passing race tests

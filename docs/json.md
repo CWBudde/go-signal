@@ -753,7 +753,7 @@ The envelope fields, plus:
 | ------------- | -------- | ---------------------------------------------------------------------------------------------------- |
 | `body`        | string   | Message text; _optional_. Mentions are U+FFFC placeholders for now                                   |
 | `attachments` | array    | _optional_. See below                                                                                |
-| `sticker`     | object   | _optional_. `packId` (hex), `stickerId` (number) and _optional_ `emoji`                              |
+| `sticker`     | object   | _optional_. `packId` (hex), `stickerId` (number), _optional_ `emoji` and `image` (see below)         |
 | `quote`       | object   | The message this one replies to; _optional_. `author` (recipient), `timestamp` and _optional_ `text` |
 | `viewOnce`    | boolean  | `true` for a view-once message; _optional_ (left out when `false`)                                   |
 | `unsupported` | string[] | Parts of the message go-signal can't show yet (names as in `unsupported` below); _optional_          |
@@ -773,6 +773,17 @@ Each entry of `attachments` has:
 | `downloadError` | string | Why `--download-attachments` couldn't save it (e.g. `attachment not found on the CDN`); _optional_, excludes `path` |
 
 Without `--download-attachments`, neither `path` nor `downloadError` is set.
+
+`sticker.image`, when present, has the same metadata and optional download fields as an
+attachment. It is separate from `attachments`, whose numbering is unchanged. Its saved path
+is `<dir>/<timestamp>-sticker-<stickerId><extension>`; collisions get a numeric suffix and
+existing files are never overwritten. Pack keys and the image's cryptographic/CDN details are
+not rendered. Metadata-only stickers and old inbox entries may have no `image`.
+
+Sticker image downloads use the embedded message attachment. An expired or invalid attachment
+produces `sticker.image.downloadError`; other media and subsequent messages still proceed.
+These fields are additive; the schema remains version 1. Sticker sends use the existing send
+result envelope and per-recipient outcomes.
 
 ### `edit`
 

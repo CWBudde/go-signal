@@ -10,6 +10,7 @@ import (
 
 	"github.com/cwbudde/go-signal/internal/app"
 	"github.com/cwbudde/go-signal/internal/output"
+	"github.com/cwbudde/go-signal/internal/signal"
 	"github.com/spf13/cobra"
 )
 
@@ -25,6 +26,11 @@ attached with --attach (up to 100 MiB each) are uploaded once for all recipients
 for your own messages) and the timestamp is the message's time in ms, as receive -o json
 shows it. --quote-text is the quoted text shown when the recipient no longer has the message.
 
+--sticker-pack <link> --sticker-id <number> sends one sticker from a Signal pack link
+(https://signal.art/addstickers/#pack_id=...&pack_key=...). Sticker ID 0 is valid.
+The selected image is fetched and uploaded once for all recipients. A sticker is sent alone:
+message text, stdin, attachments, quotes and edits cannot be combined with these flags.
+
 --edit <timestamp> replaces one of your own sent messages in the same chats. Use the original
 message's timestamp in ms and provide the replacement text with -m or --stdin. Mentions and
 other supplied content form the replacement; previous content is not loaded automatically.
@@ -39,14 +45,16 @@ exit code is non-zero.`
 
 func newSendCmd(clients *clientOpener, printers *printerFactory, appOpts []app.Option) *cobra.Command {
 	var (
-		message string
-		stdin   bool
-		groups  []string
-		req     app.SendRequest
+		message     string
+		stdin       bool
+		groups      []string
+		stickerPack string
+		stickerID   uint32
+		req         app.SendRequest
 	)
 
 	cmd := &cobra.Command{
-		Use:   "send <recipient>... (-m <text> | --stdin | --attach <file>)",
+		Use:   "send <recipient>... (-m <text> | --stdin | --attach <file> | --sticker-pack <link> --sticker-id <number>)",
 		Short: "Send a message to users, groups or yourself",
 		Long:  sendLong,
 		Example: `  go-signal send +4915112345678 -m "Hello"
@@ -56,6 +64,11 @@ func newSendCmd(clients *clientOpener, printers *printerFactory, appOpts []app.O
   go-signal send +4915112345678 --attach photo.jpg -m "Look, @{@alice.42}"
   go-signal send +4915112345678 --quote +4915112345678:1790000000000 -m "Yes"`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			err := sendStickerFlags(cmd, &req, stickerPack, stickerID)
+			if err != nil {
+				return err
+			}
+
 			if cmd.Flags().Changed("edit") && req.EditTarget == 0 {
 				return fmt.Errorf("%w: --edit must be a nonzero message timestamp in ms", app.ErrInvalidEdit)
 			}
@@ -86,10 +99,40 @@ func newSendCmd(clients *clientOpener, printers *printerFactory, appOpts []app.O
 	flags.StringVar(&req.Quote, "quote", "", "reply to the message `<author>:<timestamp>`")
 	flags.StringVar(&req.QuoteText, "quote-text", "", "the quoted text, shown if the recipient lacks the message")
 	flags.Uint64Var(&req.EditTarget, "edit", 0, "edit your message with this sent timestamp in ms")
+	addStickerFlags(cmd, &stickerPack, &stickerID)
 	cmd.MarkFlagsMutuallyExclusive("message", "stdin")
-	cmd.MarkFlagsOneRequired("message", "stdin", "attach")
+	cmd.MarkFlagsOneRequired("message", "stdin", "attach", "sticker-pack")
 
 	return cmd
+}
+
+func addStickerFlags(cmd *cobra.Command, pack *string, stickerID *uint32) {
+	cmd.Flags().StringVar(pack, "sticker-pack", "", "Signal sticker pack link (requires --sticker-id)")
+	cmd.Flags().Uint32Var(stickerID, "sticker-id", 0, "sticker ID within the pack, including 0 (requires --sticker-pack)")
+	cmd.MarkFlagsRequiredTogether("sticker-pack", "sticker-id")
+}
+
+// sendStickerFlags validates explicit flags before a client is opened or stdin is read.
+func sendStickerFlags(cmd *cobra.Command, req *app.SendRequest, pack string, stickerID uint32) error {
+	if !cmd.Flags().Changed("sticker-pack") {
+		return nil
+	}
+
+	for _, flag := range []string{"message", "stdin", "attach", "quote", "quote-text", "edit"} {
+		if cmd.Flags().Changed(flag) {
+			return fmt.Errorf("%w: stickers cannot be combined with --%s", signal.ErrInvalidSticker, flag)
+		}
+	}
+
+	ref, err := app.ParseStickerPackURL(pack)
+	if err != nil {
+		return err //nolint:wrapcheck // parsing reports the invalid-sticker context
+	}
+
+	ref.StickerID = stickerID
+	req.Sticker = &ref
+
+	return nil
 }
 
 // runSend runs a sending use case (send, react, delete) on a new client and prints its result
