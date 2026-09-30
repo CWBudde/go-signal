@@ -106,6 +106,10 @@ func marshalEvent(evt Event, chat Chat) ([]byte, error) {
 	)
 
 	switch evt := evt.(type) {
+	case *PollVote:
+		typ = "pollVote"
+	case *PollClose:
+		typ = "pollClose"
 	case *Message:
 		typ = storedMessage
 	case *Edit:
@@ -171,6 +175,10 @@ func decodeEvent(stored storedEvent) (Event, error) {
 	)
 
 	switch stored.Type {
+	case "pollVote":
+		evt = &PollVote{}
+	case "pollClose":
+		evt = &PollClose{}
 	case storedMessage:
 		evt = &Message{}
 	case storedEdit:

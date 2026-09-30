@@ -218,6 +218,8 @@ func (c *meowClient) ownProfileKey(ctx context.Context) []byte {
 }
 
 // dataMessage builds the DataMessage of req with the uploaded attachments.
+//
+//nolint:cyclop // converts each supported message component
 func dataMessage(req SendRequest, attachments []*signalpb.AttachmentPointer, profileKey []byte,
 ) (*signalpb.DataMessage, error) {
 	msg := &signalpb.DataMessage{
@@ -225,7 +227,12 @@ func dataMessage(req SendRequest, attachments []*signalpb.AttachmentPointer, pro
 		Attachments: attachments,
 	}
 
-	err := addSticker(msg, req.Sticker, attachments)
+	err := addPoll(msg, req)
+	if err != nil {
+		return nil, err
+	}
+
+	err = addSticker(msg, req.Sticker, attachments)
 	if err != nil {
 		return nil, err
 	}

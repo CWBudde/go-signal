@@ -594,6 +594,10 @@ func envelopeOf(evt signal.Event) (signal.Envelope, bool) {
 	switch evt := evt.(type) {
 	case *signal.Message:
 		return evt.Envelope, true
+	case *signal.PollVote:
+		return evt.Envelope, true
+	case *signal.PollClose:
+		return evt.Envelope, true
 	case *signal.Edit:
 		return evt.Envelope, true
 	case *signal.Delete:

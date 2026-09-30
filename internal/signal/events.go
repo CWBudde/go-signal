@@ -1,7 +1,7 @@
 package signal
 
 // Event is an incoming event. It is a closed sum type; switch on the concrete pointer types:
-// *Message, *Edit, *Delete, *Reaction, *Typing, *Receipt, *ReadSync, *Unsupported,
+// *Message, *PollVote, *PollClose, *Edit, *Delete, *Reaction, *Typing, *Receipt, *ReadSync, *Unsupported,
 // *DecryptionFailure, *IdentityChanged, *QueueEmpty and *Connection.
 type Event interface {
 	isEvent()
@@ -23,7 +23,7 @@ type Envelope struct {
 	Sync bool
 }
 
-// Message is a regular data message: it has a body, attachments or a sticker. With
+// Message is a regular data message: it has a body, attachments, a sticker or a poll creation. With
 // Envelope.Sync it is a sync transcript of a message we sent from another device.
 type Message struct {
 	Envelope
@@ -31,7 +31,9 @@ type Message struct {
 	Body        string
 	Attachments []Attachment
 	Sticker     *Sticker
-	Quote       *Quote
+	// Poll is creation content with an ordered list of answer options.
+	Poll  *Poll
+	Quote *Quote
 	// ViewOnce marks a view-once message (its attachments can be opened once).
 	ViewOnce bool
 	// Unsupported names parts of the message that go-signal can't show yet, e.g. "contact" or
@@ -129,8 +131,8 @@ type ReadSync struct {
 //
 //   - "call" (1:1 call offer or hangup, or a group call update)
 //   - data messages without body, attachments or sticker: "groupUpdate", "expirationTimerUpdate",
-//     "profileKeyUpdate", "endSession", "contact", "payment", "giftBadge", "pollCreate",
-//     "pollVote", "pollTerminate", "pinMessage", "unpinMessage", "adminDelete", or
+//     "profileKeyUpdate", "endSession", "contact", "payment", "giftBadge", "invalidPoll",
+//     "pinMessage", "unpinMessage", "adminDelete", or
 //     "dataMessage" when nothing is recognised
 //   - sync messages from our other devices: "deleteForMe" (messages deleted locally there) and
 //     "messageRequestResponse" (a message request accepted, blocked, …)

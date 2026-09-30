@@ -180,6 +180,7 @@ type messageDoc struct {
 	eventHead
 	envelopeJSON
 
+	Poll        *pollJSON        `json:"poll,omitempty"`
 	Body        string           `json:"body,omitempty"`
 	Attachments []attachmentJSON `json:"attachments,omitempty"`
 	Sticker     *stickerJSON     `json:"sticker,omitempty"`
@@ -273,11 +274,21 @@ type connectionDoc struct {
 	Error string `json:"error,omitempty"`
 }
 
-//nolint:cyclop // one case per event type
+//nolint:cyclop,funlen // one case per event type
 func (p *Printer) eventDoc(evt signal.Event) any {
 	switch evt := evt.(type) {
 	case *signal.Message:
 		return p.messageDocOf(evt, nil)
+	case *signal.PollVote:
+		return pollVoteDoc{
+			eventHead: head("pollVote"), envelopeJSON: p.envelope(evt.Envelope),
+			TargetAuthor: p.recipient(evt.TargetAuthor), TargetTimestamp: evt.TargetTimestamp,
+			OptionIndexes: pollIndexes(evt.OptionIndexes), VoteCount: evt.VoteCount,
+		}
+	case *signal.PollClose:
+		return pollCloseDoc{
+			eventHead: head("pollClose"), envelopeJSON: p.envelope(evt.Envelope), TargetTimestamp: evt.TargetTimestamp,
+		}
 	case *signal.Edit:
 		return editDoc{
 			eventHead: head(typeEdit), envelopeJSON: p.envelope(evt.Envelope),
@@ -341,6 +352,7 @@ func (p *Printer) messageDocOf(msg *signal.Message, saved []app.SavedAttachment)
 		eventHead:    head(typeMessage),
 		envelopeJSON: p.envelope(msg.Envelope),
 		Body:         msg.Body,
+		Poll:         pollToJSON(msg.Poll),
 		ViewOnce:     msg.ViewOnce,
 		Unsupported:  msg.Unsupported,
 	}
@@ -409,6 +421,11 @@ func (p *Printer) eventLine(evt signal.Event) string {
 	switch evt := evt.(type) {
 	case *signal.Message:
 		return p.envelopeLine(evt.Envelope, p.messageText(evt, nil))
+	case *signal.PollVote:
+		return p.envelopeLine(evt.Envelope, fmt.Sprintf("[poll vote for %s:%d; options %v; counter %d]",
+			p.who(evt.TargetAuthor), evt.TargetTimestamp, pollIndexes(evt.OptionIndexes), evt.VoteCount))
+	case *signal.PollClose:
+		return p.envelopeLine(evt.Envelope, fmt.Sprintf("[poll close for %d]", evt.TargetTimestamp))
 	case *signal.Edit:
 		return p.envelopeLine(evt.Envelope,
 			"[edit of message sent "+p.msDateTime(evt.TargetTimestamp)+"] "+oneLine(evt.Body))
@@ -470,6 +487,10 @@ func (p *Printer) messageMediaText(msg *signal.Message, media app.MessageMediaRe
 	saved := media.Attachments
 
 	var parts []string
+
+	if msg.Poll != nil {
+		parts = append(parts, pollText(msg.Poll))
+	}
 
 	if msg.Quote != nil {
 		quote := "[quote " + p.who(msg.Quote.Author) + " " + p.msDateTime(msg.Quote.Timestamp)

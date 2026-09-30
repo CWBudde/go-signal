@@ -91,6 +91,9 @@ func convertChatEvent(evt *events.ChatEvent, ownACI string) Event {
 		return convertDataMessage(env, content)
 	case *signalpb.EditMessage:
 		env.Timestamp = content.GetDataMessage().GetTimestamp()
+		if hasWirePoll(content.GetDataMessage()) {
+			return &Unsupported{Envelope: env, Type: invalidPollType}
+		}
 
 		return &Edit{
 			Envelope:        env,
@@ -106,7 +109,12 @@ func convertChatEvent(evt *events.ChatEvent, ownACI string) Event {
 	}
 }
 
+//nolint:cyclop // converts each supported message component
 func convertDataMessage(env Envelope, msg *signalpb.DataMessage) Event {
+	if hasWirePoll(msg) {
+		return convertPoll(env, msg)
+	}
+
 	if reaction := msg.GetReaction(); reaction != nil {
 		return &Reaction{
 			Envelope:        env,
@@ -172,9 +180,6 @@ func unsupportedParts(msg *signalpb.DataMessage) []string {
 		{"contact", len(msg.GetContact()) > 0},
 		{"payment", msg.GetPayment() != nil},
 		{"giftBadge", msg.GetGiftBadge() != nil},
-		{"pollCreate", msg.GetPollCreate() != nil},
-		{"pollVote", msg.GetPollVote() != nil},
-		{"pollTerminate", msg.GetPollTerminate() != nil},
 		{"pinMessage", msg.GetPinMessage() != nil},
 		{"unpinMessage", msg.GetUnpinMessage() != nil},
 		{"adminDelete", msg.GetAdminDelete() != nil},
