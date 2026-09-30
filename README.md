@@ -200,6 +200,21 @@ reads; other go-signal commands for that account fail with "account in use" unti
 instead of stdio, and `--on-message` runs a program for new messages from chats you choose. [docs/mcp.md](docs/mcp.md) covers Claude Desktop and other clients, every tool and
 flag, and the security model.
 
+## Scripts and bots (daemon API)
+
+`go-signal daemon serve` exposes a local HTTP JSON API and an SSE stream while receiving
+into the persistent inbox. Scripts can read events, send text to allowed recipients and
+explicitly mark messages read. Each request requires a bearer token.
+
+```sh
+go-signal daemon serve --listen 127.0.0.1:8766 \
+  --token-file /absolute/path/daemon.token --allow-recipient self
+```
+
+[docs/daemon.md](docs/daemon.md) covers token setup, endpoints, reconnecting with inbox
+cursors, retention and delivery limits. A [Python example](scripts/daemon-example.py)
+uses only the standard library.
+
 ## Configuration
 
 Settings resolve in this order: command-line flag, then `GOSIGNAL_*` environment variable (e.g.

@@ -171,7 +171,8 @@ func NewRootCmd(opts ...Option) *cobra.Command {
 
 It is a Java-free alternative to signal-cli (https://github.com/AsamK/signal-cli) with its
 own command set: link it as a secondary device next to your phone, send and receive
-messages, manage contacts and groups, and serve your account to AI assistants over MCP.`,
+messages, manage contacts and groups, serve your account to AI assistants over MCP,
+and offer a local HTTP API for scripts and bots.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
@@ -184,6 +185,7 @@ messages, manage contacts and groups, and serve your account to AI assistants ov
 	root.AddCommand(
 		newAccountCmd(clients, printers),
 		newContactsCmd(clients, printers, rootOpts.appOpts),
+		newDaemonCmd(clients, rootOpts.appOpts),
 		newDeleteCmd(clients, printers, rootOpts.appOpts),
 		newDevicesCmd(clients, printers),
 		newGroupsCmd(clients, printers),

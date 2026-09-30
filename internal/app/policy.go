@@ -143,7 +143,7 @@ func (a *App) checkAllowed(ctx context.Context, targets []Target) error {
 	}
 
 	if len(denied) > 0 {
-		return fmt.Errorf("%w: %s (mcp serve --allow-recipient)", ErrRecipientNotAllowed, strings.Join(denied, ", "))
+		return fmt.Errorf("%w: %s (configure --allow-recipient)", ErrRecipientNotAllowed, strings.Join(denied, ", "))
 	}
 
 	return nil

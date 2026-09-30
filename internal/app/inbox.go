@@ -255,14 +255,9 @@ type MarkReadResult struct {
 // This is the only way go-signal sends read receipts from the inbox. A failed receipt leaves its
 // sender's messages unread and doesn't stop the others; the errors are joined.
 func (i *Inbox) MarkRead(ctx context.Context, req MarkReadRequest) (MarkReadResult, error) {
-	until, err := parseCursor(req.Cursor)
-	if err != nil {
+	entries, err := i.markReadEntries(ctx, req)
+	if err != nil || len(entries) == 0 {
 		return MarkReadResult{}, err
-	}
-
-	entries, err := i.app.client.InboxList(ctx, signal.InboxQuery{Chat: req.Chat, Until: until, Unread: true})
-	if err != nil {
-		return MarkReadResult{}, fmt.Errorf("inbox: %w", err)
 	}
 
 	receipts := i.app.ReadReceipts()
@@ -377,6 +372,26 @@ func (i *Inbox) Message(ctx context.Context, entryID string) (*signal.Message, e
 	}
 
 	return msg, nil
+}
+
+// markReadEntries distinguishes an explicit zero upper bound from an omitted cursor.
+func (i *Inbox) markReadEntries(ctx context.Context, req MarkReadRequest) ([]signal.InboxEntry, error) {
+	until, err := parseCursor(req.Cursor)
+	if err != nil {
+		return nil, err
+	}
+
+	// An explicit zero bounds an empty page; the store uses zero for an unbounded query.
+	if req.Cursor != "" && until == 0 {
+		return nil, nil
+	}
+
+	entries, err := i.app.client.InboxList(ctx, signal.InboxQuery{Chat: req.Chat, Until: until, Unread: true})
+	if err != nil {
+		return nil, fmt.Errorf("inbox: %w", err)
+	}
+
+	return entries, nil
 }
 
 func (i *Inbox) store(ctx context.Context, evt signal.Event) error {
