@@ -42,6 +42,96 @@ func TestInbox(t *testing.T) {
 	}
 }
 
+// TestInboxSurvivesReopen exercises the real account database entirely offline.
+func TestInboxSurvivesReopen(t *testing.T) {
+	t.Parallel()
+
+	dataDir := seedAccount(t)
+	client := openInboxClient(t, dataDir)
+	alice := signal.Recipient{ACI: "cccccccc-cccc-cccc-cccc-cccccccccccc", Number: "+4915199999999"}
+	bob := signal.Recipient{ACI: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", Number: "+4915188888888"}
+	received := time.Date(2026, 9, 26, 8, 0, 0, 0, time.UTC)
+	first := addInboxMessage(t, client, alice, received)
+
+	second := addInboxMessage(t, client, bob, received.Add(time.Second))
+	if second.ID <= first.ID {
+		t.Fatalf("second ID = %d; want greater than %d", second.ID, first.ID)
+	}
+
+	err := client.Close()
+	if err != nil {
+		t.Fatalf("close before reopen: %v", err)
+	}
+
+	client = openInboxClient(t, dataDir)
+	assertInboxEntries(t, client, signal.InboxQuery{}, first, second)
+	assertInboxEntries(t, client, signal.InboxQuery{After: first.ID}, second)
+
+	deleted, err := client.InboxPrune(t.Context(), second.ReceivedAt, 0)
+	if err != nil || deleted != 1 {
+		t.Fatalf("InboxPrune before second = %d, %v; want 1", deleted, err)
+	}
+
+	third := addInboxMessage(t, client, alice, received.Add(2*time.Second))
+	if third.ID <= second.ID {
+		t.Fatalf("new ID after reopen = %d; want greater than %d", third.ID, second.ID)
+	}
+
+	assertInboxEntries(t, client, signal.InboxQuery{After: first.ID}, second, third)
+	assertInboxEntries(t, client, signal.InboxQuery{After: second.ID}, third)
+
+	deleted, err = client.InboxPrune(t.Context(), third.ReceivedAt.Add(time.Second), 0)
+	if err != nil || deleted != 2 {
+		t.Fatalf("InboxPrune all = %d, %v; want 2", deleted, err)
+	}
+
+	err = client.Close()
+	if err != nil {
+		t.Fatalf("close after pruning: %v", err)
+	}
+
+	client = openInboxClient(t, dataDir)
+	assertInboxEntries(t, client, signal.InboxQuery{})
+
+	fourth := addInboxMessage(t, client, bob, received.Add(3*time.Second))
+	if fourth.ID <= third.ID {
+		t.Fatalf("new ID after pruning and reopen = %d; want greater than %d", fourth.ID, third.ID)
+	}
+
+	assertInboxEntries(t, client, signal.InboxQuery{After: first.ID}, fourth)
+}
+
+func openInboxClient(t *testing.T, dataDir string) signal.Client {
+	t.Helper()
+
+	client, err := signal.Open(t.Context(), signal.Options{DataDir: dataDir})
+	if err != nil {
+		t.Fatalf("open inbox client: %v", err)
+	}
+
+	t.Cleanup(func() {
+		err := client.Close()
+		if err != nil {
+			t.Errorf("close inbox client: %v", err)
+		}
+	})
+
+	return client
+}
+
+func assertInboxEntries(t *testing.T, client signal.Client, query signal.InboxQuery, want ...signal.InboxEntry) {
+	t.Helper()
+
+	entries, err := client.InboxList(t.Context(), query)
+	if err != nil {
+		t.Fatalf("InboxList(%+v): %v", query, err)
+	}
+
+	if len(entries) != len(want) || (len(want) > 0 && !reflect.DeepEqual(entries, want)) {
+		t.Fatalf("InboxList(%+v) = %+v; want %+v", query, entries, want)
+	}
+}
+
 // checkInboxChanges checks the chats of an inbox that only has added, then marks added read and
 // deletes it.
 func checkInboxChanges(t *testing.T, client signal.Client, added signal.InboxEntry) {

@@ -1754,15 +1754,27 @@ don't exist yet; their jobs skip until the secrets are set, and the README no lo
 
 These remain optional/on demand. Checked foundations do not imply the user-facing feature is done.
 
-- [ ] Daemon mode: long-running receiving with our own local API for scripts and bots;
+- [x] Daemon mode: long-running receiving with our own local API for scripts and bots;
       no signal-cli JSON-RPC compatibility required.
   - [x] Shared `internal/app` use cases and persistent inbox (Phase 5).
   - [x] Long-running MCP server with authenticated loopback HTTP (5.6); this provides an
         existing transport but is not the proposed general-purpose daemon API.
-  - [ ] Define the local API and choose unix socket and/or HTTP + SSE transport.
-  - [ ] Implement the daemon API on the existing use cases and inbox, with account locking,
-        authentication where needed, and graceful shutdown.
-  - [ ] Test client reconnects and inbox delivery; document operation and provide a script example.
+  - [x] Define the local API and choose loopback HTTP JSON + SSE transport (2026-09-30).
+        `/v1` exposes health, persistent inbox pages and events, text sends and explicit
+        mark-read requests. One account per process; Unix sockets and richer sends remain deferred.
+  - [x] Implement `daemon serve` on existing use cases and inbox, with account locking,
+        bearer authentication on every route, default-deny send allowlists, read-only mode,
+        independent bounded SSE readers and graceful shutdown. Partial write outcomes are
+        preserved without retries; receive errors and remote unlink terminate the server.
+        Shared use cases now allocate unique outgoing timestamps within one App and treat
+        an explicit zero read cursor as a no-op instead of an unbounded receipt request.
+  - [x] Test reconnects, cursor replay, paging/filtering, retention, concurrent/slow readers,
+        storage failures, auth/configuration, read-receipt bounds and lock release using
+        offline fixtures on both backends; real SQLite close/reopen preserves IDs and entries.
+        [Operation and API docs](docs/daemon.md), a reconnecting standard-library Python
+        script and an [implementation plan](docs/superpowers/plans/2026-09-30-daemon-api.md)
+        are included. Replay is limited to retained stored entries; acknowledgement-before-store
+        and pruned-history gaps remain, without exactly-once or crash-proof delivery claims.
 - [ ] Group management and profile updates.
   - [x] Existing group list/show/leave commands and group title resolution (4.2).
   - [x] Integration-only two-member group creation, verified live (10.2); not a public command.
