@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.2.0](https://github.com/CWBudde/go-signal/compare/v0.1.0...v0.2.0) (2026-09-30)
+
+
+### Features
+
+* add administrator group member removal ([17ad352](https://github.com/CWBudde/go-signal/commit/17ad352b6f1674a7c8242ba78bface5f8ac38b93))
+* add authenticated loopback daemon API and SSE ([4290a6a](https://github.com/CWBudde/go-signal/commit/4290a6af367a34fd3ecee7891ce0e6c6a3951a1c))
+* add group members and approve join requests ([0869479](https://github.com/CWBudde/go-signal/commit/0869479650b1a7b787cb020eccd127cc384c9945))
+* add group members and approve join requests ([69008f5](https://github.com/CWBudde/go-signal/commit/69008f508a065d302a47714e0fd5ef855727a45c))
+* add group polls and retained inbox results ([a01d35c](https://github.com/CWBudde/go-signal/commit/a01d35ce434316616b1fc566fda55a986d4ffbd6))
+* add group polls and retained inbox results ([a998363](https://github.com/CWBudde/go-signal/commit/a998363bfef5d8465b6bc247da3abeca82d38a7d))
+* add group renaming functionality ([925073f](https://github.com/CWBudde/go-signal/commit/925073feac6e45d14d0af2bbebee1883947da97b))
+* add local daemon API for scripts and bots ([ac4618f](https://github.com/CWBudde/go-signal/commit/ac4618fe878852ebd8ca45db805fc26875dcfe8d))
+* add own-profile text updates ([9542076](https://github.com/CWBudde/go-signal/commit/954207618d97566bf6dbc42000350246eef5a364))
+* add own-profile text updates ([dc78406](https://github.com/CWBudde/go-signal/commit/dc78406e68147bfd1cc517253c977ad725ca74ca))
+* add regression test for hook queue overflow handling ([c84b15b](https://github.com/CWBudde/go-signal/commit/c84b15be5f0a7662c786a46856eb97f12af604d0))
+* groups rename command ([5d34fa9](https://github.com/CWBudde/go-signal/commit/5d34fa9776f5ee2ac68a9272613717dea53fd584))
+* implement group creation functionality with CLI and API support ([285903f](https://github.com/CWBudde/go-signal/commit/285903f77f7b93ede60140b0ac9dee15a4c85a8b))
+* install with go install; README install and MCP sections ([7e7eca9](https://github.com/CWBudde/go-signal/commit/7e7eca9cfab32a78686b110b435bacf952bc4a9e))
+* one-line install script attached to every release ([72cda78](https://github.com/CWBudde/go-signal/commit/72cda785c2eedafd143802d267f332052668b457))
+* receive sticker images and send stickers ([f62dc7d](https://github.com/CWBudde/go-signal/commit/f62dc7d400fe269bfa6eb72441f814bd6471677a))
+* receive sticker images and send stickers ([1498cff](https://github.com/CWBudde/go-signal/commit/1498cff8517721a64a5a5868dbb46bb078308a6d))
+
+
+### Bug Fixes
+
+* **app:** bound read receipts and allocate unique send timestamps ([bc47065](https://github.com/CWBudde/go-signal/commit/bc470659c5eaa46555dd2bddd9817f4516aa4e84))
+
+
+### Documentation
+
+* define own-profile text update design ([a76b6a6](https://github.com/CWBudde/go-signal/commit/a76b6a6741e60d6666892f109d000f5d3ccbeecc))
+* plan own-profile text updates ([6364190](https://github.com/CWBudde/go-signal/commit/6364190f2ed9c1c8eb5f5b2f54f0b3dbc9eef5bc))
+* record own-profile implementation delivery ([e3f14b8](https://github.com/CWBudde/go-signal/commit/e3f14b821dfcc29971eb16a5cfee66ab80cdc3d9))
+
 ## 0.1.0 (2026-09-28)
 
 
