@@ -56,6 +56,23 @@ func connectWith(
 ) *sdk.ClientSession {
 	t.Helper()
 
+	return connectServer(t, newServer(t, fake, opts, appOpts...), mcpClient)
+}
+
+// localTimeZone names the location that localTime returns.
+const localTimeZone = "test-local-time"
+
+// localTime as Options.Location makes newServer leave the Location unset (time.Local) instead of
+// setting UTC.
+func localTime() *time.Location {
+	return time.FixedZone(localTimeZone, 0)
+}
+
+// newServer returns a server on the fake with the options (Version, Location and a DownloadDir
+// are filled in) that receives while the test runs if the fake has a linked account.
+func newServer(t *testing.T, fake *signaltest.Fake, opts mcp.Options, appOpts ...app.Option) *mcp.Server {
+	t.Helper()
+
 	client, err := fake.Factory(t.Context(), signal.Options{})
 	if err != nil {
 		t.Fatalf("open: %v", err)
@@ -68,7 +85,13 @@ func connectWith(
 		}
 	})
 
-	opts.Version, opts.Location = testVersion, time.UTC
+	opts.Version = testVersion
+	if opts.Location != nil && opts.Location.String() == localTimeZone {
+		opts.Location = nil
+	} else {
+		opts.Location = time.UTC
+	}
+
 	if opts.DownloadDir == "" {
 		opts.DownloadDir = t.TempDir()
 	}
@@ -78,6 +101,13 @@ func connectWith(
 	if len(fake.Linked) > 0 {
 		receive(t, server, client)
 	}
+
+	return server
+}
+
+// connectServer connects an MCP client with the configuration to the server.
+func connectServer(t *testing.T, server *mcp.Server, mcpClient testClient) *sdk.ClientSession {
+	t.Helper()
 
 	serverTransport, clientTransport := sdk.NewInMemoryTransports()
 
