@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.2.1](https://github.com/CWBudde/go-signal/compare/v0.2.0...v0.2.1) (2026-10-01)
+
+
+### Bug Fixes
+
+* **mcp:** keep the panic value out of the client error ([034dfd0](https://github.com/CWBudde/go-signal/commit/034dfd0f29969453666d86623fa3b63aba642502))
+* **mcp:** stop doctor from panicking and recover tool panics ([003660b](https://github.com/CWBudde/go-signal/commit/003660b6d043b9b235bb9139b7579cb9f86590cc))
+* **mcp:** stop doctor from panicking without a location and recover tool panics ([347b7d6](https://github.com/CWBudde/go-signal/commit/347b7d6475bbb8605ccf9690dfd9e0bad19e9b4c))
+
+
+### Documentation
+
+* add the go-signal gopher to the README ([0ccd30b](https://github.com/CWBudde/go-signal/commit/0ccd30b6fa339b13317f50ae0b46a52dcec7e422))
+* add the go-signal gopher to the README ([0880518](https://github.com/CWBudde/go-signal/commit/0880518ca90d1406cbc067ae63fafc2142c3ffea))
+
 ## [0.2.0](https://github.com/CWBudde/go-signal/compare/v0.1.0...v0.2.0) (2026-09-30)
 
 
