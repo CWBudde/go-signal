@@ -1,5 +1,9 @@
 # go-signal
 
+<p align="center">
+  <img src="docs/images/go-signal.png" alt="The Go gopher in a go-signal hoodie, holding a laptop and a phone with Signal" width="240">
+</p>
+
 A command-line client for the [Signal](https://signal.org) messenger, written in Go. It is a Java-free
 alternative to [signal-cli](https://github.com/AsamK/signal-cli) with its own idiomatic CLI. It
 runs as a linked device next to your phone: it sends and receives messages, reactions, receipts
