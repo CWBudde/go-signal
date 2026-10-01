@@ -105,13 +105,20 @@ func NewServer(a *app.App, opts Options) *Server {
 		MaxAge: opts.InboxMaxAge, MaxCount: opts.InboxMaxCount, Added: server.added,
 	})
 
+	loc := opts.Location
+	if loc == nil {
+		loc = time.Local //nolint:gosmopolitan // text output is for the local user
+	}
+
 	handlers := &tools{
-		app: a, inbox: server.inbox, loc: opts.Location, dir: opts.DownloadDir, attachDir: opts.AttachDir,
+		app: a, inbox: server.inbox, loc: loc, dir: opts.DownloadDir, attachDir: opts.AttachDir,
 		logger: logger, version: opts.Version, started: time.Now(), readOnly: opts.ReadOnly,
 	}
 	if opts.Confirm {
 		handlers.confirmer = newConfirmer()
 	}
+
+	server.AddReceivingMiddleware(logCalls(logger))
 
 	addReadTools(server.Server, handlers)
 	addDoctor(server.Server, handlers)
