@@ -58,6 +58,11 @@ func TestToolPanic(t *testing.T) {
 		t.Fatalf("boom = %+v, want an error", res)
 	}
 
+	// The panic value stays in the log; the client gets a generic error.
+	if reveals(err, res, "kaboom") {
+		t.Errorf("error %v, result %+v reveal the panic value", err, res)
+	}
+
 	if got := logs.String(); !strings.Contains(got, "handler panicked") || !strings.Contains(got, "kaboom") ||
 		!strings.Contains(got, "goroutine") {
 		t.Errorf("log lacks the panic and its stack:\n%s", got)
@@ -88,4 +93,23 @@ func TestDoctorLocalTime(t *testing.T) {
 	waitForCheck(t, session, "connection", func(check output.CheckJSON) bool {
 		return strings.HasPrefix(check.Detail, "connected since ")
 	})
+}
+
+// reveals reports whether the error or the text of the result contains s.
+func reveals(err error, res *sdk.CallToolResult, s string) bool {
+	if err != nil && strings.Contains(err.Error(), s) {
+		return true
+	}
+
+	if res == nil {
+		return false
+	}
+
+	for _, content := range res.Content {
+		if text, ok := content.(*sdk.TextContent); ok && strings.Contains(text.Text, s) {
+			return true
+		}
+	}
+
+	return false
 }

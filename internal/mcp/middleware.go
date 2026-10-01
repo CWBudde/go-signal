@@ -45,7 +45,8 @@ func logCalls(logger *slog.Logger) sdk.Middleware {
 	}
 }
 
-// recovered calls next and turns a panic into errPanic, logged with its stack.
+// recovered calls next and turns a panic into errPanic, logged with its stack. The client only
+// gets the generic error: the panic value may hold internal or private data.
 func recovered(
 	ctx context.Context, logger *slog.Logger, next sdk.MethodHandler, method, tool string, req sdk.Request,
 ) (sdk.Result, error) {
@@ -64,7 +65,7 @@ func recovered(
 			logger.ErrorContext(ctx, "mcp: handler panicked",
 				"method", method, "tool", tool, "panic", cause, "stack", string(debug.Stack()))
 
-			res, err = nil, fmt.Errorf("%w in %s: %v", errPanic, method, cause)
+			res, err = nil, fmt.Errorf("%w in %s", errPanic, method)
 		}()
 
 		res, err = next(ctx, method, req)
