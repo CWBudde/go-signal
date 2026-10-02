@@ -20,6 +20,7 @@ type GroupJSON struct {
 	ID                       string                 `json:"id"`
 	Title                    string                 `json:"title"`
 	Description              string                 `json:"description,omitempty"`
+	AvatarPath               string                 `json:"avatarPath,omitempty"`
 	Revision                 uint32                 `json:"revision"`
 	Membership               string                 `json:"membership"`
 	Role                     string                 `json:"role,omitempty"`
@@ -120,6 +121,7 @@ func NewGroupJSON(group signal.Group, names app.Names) GroupJSON {
 
 	out.MembersCanEditAttributes = new(group.MembersCanEditAttributes)
 	out.MembersCanAddMembers = new(group.MembersCanAddMembers)
+	out.AvatarPath = group.AvatarPath
 
 	out.Members = make([]GroupMemberJSON, 0, len(group.Members))
 	for _, member := range group.Members {
@@ -222,6 +224,7 @@ func (p *Printer) Group(group signal.Group) error {
 	fmt.Fprintf(table, "ID:\t%s\n", group.ID)
 	fmt.Fprintf(table, "Title:\t%s\n", orDash(oneLine(group.Title)))
 	fmt.Fprintf(table, "Description:\t%s\n", orDash(oneLine(group.Description)))
+	writeGroupAvatar(table, group)
 	fmt.Fprintf(table, "Revision:\t%d\n", group.Revision)
 	fmt.Fprintf(table, "Our role:\t%s\n", ourRole(group))
 	fmt.Fprintf(table, "Disappearing messages:\t%s\n", timerText(group.Timer))
@@ -267,6 +270,12 @@ func (p *Printer) Group(group signal.Group) error {
 	}
 
 	return flush(table)
+}
+
+func writeGroupAvatar(table *tabwriter.Writer, group signal.Group) {
+	if group.Err == nil && group.AvatarPath != "" {
+		fmt.Fprintf(table, "Avatar path:\t%s\n", strconv.Quote(group.AvatarPath))
+	}
 }
 
 // LeftGroup confirms `groups leave`.

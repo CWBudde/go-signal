@@ -132,26 +132,40 @@ updated group and remembers the new title for subsequent commands. An unchanged 
 no update; a concurrent change fails with a retry hint. A successful rename confirms the server
 update; failures notifying members are logged separately.
 
-Update a group's description, disappearing-message timer or permissions:
+Update a group's description, avatar, disappearing-message timer or permissions:
 
 ```sh
 go-signal groups update "Family" --description "Family plans" --timer 86400
 go-signal groups update "Family" --announcements-only --edit-permission admins --add-member-permission admins
 go-signal groups update "Family" --description= --timer 0 --announcements-only=false
+go-signal groups update "Family" --avatar family.png --description "Family plans"
+go-signal groups update "Family" --remove-avatar
 ```
 
 Supply at least one setting. Omitted flags preserve existing values; an empty description
 clears it, and `--timer` accepts integer seconds (`0` disables the timer). Permission values
-are `members` or `admins`. Description and timer changes require full membership and permission
+are `members` or `admins`. Description, avatar and timer changes require full membership and permission
 to edit group information; changing permissions or announcement mode requires an administrator.
 Every supplied setting is checked against current permissions before any change is submitted.
-An unchanged update sends nothing and leaves the revision unchanged. All changed settings go
+Without `--avatar`, an unchanged update sends nothing and leaves the revision unchanged. All changed settings go
 in one patch, without automatic conflict retries. Success prints fresh server state, including
 who can edit details and add members. If the server accepted the change but fetching its result
 failed, inspect `groups show <id>` before retrying. Member notification failures are logged.
 If the reply cannot establish acceptance, the error identifies an uncertain outcome, the group
 ID and attempted revision; inspect the group before retrying rather than assuming failure.
 Use `groups rename` to change the title.
+
+`--avatar` accepts a regular PNG or JPEG file up to 2 MiB and 2048 pixels in each dimension.
+These are local input limits; images are validated and uploaded unchanged, without resizing.
+`--remove-avatar` clears the avatar; the two flags are mutually exclusive. Omitting both
+preserves it. Setting an avatar always uploads and changes the revision, even when you supply
+the same file again; removing an already absent avatar leaves the revision unchanged.
+The output includes the current opaque `avatarPath`, without downloading the image.
+
+All supplied settings are authorized before uploading. An upload failure leaves group state
+unchanged; a later conflict or failed patch can leave unused encrypted image data on the CDN.
+Avatar and other settings are applied in one group patch. Phone rendering and restoration
+require the separate [live check](docs/dev.md#group-avatar-live-check).
 
 To add members or invite users to an existing group:
 

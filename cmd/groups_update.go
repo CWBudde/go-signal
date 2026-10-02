@@ -14,6 +14,8 @@ type groupUpdateFlags struct {
 	announcementsOnly   bool
 	editPermission      string
 	addMemberPermission string
+	avatarFile          string
+	removeAvatar        bool
 }
 
 func newGroupsUpdateCmd(clients *clientOpener, printers *printerFactory) *cobra.Command {
@@ -21,16 +23,23 @@ func newGroupsUpdateCmd(clients *clientOpener, printers *printerFactory) *cobra.
 
 	cmd := &cobra.Command{
 		Use:   "update <group>",
-		Short: "Update a group's description, timer or permissions",
+		Short: "Update a group's description, timer, avatar or permissions",
 		Long: `Update changes only the supplied settings. Supply at least one flag. Omitted flags
 preserve current values; --description= clears the description, --timer 0 disables
 disappearing messages, and --announcements-only=false lets all members send messages.
 The timer uses integer seconds. Permission values are members or admins.
+Set an avatar with --avatar <file>, or clear it with --remove-avatar; these flags
+are mutually exclusive. Avatars must be regular PNG or JPEG files, at most 2 MiB
+and 2048 pixels on either side. Files are validated before account access; images
+are not resized. --remove-avatar=false preserves the avatar.
 
-Description and timer changes require full membership and permission to edit group
+Description, timer and avatar changes require full membership and permission to edit group
 information. Changing announcement mode or permissions requires an administrator.
 Every supplied setting is checked against fresh permissions, including unchanged values.
-All changed settings are submitted in one patch. An unchanged update sends nothing.
+All changed settings are submitted in one patch. Setting an avatar always uploads
+and advances the revision, even for the same file. Removing an absent avatar is a
+no-op after fresh authorization. Other unchanged updates send nothing. An avatar
+upload failure submits no group patch.
 Conflicts fail without automatic retries; accepted or uncertain errors require inspecting
 groups show before retrying. Success prints fresh server state. Member notification
 failures are logged separately. Use groups rename to change the title.
@@ -38,16 +47,9 @@ failures are logged separately. Use groups rename to change the title.
 ` + groupArgHelp,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			update, err := flags.update(cmd)
+			req, err := flags.request(cmd, args[0])
 			if err != nil {
 				return err
-			}
-
-			req := app.UpdateGroupRequest{Group: args[0], Update: update}
-
-			err = req.Check()
-			if err != nil {
-				return err //nolint:wrapcheck // preflight error is self-contained
 			}
 
 			printer, err := printers.printer(cmd.OutOrStdout())
@@ -75,11 +77,28 @@ failures are logged separately. Use groups rename to change the title.
 	}
 
 	flags.register(cmd)
+	cmd.MarkFlagsMutuallyExclusive("avatar", "remove-avatar")
 
 	return cmd
 }
 
+func (f groupUpdateFlags) request(cmd *cobra.Command, group string) (app.UpdateGroupRequest, error) {
+	update, err := f.update(cmd)
+	if err != nil {
+		return app.UpdateGroupRequest{}, err
+	}
+
+	req := app.UpdateGroupRequest{Group: group, Update: update, RemoveAvatar: f.removeAvatar}
+	if cmd.Flags().Changed("avatar") {
+		req.AvatarFile = new(f.avatarFile)
+	}
+
+	return req.Prepare() //nolint:wrapcheck // self-contained preflight validation
+}
+
 func (f *groupUpdateFlags) register(cmd *cobra.Command) {
+	cmd.Flags().StringVar(&f.avatarFile, "avatar", "", "PNG or JPEG avatar file (at most 2 MiB, 2048 pixels per side)")
+	cmd.Flags().BoolVar(&f.removeAvatar, "remove-avatar", false, "clear the group avatar (omitted or false preserves)")
 	cmd.Flags().StringVar(&f.description, "description", "", "description (empty clears; omitted preserves)")
 	cmd.Flags().Uint32Var(&f.timer, "timer", 0,
 		"disappearing-message timer in seconds (0 disables; omitted preserves)")

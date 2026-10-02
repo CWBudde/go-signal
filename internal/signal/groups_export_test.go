@@ -89,6 +89,16 @@ func AddMembersChange(raw *signalmeow.Group, self string, members []Recipient) (
 // GroupAdditionSender is the transport used by AddGroupMembersOnce.
 type GroupAdditionSender = groupAdditionSender
 
+// GroupAvatarSender is the transport used by UpdateGroupWithAvatarOnce.
+type GroupAvatarSender = groupAvatarSender
+
+// UpdateGroupWithAvatarOnce exposes avatar preflight and single-attempt transport.
+func UpdateGroupWithAvatarOnce(ctx context.Context, cli GroupAvatarSender, raw *signalmeow.Group, self string,
+	update GroupUpdate, invalidate func(),
+) (*signalmeow.Group, error) {
+	return updateGroupWithAvatarOnce(ctx, cli, raw, self, update, invalidate)
+}
+
 // AddGroupMembersOnce exposes the single-attempt addition and authoritative refetch.
 func AddGroupMembersOnce(ctx context.Context, cli GroupAdditionSender,
 	raw *signalmeow.Group, change *signalmeow.GroupChange, invalidate func(),

@@ -20,6 +20,10 @@ func settingsChange(raw *signalmeow.Group, self string, update GroupUpdate) (*si
 	}
 
 	change := &signalmeow.GroupChange{}
+	if next.AvatarPath != group.AvatarPath {
+		change.ModifyAvatar = new(next.AvatarPath)
+	}
+
 	if next.Description != group.Description {
 		change.ModifyDescription = new(next.Description)
 	}
@@ -140,19 +144,7 @@ func (c *meowClient) UpdateGroup(ctx context.Context, ref string, update GroupUp
 		return Group{}, c.lostOr(groupFetchError(gid, err))
 	}
 
-	change, err := settingsChange(raw, c.ownACI, update)
-	if err != nil {
-		return Group{}, fmt.Errorf("update group %s: %w", gid, err)
-	}
-
-	if change == nil {
-		group := convertGroup(raw, c.ownACI)
-		c.cacheGroup(ctx, group)
-
-		return group, nil
-	}
-
-	accepted, err := updateGroupSettingsOnce(ctx, cli, raw, change, func() { cli.GroupCache.Delete(gid) })
+	accepted, err := updateGroupWithAvatarOnce(ctx, cli, raw, c.ownACI, update, func() { cli.GroupCache.Delete(gid) })
 	if err != nil {
 		partial := Group{}
 		if accepted != nil {

@@ -573,6 +573,7 @@ the server no longer shows us (we left or were removed) or doesn't know is still
 | `id`                       | string  | Group ID (base64)                                                                                                                 |
 | `title`                    | string  | Title; empty if unknown                                                                                                           |
 | `description`              | string  | Description; _optional_                                                                                                           |
+| `avatarPath`               | string  | Opaque CDN path of the current avatar; _optional_, absent when cleared or the group cannot be fetched. No image is downloaded     |
 | `revision`                 | number  | Number of changes to the group so far (`0` when `error` is set)                                                                   |
 | `membership`               | string  | How we belong to it: `member`, `pending` (invited), `requesting` (asked to join) or `none`                                        |
 | `role`                     | string  | Our role: `admin` or `member` (for `pending`: the role the invitation offers); _optional_                                         |
@@ -613,7 +614,7 @@ conflict errors fail the command without printing a success document.
 ## `groups update`
 
 Returns the same document as [`groups show`](#groups-show), fetched after the combined settings
-change. An unchanged update leaves the revision unchanged. Omitted settings are preserved;
+change. An unchanged update without `--avatar` leaves the revision unchanged. Omitted settings are preserved;
 explicit empty description, zero timer and false announcement mode are applied. Permission
 booleans are included even when false. All supplied fields are authorized against fresh state
 before any mutation. Validation, permission and conflict errors produce no success document,
@@ -621,6 +622,13 @@ including when the patch was accepted but its response or follow-up fetch failed
 retains the accepted group ID/revision and advises inspection before retrying.
 When a transport or response-decoding error prevents establishing acceptance, the error reports
 an uncertain outcome with the group ID and attempted revision, without claiming acceptance.
+
+`--avatar` uploads a validated PNG/JPEG unchanged and sets its path in the same patch as other
+settings. Setting always changes the revision; `--remove-avatar` clears the path, and removing
+an absent avatar is a no-op. Omitting both preserves the avatar. A failed upload submits no
+group patch. A later patch failure can leave an unused encrypted upload. Success returns the
+fresh server's optional `avatarPath`; accepted follow-up failures return no success document
+or inferred avatar path. The additive field retains schema version 1.
 
 ## `groups add-members`
 
