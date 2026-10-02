@@ -583,6 +583,7 @@ the server no longer shows us (we left or were removed) or doesn't know is still
 | `members`                  | array   | Members: recipient fields plus `role` (`admin`, `member`) and `joinedAtRevision`; _optional_ (missing when `error` is set)        |
 | `pending`                  | array   | Invited users: recipient fields plus `role`, `addedBy` (recipient) and `invitedAt`; _optional_ (as `members`)                     |
 | `requesting`               | array   | Users asking to join: recipient fields plus `requestedAt`; _optional_ (as `members`)                                              |
+| `banned`                   | array   | Banned users: recipient fields plus optional `bannedAt` (UTC RFC3339 timestamp); _optional_ (as `members`)                        |
 | `leftAt`                   | string  | When we left the group with go-signal; _optional_                                                                                 |
 | `error`                    | string  | Why the group couldn't be fetched (e.g. we are not a member); _optional_. The other fields then only hold what go-signal knows    |
 
@@ -644,6 +645,21 @@ level reflects the selected account, including after self-demotion. Duplicates c
 and unchanged roles are skipped. A complete no-op preserves the revision. Validation,
 permission and last-administrator failures produce no success document. Errors after an
 accepted change also produce no success document; inspect the group before retrying.
+
+## `groups ban` / `groups unban`
+
+Returns the same document as [`groups show`](#groups-show), freshly fetched after the change.
+Banning removes targets from `members`, `pending` or `requesting` and adds them to `banned`;
+absent users can also be banned. Unbanning removes their ACI bans without adding membership.
+Duplicates and unchanged requests are skipped, preserving the revision for a complete no-op.
+Existing ban times and PNI bans are preserved; mutation targets resolve to ACIs. `bannedAt` is
+omitted when the server reports no timestamp. A fetched group with no bans has `banned: []`;
+an inaccessible group omits it. These additive fields retain schema version 1.
+
+Validation, permission and conflict errors produce no success document. Accepted follow-up
+failures retain the group ID/revision in the error with inspection guidance; uncertain patch
+errors advise inspection without claiming acceptance. See [the live check](dev.md#group-ban-live-check)
+for phone and link-joining verification.
 
 ## `groups leave`
 

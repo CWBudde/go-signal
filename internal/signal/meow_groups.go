@@ -362,6 +362,8 @@ func convertGroup(raw *signalmeow.Group, ownACI string) Group {
 		})
 	}
 
+	group.Banned = convertBannedMembers(raw.BannedMembers)
+
 	group.Membership, group.Role = group.MembershipOf(ownACI)
 	group.MembersCanEditAttributes = raw.AccessControl != nil &&
 		raw.AccessControl.Attributes == signalmeow.AccessControl_MEMBER
@@ -449,4 +451,18 @@ func containsACI(recipients []Recipient, aci string) bool {
 	}
 
 	return false
+}
+
+func convertBannedMembers(raw []*signalmeow.BannedMember) []BannedMember {
+	var banned []BannedMember
+
+	for _, member := range raw {
+		if member != nil {
+			banned = append(banned, BannedMember{
+				Recipient: serviceRecipient(member.ServiceID), BannedAt: msTime(member.Timestamp),
+			})
+		}
+	}
+
+	return banned
 }

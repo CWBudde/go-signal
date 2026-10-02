@@ -182,6 +182,27 @@ yourself. Success confirms the server update; member notification failures are l
 Invitations known only by phone-number identity (PNI), which the current backend cannot
 decrypt, cannot be removed with this command.
 
+Administrators can ban users from a group or lift existing bans:
+
+```sh
+go-signal groups ban "Family" +4915112345678 @alice.42
+go-signal groups unban "Family" @alice.42
+go-signal groups show "Family"   # includes the banned users and ban times
+```
+
+Banning removes full membership, revokes an invitation or rejects a join request in the same
+change, and prevents joining or requesting through a group link. You can also ban an absent
+user. Unbanning permits rejoining but does not add the user back. Recipients can be numbers,
+ACIs or usernames; all targets resolve to ACIs before one patch. You cannot target yourself.
+Existing PNI bans are shown and preserved, but these commands cannot change them or remove
+PNI-only invitations. Duplicates and unchanged bans are skipped; a complete no-op preserves
+the revision and still requires current administrator access. Existing ban times are preserved.
+
+Success prints fresh server state. Conflicts are not retried; inspect `groups show <id>` before
+retrying accepted or uncertain failures. Notification failures after acceptance are logged.
+Preventive bans do not notify absent users, and unbanning does not notify the unbanned user.
+Phone behavior and blocked link joining require the separate [live check](docs/dev.md#group-ban-live-check).
+
 Administrators can promote or demote full members:
 
 ```sh

@@ -134,6 +134,12 @@ type Fake struct {
 	GroupUpdateFollowUpErr error
 	// SetGroupMemberRoleErr rejects a validated role mutation before changing the group.
 	SetGroupMemberRoleErr error
+	// SetGroupBannedErr rejects a validated ban change before mutation.
+	SetGroupBannedErr error
+	// GroupBanFollowUpErr fails the fetch after a committed ban change.
+	GroupBanFollowUpErr error
+	// GroupBanTime fixes the timestamp for new bans; zero uses time.Now.
+	GroupBanTime time.Time
 	// GroupRoleFollowUpErr fails verification after a role change was accepted.
 	GroupRoleFollowUpErr error
 	// RemoveGroupMembersErr makes removal fail after validation, before changing the group.

@@ -244,6 +244,7 @@ func (c *client) fetch(groupID string) (signal.Group, error) {
 	group.Members = slices.Clone(group.Members)
 	group.Pending = slices.Clone(group.Pending)
 	group.Requesting = slices.Clone(group.Requesting)
+	group.Banned = slices.Clone(group.Banned)
 	c.fake.cacheGroup(group)
 
 	return group, nil

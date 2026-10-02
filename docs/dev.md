@@ -316,6 +316,39 @@ Inspect `groups show <id>` before retrying accepted or uncertain failures. Notif
 failures after acceptance are logged; phone observation is required independently of server
 state. Leave live acceptance open until both backends and phone observations are verified.
 
+### Group-ban live check
+
+This manual check is separately opt-in. Use disposable linked accounts, an online peer phone
+and disposable groups, with explicit `--data-dir` and `--account` for every command. Run once
+with `just build` (pure Go) and once with `just build-cgo` using separate groups. Enable a
+group link on the administrator's phone; invite-link management and joining are not yet CLI
+commands. Record the original membership, bans and revision with `groups show <id> -o json`.
+
+1. As a full administrator, run `groups ban <id> <peer-number> <peer-ACI>`. Verify one revision
+   increment, the peer removed from `members` and one ACI entry in `banned` with a ban time.
+   Check the peer's phone for removal. Try the group link on that phone; joining or requesting
+   must be denied. Repeat the ban and confirm the revision and ban time stay unchanged.
+2. Run `groups unban <id> <peer>`. Confirm the ban disappears but the peer remains absent.
+   Repeat and check there is no revision increment. Verify the phone can join or request again
+   using the link, then restore membership and approve the request as needed.
+3. Prepare disposable ACI invitations and join requests on the phones. Ban those targets and
+   verify invitations are revoked and requests rejected in the same revision as the ban.
+   Check peer-phone state. Separately ban an absent user and confirm no membership is added.
+4. With an ordinary member as the selected account, attempt both commands, including requests
+   whose desired bans already match. They must fail without changing bans, membership or
+   revision. A batch containing a valid target and self (number, ACI or `self`) must fail
+   atomically. Check duplicate targets and preservation of unrelated bans/settings.
+5. If PNI bans are available in the fixture, verify they are displayed and preserved through
+   ACI mutations. These commands cannot target PNI bans or revoke PNI-only invitations.
+6. Restore original bans and membership from the administrator account and verify fresh server
+   and phone state. Unbanning does not restore membership; re-add or re-invite users explicitly.
+   Remove the test peers and leave the disposable groups when finished.
+
+Inspect `groups show <id>` before retrying accepted or uncertain failures. Notification
+failures after acceptance are logged; phone observations and link-joining attempts must be
+checked independently of server state. Leave live acceptance open until both backends and
+those observations have been verified. Ordinary tests use offline fixtures only.
+
 ### Own-profile live check
 
 Profile mutation checks are manual and separately opt-in. Use a dedicated disposable account
