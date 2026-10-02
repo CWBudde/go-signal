@@ -776,9 +776,10 @@ also prints its caught panic about the empty endorsements to stderr, which we ca
 the new revision probably fails (only logged), its `signalmeow_groups` row stays (the group keeps
 being listed, as `left`), and a failure to tell the members is only logged by signalmeow. Groups
 can't be told apart as "left on another device" versus "removed" (both a 403). Creation,
-renaming, member addition/removal and settings updates (`groups update`) are implemented under
-"Later / on demand", with live acceptance tracked separately there. Avatars, banned members,
-invite links, joining and standalone administrator-role changes remain open.
+renaming, member addition/removal, settings updates (`groups update`) and standalone
+administrator-role changes (`groups promote|demote`) are implemented under "Later / on demand",
+with live acceptance tracked separately there. Avatars, banned members, invite links and joining
+remain open.
 
 #### 4.3 Identities and safety numbers
 
@@ -1853,6 +1854,23 @@ These remain optional/on demand. Checked foundations do not imply the user-facin
   - [ ] Settings: verify combined changes, omission/clearing, no-op, permissions, peer-phone
         updates and restoration live on both backends with disposable groups, following
         [the live procedure](docs/dev.md#group-settings-live-check).
+  - [x] Standalone administrator-role changes (`groups promote|demote <group> <member>...`,
+        2026-10-02), extending the merged group-settings work. Numbers, ACIs, usernames and
+        self resolve before one role-only patch. Fresh full-admin authorization and every
+        full-member target are checked atomically; invitations and join requests are rejected.
+        Duplicates and unchanged roles are skipped. Self-demotion requires another full admin;
+        demoting every administrator, including in a self-only group, is refused. Conflicts
+        are not retried. Fresh accepted state is returned; accepted follow-up failures retain
+        ID/revision, while opaque failures report uncertainty with inspection guidance.
+  - [x] Roles: policy/ownership/revision and exact-wire tests, stale-cache authorization,
+        transport failure paths, account-aware fake/application tests, CLI preflight and
+        plain/JSON goldens, documentation and independent reviews. `just fmt`, `just check`,
+        `just check-purego`, the no-cgo fallback suite, `just build` and `just docs-gen` passed.
+        Existing group JSON schema version 1 is retained.
+  - [ ] Roles: verify promotion/demotion, duplicates/no-op, permissions, invalid batches,
+        self-demotion, last-admin refusal, peer-phone updates and restoration live on both
+        backends with disposable groups, following
+        [the live procedure](docs/dev.md#group-role-live-check). No production mutations were run.
   - [ ] Add command/output tests, documentation and live verification for the remaining operations.
 - [ ] Stickers, stories, polls and pinned messages.
   - [x] Receive and render sticker metadata (pack ID, sticker ID and emoji), with conversion

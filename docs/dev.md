@@ -289,6 +289,33 @@ An accepted patch whose notification fails may only log that failure; phone obse
 required separately from the server-state checks. Leave live acceptance open until both
 backends and the peer-phone observations have been checked.
 
+### Group-role live check
+
+This manual check is separately opt-in. Use a disposable linked account, an online peer
+phone and a disposable group, with explicit `--data-dir` and `--account` for every command.
+Run once with `just build` (pure Go) and once with `just build-cgo` using separate groups.
+
+1. Create a group with the peer as a full member and the test account as administrator.
+   Record `groups show <id> -o json`, including roles and revision.
+2. Run `groups promote <id> <peer>` and confirm a fresh server fetch shows both accounts as
+   administrators with one revision increment. Check the peer's phone for its role and
+   group-change notification. Repeat with the peer's number and ACI together; confirm no
+   further revision increment.
+3. Run `groups demote <id> <peer>` and check the server and phone show the peer as an ordinary
+   member. A batch containing a full member and an invited, requesting or absent user must
+   fail without changing any role or revision. Repeat with the test account as an ordinary
+   member (roles set on the peer's phone); even an unchanged request must fail permission checks.
+4. With both accounts administrators again, run `groups demote <id> self`. Confirm the
+   selected account's group-level role is `member` and the peer remains administrator.
+   Restore the test account's role on the peer's phone before continuing.
+5. Attempt to demote all administrators together, and separately the only administrator of
+   a self-only group. Both must fail without a patch. Restore the original roles and verify
+   fresh server and phone state before removing the peer and leaving the disposable groups.
+
+Inspect `groups show <id>` before retrying accepted or uncertain failures. Notification
+failures after acceptance are logged; phone observation is required independently of server
+state. Leave live acceptance open until both backends and phone observations are verified.
+
 ### Own-profile live check
 
 Profile mutation checks are manual and separately opt-in. Use a dedicated disposable account

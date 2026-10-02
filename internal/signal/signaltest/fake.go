@@ -132,6 +132,10 @@ type Fake struct {
 	UpdateGroupErr error
 	// GroupUpdateFollowUpErr fails verification after the settings were accepted.
 	GroupUpdateFollowUpErr error
+	// SetGroupMemberRoleErr rejects a validated role mutation before changing the group.
+	SetGroupMemberRoleErr error
+	// GroupRoleFollowUpErr fails verification after a role change was accepted.
+	GroupRoleFollowUpErr error
 	// RemoveGroupMembersErr makes removal fail after validation, before changing the group.
 	RemoveGroupMembersErr error
 	// AddGroupMembersErr makes addition fail before changing the group.

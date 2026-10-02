@@ -636,6 +636,15 @@ Returns the same document as [`groups show`](#groups-show), with the new revisio
 removed recipients absent from `members`, `pending` or `requesting`. Duplicate recipients
 count once. Validation, permission and conflict errors fail without a success document.
 
+## `groups promote` / `groups demote`
+
+Returns the same document as [`groups show`](#groups-show), freshly fetched after the
+change. The affected full members have `role` set to `admin` or `member`; `role` at group
+level reflects the selected account, including after self-demotion. Duplicates count once
+and unchanged roles are skipped. A complete no-op preserves the revision. Validation,
+permission and last-administrator failures produce no success document. Errors after an
+accepted change also produce no success document; inspect the group before retrying.
+
 ## `groups leave`
 
 ```json

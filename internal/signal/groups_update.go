@@ -11,7 +11,7 @@ import (
 var (
 	// ErrInvalidGroupUpdate means the settings update is empty or contains an invalid description.
 	ErrInvalidGroupUpdate = errors.New("invalid group update")
-	// ErrGroupUpdateUncertain means a settings PATCH may have been accepted despite its error.
+	// ErrGroupUpdateUncertain means a group PATCH may have been accepted despite its error.
 	// Inspect the group before retrying; the result does not claim an accepted revision.
 	ErrGroupUpdateUncertain = errors.New("group update outcome is uncertain")
 )

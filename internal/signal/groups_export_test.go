@@ -126,3 +126,17 @@ func UpdateGroupSettingsOnce(ctx context.Context, cli GroupAdditionSender,
 ) (*signalmeow.Group, error) {
 	return updateGroupSettingsOnce(ctx, cli, raw, change, invalidate)
 }
+
+// MemberRoleChange exposes the role change builder.
+func MemberRoleChange(raw *signalmeow.Group, self string, members []Recipient,
+	role GroupRole,
+) (*signalmeow.GroupChange, error) {
+	return memberRoleChange(raw, self, members, role)
+}
+
+// SetGroupMemberRoleOnce exposes the single-attempt role transport and authoritative refetch.
+func SetGroupMemberRoleOnce(ctx context.Context, cli GroupAdditionSender,
+	raw *signalmeow.Group, change *signalmeow.GroupChange, invalidate func(),
+) (*signalmeow.Group, error) {
+	return setGroupMemberRoleOnce(ctx, cli, raw, change, invalidate)
+}
