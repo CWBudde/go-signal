@@ -134,6 +134,13 @@ type Fake struct {
 	GroupUpdateFollowUpErr error
 	// SetGroupMemberRoleErr rejects a validated role mutation before changing the group.
 	SetGroupMemberRoleErr error
+	// GroupLinkStates and GroupLinkPasswords hold separate invite-link server fixtures.
+	// Passwords are standard base64 of sixteen bytes; missing state means disabled.
+	GroupLinkStates      map[string]signal.GroupLinkState
+	GroupLinkPasswords   map[string]string
+	GroupLinkErr         error
+	UpdateGroupLinkErr   error
+	GroupLinkFollowUpErr error
 	// SetGroupBannedErr rejects a validated ban change before mutation.
 	SetGroupBannedErr error
 	// GroupBanFollowUpErr fails the fetch after a committed ban change.

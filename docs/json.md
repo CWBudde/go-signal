@@ -661,6 +661,35 @@ failures retain the group ID/revision in the error with inspection guidance; unc
 errors advise inspection without claiming acceptance. See [the live check](dev.md#group-ban-live-check)
 for phone and link-joining verification.
 
+## `groups link show` / `groups link update`
+
+These explicit commands return a dedicated document:
+
+```json
+{
+  "version": 1,
+  "groupLink": {
+    "id": "Z3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXA=",
+    "revision": 13,
+    "state": "disabled"
+  }
+}
+```
+
+| Field      | Type   | Description                                                                                 |
+| ---------- | ------ | ------------------------------------------------------------------------------------------- |
+| `id`       | string | Group ID in base64                                                                          |
+| `revision` | number | Fresh group revision; unchanged state without reset preserves it                            |
+| `state`    | string | `disabled`, `enabled`, `enabled-with-approval`, or `unknown` for unrecognized server access |
+| `url`      | string | Active `https://signal.group/#…` invite URL; omitted for disabled or unknown state          |
+
+The URL contains the master key and invite password. Ordinary group documents and existing
+MCP group results never include it. Updates require fresh administrator permissions, including
+no-ops. Disabling preserves the password; resetting replaces it without implicitly enabling.
+State and reset can be combined in one patch. Validation, permission, conflict, accepted
+follow-up and uncertain errors produce no success document. Accepted errors retain only the
+group ID/revision and advise inspection; uncertain errors do not claim acceptance.
+
 ## `groups leave`
 
 ```json

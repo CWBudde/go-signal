@@ -36,6 +36,7 @@ func newGroupsCmd(clients *clientOpener, printers *printerFactory) *cobra.Comman
 		newGroupsBanCmd(clients, printers),
 		newGroupsUnbanCmd(clients, printers),
 		newGroupsLeaveCmd(clients, printers),
+		newGroupsLinkCmd(clients, printers),
 	)
 
 	return cmd

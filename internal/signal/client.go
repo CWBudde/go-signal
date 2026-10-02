@@ -255,6 +255,15 @@ type Client interface { //nolint:interfacebloat // the one facade over signalmeo
 	// return ID/revision, and uncertain requests return ErrGroupUpdateUncertain.
 	SetGroupBanned(ctx context.Context, ref string, members []Recipient, banned bool) (Group, error)
 
+	// GroupLink returns an enabled group's invite URL after fetching fresh full membership.
+	// Disabled and unrecognized access states have no URL. Secrets appear only in this result.
+	GroupLink(ctx context.Context, ref string) (GroupLink, error)
+
+	// UpdateGroupLink changes invite access and/or rotates its password against fresh full
+	// administrator membership, even for no-ops. It submits one patch without retries and
+	// returns accepted ID/revision separately from uncertain or follow-up failures.
+	UpdateGroupLink(ctx context.Context, ref string, update GroupLinkUpdate) (GroupLink, error)
+
 	// GroupTitles returns what the title cache knows about the groups fetched before (by Groups,
 	// Group, CreateGroup, RenameGroup or LeaveGroup), by group ID, from the store: it needs no
 	// Connect. Groups never fetched are missing. It fails with ErrClosed after Close.

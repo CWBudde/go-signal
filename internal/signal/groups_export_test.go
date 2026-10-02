@@ -154,3 +154,25 @@ func SetGroupBannedOnce(ctx context.Context, cli GroupAdditionSender, raw *signa
 ) (*signalmeow.Group, error) {
 	return setGroupBannedOnce(ctx, cli, raw, change, invalidate)
 }
+
+// GroupLinkChange exposes the invite-link patch builder.
+func GroupLinkChange(raw *signalmeow.Group, self string, update GroupLinkUpdate) (*signalmeow.GroupChange, error) {
+	return groupLinkChange(raw, self, update)
+}
+
+// ConvertGroupLink exposes dedicated link conversion.
+func ConvertGroupLink(raw *signalmeow.Group, self string) (GroupLink, error) {
+	return convertGroupLink(raw, self)
+}
+
+// UpdateGroupLinkOnce exposes single-attempt link transport.
+func UpdateGroupLinkOnce(ctx context.Context, cli GroupAdditionSender, raw *signalmeow.Group,
+	change *signalmeow.GroupChange, invalidate func(),
+) (*signalmeow.Group, error) {
+	return updateGroupLinkOnce(ctx, cli, raw, change, invalidate)
+}
+
+// VerifiedGroupLink exposes accepted link verification and partial-result handling.
+func VerifiedGroupLink(raw *signalmeow.Group, self string, committedRevision uint32) (GroupLink, error) {
+	return verifiedGroupLink(raw, self, committedRevision)
+}

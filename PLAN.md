@@ -114,6 +114,8 @@ go-signal contacts list [--blocked] [--query <q>] | show <recipient> | block <re
 go-signal groups list | show <group> | leave <group> --yes [--promote <member>]...   # <group>: ID, master key or title
 go-signal groups create <title> [--member <number|ACI|@username>]...
 go-signal groups rename <group> <title>
+go-signal groups link show <group>
+go-signal groups link update <group> [--state disabled|enabled|enabled-with-approval] [--reset]
 go-signal groups add-members <group> <recipient>...
 go-signal groups remove-members <group> <recipient>...
 go-signal devices list
@@ -777,9 +779,10 @@ the new revision probably fails (only logged), its `signalmeow_groups` row stays
 being listed, as `left`), and a failure to tell the members is only logged by signalmeow. Groups
 can't be told apart as "left on another device" versus "removed" (both a 403). Creation,
 renaming, member addition/removal, settings updates (`groups update`), standalone
-administrator-role changes (`groups promote|demote`) and banned-member management
-(`groups ban|unban`) are implemented under "Later / on demand", with live acceptance tracked
-separately there. Avatars, invite links and joining remain open.
+administrator-role changes (`groups promote|demote`), banned-member management
+(`groups ban|unban`) and invite-link management (`groups link show|update`) are implemented
+under "Later / on demand", with live acceptance tracked separately there. Avatars and joining
+remain open.
 
 #### 4.3 Identities and safety numbers
 
@@ -1894,6 +1897,29 @@ These remain optional/on demand. Checked foundations do not imply the user-facin
         link joining, unbanning, duplicates/no-op, permissions, peer-phone updates and
         restoration live on both backends with disposable groups, following
         [the live procedure](docs/dev.md#group-ban-live-check). No production mutations were run.
+  - [x] Invite-link management (`groups link show|update <group>`, 2026-10-03).
+        Explicit link output contains the state and active URL; ordinary group/MCP output
+        contains no invite secrets. Full membership is required to read, and fresh full
+        administrator permissions to update, including unchanged requests. States are
+        disabled, enabled and enabled-with-approval; unknown server access exposes no URL.
+        Initial enabling creates a random 16-byte password in the same patch. Disabling
+        preserves the password; re-enabling restores the URL. Resetting invalidates the old
+        URL without enabling a disabled link. State/reset can be combined in one patch;
+        unchanged state without reset preserves the revision. Changes are not retried.
+        Accepted failures retain the committed ID/revision without an unverified URL;
+        uncertain failures advise inspecting `groups link show` without claiming acceptance.
+  - [x] Links: permission/no-op/revision, exact-wire, URL decoding, malformed-secret,
+        stale-cache authorization and transport failure tests; account-aware fake/application
+        tests, CLI preflight/secret-redaction, plain/JSON goldens, documentation and independent
+        reviews. `just fmt`, `just check`, `just check-purego` and the no-cgo fallback suite
+        passed. `just build` and `just docs-gen` passed with automatic Go VCS stamping
+        disabled for the sandbox's spurious `/tmp/.git`; justfile version metadata is retained.
+        Temporary compiler/just files and caches used ignored workspace directories after
+        `/tmp` quota errors. Dedicated `groupLink` JSON retains schema version 1.
+  - [ ] Links: verify initial enabling, disable/re-enable, approval, resets and old-link
+        rejection, permissions, no-op, peer-phone notifications and access-mode restoration
+        live on both backends with disposable groups, following
+        [the live procedure](docs/dev.md#group-link-live-check). No production mutations were run.
   - [ ] Add command/output tests, documentation and live verification for the remaining operations.
 - [ ] Stickers, stories, polls and pinned messages.
   - [x] Receive and render sticker metadata (pack ID, sticker ID and emoji), with conversion

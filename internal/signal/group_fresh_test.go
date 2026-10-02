@@ -87,6 +87,22 @@ func TestGroupFetchCannotAuthorizeFromCachedState(t *testing.T) { //nolint:cyclo
 				}
 			}
 
+			seedGroupCache(cache, cached)
+
+			_, linkErr := client.GroupLink(t.Context(), ref)
+			if !errors.Is(linkErr, errTest) {
+				t.Fatalf("GroupLink authorized cached state: %v", linkErr)
+			}
+
+			for _, update := range []signal.GroupLinkUpdate{{Reset: true}, {State: new(signal.GroupLinkDisabled)}} {
+				seedGroupCache(cache, cached)
+
+				_, updateErr := client.UpdateGroupLink(t.Context(), ref, update)
+				if !errors.Is(updateErr, errTest) {
+					t.Fatalf("UpdateGroupLink authorized cached state: %v", updateErr)
+				}
+			}
+
 			// Restore the stale fixture so Group independently proves its fresh-fetch behavior.
 			seedGroupCache(cache, cached)
 
