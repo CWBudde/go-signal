@@ -59,6 +59,18 @@ func TestGroupFetchCannotAuthorizeFromCachedState(t *testing.T) {
 				ref = masterKey
 			}
 
+			for _, description := range []string{"fresh", cached.Description} {
+				seedGroupCache(cache, cached)
+
+				_, updateErr := client.UpdateGroup(t.Context(), ref, signal.GroupUpdate{Description: new(description)})
+				if !errors.Is(updateErr, errTest) {
+					t.Fatalf("UpdateGroup authorized cached state: %v", updateErr)
+				}
+			}
+
+			// Restore the stale fixture so Group independently proves its fresh-fetch behavior.
+			seedGroupCache(cache, cached)
+
 			group, err := client.Group(t.Context(), ref)
 			if !errors.Is(err, errTest) {
 				t.Fatalf("Group returned cached authorization %+v, %v; want current fetch error %v", group, err, errTest)

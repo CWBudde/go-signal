@@ -107,11 +107,11 @@ type groupRemovalSender interface {
 func removeGroupMembersOnce(ctx context.Context, cli groupRemovalSender,
 	raw *signalmeow.Group, change *signalmeow.GroupChange, invalidate func(),
 ) error {
-	return changeGroupMembersOnce(ctx, cli, raw, change, invalidate, "removed")
+	return changeGroupOnce(ctx, cli, raw, change, invalidate, "Group members removed")
 }
 
-// changeGroupMembersOnce commits a single change without automatic conflict rebasing.
-func changeGroupMembersOnce(ctx context.Context, cli groupRemovalSender,
+// changeGroupOnce commits a single change without automatic conflict rebasing.
+func changeGroupOnce(ctx context.Context, cli groupRemovalSender,
 	raw *signalmeow.Group, change *signalmeow.GroupChange, invalidate func(), operation string,
 ) error {
 	masterKey, err := base64.StdEncoding.DecodeString(string(raw.GroupMasterKey))
@@ -144,7 +144,7 @@ func changeGroupMembersOnce(ctx context.Context, cli groupRemovalSender,
 	if err != nil {
 		// The server mutation succeeded. Match other group updates: report notification
 		// trouble in logs without inviting a retry of the already committed mutation.
-		zerolog.Ctx(ctx).Error().Err(err).Msgf("Group members %s, but notifying group members failed", operation)
+		zerolog.Ctx(ctx).Error().Err(err).Msgf("%s, but notifying group members failed", operation)
 	}
 
 	return nil

@@ -128,6 +128,10 @@ type Fake struct {
 	LeaveErr error
 	// RenameErr makes RenameGroup fail after validation, before changing the group.
 	RenameErr error
+	// UpdateGroupErr makes a settings mutation fail before changing the group.
+	UpdateGroupErr error
+	// GroupUpdateFollowUpErr fails verification after the settings were accepted.
+	GroupUpdateFollowUpErr error
 	// RemoveGroupMembersErr makes removal fail after validation, before changing the group.
 	RemoveGroupMembersErr error
 	// AddGroupMembersErr makes addition fail before changing the group.

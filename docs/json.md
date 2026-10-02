@@ -568,21 +568,23 @@ The scan limit defaults to 1,000 chat entries and is capped at 10,000.
 the server no longer shows us (we left or were removed) or doesn't know is still listed, with
 `error` set, the last title go-signal saw, and no member lists. The master key is never printed.
 
-| Field               | Type    | Description                                                                                                                    |
-| ------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `id`                | string  | Group ID (base64)                                                                                                              |
-| `title`             | string  | Title; empty if unknown                                                                                                        |
-| `description`       | string  | Description; _optional_                                                                                                        |
-| `revision`          | number  | Number of changes to the group so far (`0` when `error` is set)                                                                |
-| `membership`        | string  | How we belong to it: `member`, `pending` (invited), `requesting` (asked to join) or `none`                                     |
-| `role`              | string  | Our role: `admin` or `member` (for `pending`: the role the invitation offers); _optional_                                      |
-| `timerSeconds`      | number  | Disappearing messages timer in seconds; `0` is off                                                                             |
-| `announcementsOnly` | boolean | `true` if only admins can send messages                                                                                        |
-| `members`           | array   | Members: recipient fields plus `role` (`admin`, `member`) and `joinedAtRevision`; _optional_ (missing when `error` is set)     |
-| `pending`           | array   | Invited users: recipient fields plus `role`, `addedBy` (recipient) and `invitedAt`; _optional_ (as `members`)                  |
-| `requesting`        | array   | Users asking to join: recipient fields plus `requestedAt`; _optional_ (as `members`)                                           |
-| `leftAt`            | string  | When we left the group with go-signal; _optional_                                                                              |
-| `error`             | string  | Why the group couldn't be fetched (e.g. we are not a member); _optional_. The other fields then only hold what go-signal knows |
+| Field                      | Type    | Description                                                                                                                       |
+| -------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                       | string  | Group ID (base64)                                                                                                                 |
+| `title`                    | string  | Title; empty if unknown                                                                                                           |
+| `description`              | string  | Description; _optional_                                                                                                           |
+| `revision`                 | number  | Number of changes to the group so far (`0` when `error` is set)                                                                   |
+| `membership`               | string  | How we belong to it: `member`, `pending` (invited), `requesting` (asked to join) or `none`                                        |
+| `role`                     | string  | Our role: `admin` or `member` (for `pending`: the role the invitation offers); _optional_                                         |
+| `timerSeconds`             | number  | Disappearing messages timer in seconds; `0` is off                                                                                |
+| `announcementsOnly`        | boolean | `true` if only admins can send messages                                                                                           |
+| `membersCanEditAttributes` | boolean | Whether ordinary members may edit group information (including the timer); present for fetched groups, absent when `error` is set |
+| `membersCanAddMembers`     | boolean | Whether ordinary members may add or invite users; present for fetched groups, absent when `error` is set                          |
+| `members`                  | array   | Members: recipient fields plus `role` (`admin`, `member`) and `joinedAtRevision`; _optional_ (missing when `error` is set)        |
+| `pending`                  | array   | Invited users: recipient fields plus `role`, `addedBy` (recipient) and `invitedAt`; _optional_ (as `members`)                     |
+| `requesting`               | array   | Users asking to join: recipient fields plus `requestedAt`; _optional_ (as `members`)                                              |
+| `leftAt`                   | string  | When we left the group with go-signal; _optional_                                                                                 |
+| `error`                    | string  | Why the group couldn't be fetched (e.g. we are not a member); _optional_. The other fields then only hold what go-signal knows    |
 
 The recipient fields (`aci`, `pni`, `number`, `username`) are those of a
 [recipient](#common-objects). Users invited by phone number are missing from `pending` (signalmeow
@@ -606,6 +608,18 @@ document; an error may include the ID to inspect before retrying a possibly comp
 Returns the same document as [`groups show`](#groups-show), with the updated title and revision.
 Renaming to the existing title leaves the revision unchanged. Validation, permission and
 conflict errors fail the command without printing a success document.
+
+## `groups update`
+
+Returns the same document as [`groups show`](#groups-show), fetched after the combined settings
+change. An unchanged update leaves the revision unchanged. Omitted settings are preserved;
+explicit empty description, zero timer and false announcement mode are applied. Permission
+booleans are included even when false. All supplied fields are authorized against fresh state
+before any mutation. Validation, permission and conflict errors produce no success document,
+including when the patch was accepted but its response or follow-up fetch failed; the error
+retains the accepted group ID/revision and advises inspection before retrying.
+When a transport or response-decoding error prevents establishing acceptance, the error reports
+an uncertain outcome with the group ID and attempted revision, without claiming acceptance.
 
 ## `groups add-members`
 

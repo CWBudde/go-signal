@@ -5,6 +5,8 @@ Revision:              13
 Our role:              admin
 Disappearing messages: 1w
 Who can send:          only admins
+Who can edit details:  only admins
+Who can add members:   only admins
 
 Members (2):
   me                                    admin

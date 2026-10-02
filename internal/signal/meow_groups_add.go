@@ -123,13 +123,13 @@ func addGroupMembersOnce(ctx context.Context, cli groupAdditionSender,
 
 	var committed *signalmeow.Group
 
-	err := changeGroupMembersOnce(ctx, cli, &notify, change, func() {
+	err := changeGroupOnce(ctx, cli, &notify, change, func() {
 		// The callback runs only after the server accepts the patch. Do not return
 		// our proposed revision as accepted state on a rejected or uncertain request.
 		committed = &signalmeow.Group{GroupIdentifier: raw.GroupIdentifier, Revision: change.Revision}
 
 		invalidate()
-	}, "added")
+	}, "Group members added")
 	if err != nil {
 		return committed, err
 	}
