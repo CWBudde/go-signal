@@ -1,18 +1,20 @@
 ID:                    Z3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXA=
 Title:                 Family
-Description:           All of us\nand the dog
+Description:           Weekend plans
 Revision:              13
 Our role:              admin
-Disappearing messages: 1w
-Who can send:          only admins
-Who can edit details:  only admins
-Who can add members:   only admins
+Disappearing messages: 1d
+Who can send:          all members
+Who can edit details:  all members
+Who can add members:   all members
 
-Members (4):
+Members (3):
   me                                    admin
   aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa  member
   cccccccc-cccc-4ccc-8ccc-cccccccccccc  member
-  bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb  member
+
+Invited (1):
+  bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb  member  invited by aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa  2026-09-20 12:30:00 UTC
 
 Requesting to join (1):
   dddddddd-dddd-4ddd-8ddd-dddddddddddd  2026-09-20 13:30:00 UTC

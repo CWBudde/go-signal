@@ -218,6 +218,14 @@ type Client interface { //nolint:interfacebloat // the one facade over signalmeo
 	// Connect, full membership and permission to edit attributes. An unchanged title is a
 	// no-op. The returned group includes the new revision; conflicts return ErrGroupChanged.
 	RenameGroup(ctx context.Context, ref, title string) (Group, error)
+	// UpdateGroup changes optional settings against fresh membership and permissions.
+	// It needs Connect (SendOnly is enough), submits at most one patch, and does not
+	// retry conflicts. A no-op returns current state without changing the revision.
+	// After acceptance, a follow-up failure returns the accepted ID and revision:
+	// inspect groups show before retrying. ErrGroupUpdateUncertain reports an attempted
+	// revision with inspection guidance, without claiming that the change was accepted.
+	UpdateGroup(ctx context.Context, ref string, update GroupUpdate) (Group, error)
+
 	// AddGroupMembers adds ordinary members or invites them when profile credentials
 	// are unavailable. It needs Connect, full membership and permission to add members.
 	// Administrators can approve join requests. Existing members, invitations and

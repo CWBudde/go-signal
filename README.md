@@ -132,6 +132,27 @@ updated group and remembers the new title for subsequent commands. An unchanged 
 no update; a concurrent change fails with a retry hint. A successful rename confirms the server
 update; failures notifying members are logged separately.
 
+Update a group's description, disappearing-message timer or permissions:
+
+```sh
+go-signal groups update "Family" --description "Family plans" --timer 86400
+go-signal groups update "Family" --announcements-only --edit-permission admins --add-member-permission admins
+go-signal groups update "Family" --description= --timer 0 --announcements-only=false
+```
+
+Supply at least one setting. Omitted flags preserve existing values; an empty description
+clears it, and `--timer` accepts integer seconds (`0` disables the timer). Permission values
+are `members` or `admins`. Description and timer changes require full membership and permission
+to edit group information; changing permissions or announcement mode requires an administrator.
+Every supplied setting is checked against current permissions before any change is submitted.
+An unchanged update sends nothing and leaves the revision unchanged. All changed settings go
+in one patch, without automatic conflict retries. Success prints fresh server state, including
+who can edit details and add members. If the server accepted the change but fetching its result
+failed, inspect `groups show <id>` before retrying. Member notification failures are logged.
+If the reply cannot establish acceptance, the error identifies an uncertain outcome, the group
+ID and attempted revision; inspect the group before retrying rather than assuming failure.
+Use `groups rename` to change the title.
+
 To add members or invite users to an existing group:
 
 ```sh

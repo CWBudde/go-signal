@@ -775,8 +775,10 @@ errors are demoted to debug in the log bridge (only that case, recognised by the
 also prints its caught panic about the empty endorsements to stderr, which we can't catch). After leaving, signalmeow's endorsement update for
 the new revision probably fails (only logged), its `signalmeow_groups` row stays (the group keeps
 being listed, as `left`), and a failure to tell the members is only logged by signalmeow. Groups
-can't be told apart as "left on another device" versus "removed" (both a 403). Avatars, access
-control, banned members, invite links and group changes (`groups update`, join) are open.
+can't be told apart as "left on another device" versus "removed" (both a 403). Creation,
+renaming, member addition/removal and settings updates (`groups update`) are implemented under
+"Later / on demand", with live acceptance tracked separately there. Avatars, banned members,
+invite links, joining and standalone administrator-role changes remain open.
 
 #### 4.3 Identities and safety numbers
 
@@ -1835,6 +1837,22 @@ These remain optional/on demand. Checked foundations do not imply the user-facin
         `TestIntegrationRenameGroup` passed on cgo and pure Go (2026-09-29): server title and
         revision, unchanged-title no-op and cached title checked; original title restored and
         verified on the server after each run.
+  - [x] Update group settings (`groups update <group>`): description, disappearing timer in
+        integer seconds, announcement mode and edit/add-member permissions. Omitted fields
+        are preserved; explicit empty/zero/false values clear or disable settings. Full
+        membership and original fresh permissions are checked for every supplied field,
+        including unchanged administrator-only settings, before one combined patch.
+        Unchanged updates do nothing; conflicts are not retried. Fresh accepted state is
+        returned, with accepted ID/revision retained on follow-up failures for inspection.
+        Group output adds edit/add-member permissions without a JSON schema-version bump.
+  - [x] Settings: policy/atomicity/current-cache and transport failure-path tests,
+        account-aware fake/application tests, CLI preflight and plain/JSON goldens,
+        documentation and independent reviews. `just check`, `just check-purego`, the
+        no-cgo fallback suite and `just build` passed (2026-10-02). Opaque patch failures
+        report uncertainty with inspection guidance instead of claiming acceptance.
+  - [ ] Settings: verify combined changes, omission/clearing, no-op, permissions, peer-phone
+        updates and restoration live on both backends with disposable groups, following
+        [the live procedure](docs/dev.md#group-settings-live-check).
   - [ ] Add command/output tests, documentation and live verification for the remaining operations.
 - [ ] Stickers, stories, polls and pinned messages.
   - [x] Receive and render sticker metadata (pack ID, sticker ID and emoji), with conversion

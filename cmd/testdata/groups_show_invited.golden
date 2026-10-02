@@ -5,6 +5,8 @@ Revision:              3
 Our role:              invited
 Disappearing messages: off
 Who can send:          all members
+Who can edit details:  only admins
+Who can add members:   only admins
 
 Members (1):
   aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa  admin

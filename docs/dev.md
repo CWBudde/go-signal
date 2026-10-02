@@ -260,6 +260,35 @@ integration tags. It sends an original text and one edit per chat, checks self s
 and waits for the peer's delivery receipts for the direct/group originals and edits. Receipts
 verify transport; inspect the peer's phone separately to confirm the corrected text renders.
 
+### Group-settings live check
+
+This manual check is separately opt-in and requires a disposable linked account, an online
+peer phone and disposable groups. Ordinary tests use offline fixtures. Run it once with
+`just build` (pure Go) and once with `just build-cgo`, using separate disposable groups and
+explicit `--data-dir` and `--account` values for every command.
+
+1. Create a group containing the peer and fetch it with `groups show <id> -o json`. Record its
+   description, timer, announcement mode, permissions and revision. Confirm full membership.
+2. As administrator, run `groups update <id> --description "Settings test" --timer 86400
+--announcements-only --edit-permission admins --add-member-permission admins` as one command.
+   Fetch it again and confirm all five settings changed with one revision increment. Inspect
+   the peer's phone for the settings and group-change notification.
+3. Repeat the same update and confirm the revision does not increase. Then explicitly clear
+   the description, disable the timer and announcement mode using `--description= --timer 0
+--announcements-only=false`. Confirm omitted permissions remain unchanged.
+4. In a second group where the test account is an ordinary member, prepare permissions on the
+   administrator's phone. Verify description/timer updates succeed when members may edit
+   information and fail when only administrators may edit it, including with announcement mode
+   enabled. Administrator-only flags must fail even if their supplied values already match.
+   A mixed description/permission update must fail without changing any field or revision.
+5. Restore the recorded settings through the administrator account and confirm fresh server
+   state and phone state. Remove the peer and leave the disposable groups when finished.
+
+If an error reports an accepted or uncertain patch, inspect `groups show <id>` before retrying.
+An accepted patch whose notification fails may only log that failure; phone observation is
+required separately from the server-state checks. Leave live acceptance open until both
+backends and the peer-phone observations have been checked.
+
 ### Own-profile live check
 
 Profile mutation checks are manual and separately opt-in. Use a dedicated disposable account

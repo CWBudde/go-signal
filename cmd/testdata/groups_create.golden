@@ -5,6 +5,8 @@ Revision:              0
 Our role:              admin
 Disappearing messages: off
 Who can send:          all members
+Who can edit details:  all members
+Who can add members:   only admins
 
 Members (2):
   me                                    admin

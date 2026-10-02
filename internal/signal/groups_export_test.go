@@ -114,3 +114,15 @@ func InstallGroupClient(client Client, cli *signalmeow.Client) func() {
 		meow.cliMu.Unlock()
 	}
 }
+
+// SettingsChange exposes the settings change builder.
+func SettingsChange(raw *signalmeow.Group, self string, update GroupUpdate) (*signalmeow.GroupChange, error) {
+	return settingsChange(raw, self, update)
+}
+
+// UpdateGroupSettingsOnce exposes the single-attempt settings transport.
+func UpdateGroupSettingsOnce(ctx context.Context, cli GroupAdditionSender,
+	raw *signalmeow.Group, change *signalmeow.GroupChange, invalidate func(),
+) (*signalmeow.Group, error) {
+	return updateGroupSettingsOnce(ctx, cli, raw, change, invalidate)
+}

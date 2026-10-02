@@ -17,19 +17,21 @@ const maxTitleWidth = 40
 // GroupJSON is the "group" object of docs/json.md. The MCP server can return it as structured
 // content. The master key is left out on purpose: it grants access to the group.
 type GroupJSON struct {
-	ID                string                 `json:"id"`
-	Title             string                 `json:"title"`
-	Description       string                 `json:"description,omitempty"`
-	Revision          uint32                 `json:"revision"`
-	Membership        string                 `json:"membership"`
-	Role              string                 `json:"role,omitempty"`
-	TimerSeconds      int64                  `json:"timerSeconds"`
-	AnnouncementsOnly bool                   `json:"announcementsOnly"`
-	Members           []GroupMemberJSON      `json:"members,omitzero"`
-	Pending           []PendingMemberJSON    `json:"pending,omitzero"`
-	Requesting        []RequestingMemberJSON `json:"requesting,omitzero"`
-	LeftAt            time.Time              `json:"leftAt,omitzero"`
-	Error             string                 `json:"error,omitempty"`
+	ID                       string                 `json:"id"`
+	Title                    string                 `json:"title"`
+	Description              string                 `json:"description,omitempty"`
+	Revision                 uint32                 `json:"revision"`
+	Membership               string                 `json:"membership"`
+	Role                     string                 `json:"role,omitempty"`
+	TimerSeconds             int64                  `json:"timerSeconds"`
+	AnnouncementsOnly        bool                   `json:"announcementsOnly"`
+	MembersCanEditAttributes *bool                  `json:"membersCanEditAttributes,omitempty"`
+	MembersCanAddMembers     *bool                  `json:"membersCanAddMembers,omitempty"`
+	Members                  []GroupMemberJSON      `json:"members,omitzero"`
+	Pending                  []PendingMemberJSON    `json:"pending,omitzero"`
+	Requesting               []RequestingMemberJSON `json:"requesting,omitzero"`
+	LeftAt                   time.Time              `json:"leftAt,omitzero"`
+	Error                    string                 `json:"error,omitempty"`
 }
 
 // GroupMemberJSON is an entry of GroupJSON.Members: a recipient plus the member's role.
@@ -107,6 +109,9 @@ func NewGroupJSON(group signal.Group, names app.Names) GroupJSON {
 
 		return out
 	}
+
+	out.MembersCanEditAttributes = new(group.MembersCanEditAttributes)
+	out.MembersCanAddMembers = new(group.MembersCanAddMembers)
 
 	out.Members = make([]GroupMemberJSON, 0, len(group.Members))
 	for _, member := range group.Members {
@@ -199,6 +204,8 @@ func (p *Printer) Group(group signal.Group) error {
 	fmt.Fprintf(table, "Our role:\t%s\n", ourRole(group))
 	fmt.Fprintf(table, "Disappearing messages:\t%s\n", timerText(group.Timer))
 	fmt.Fprintf(table, "Who can send:\t%s\n", choose(group.AnnouncementsOnly, "only admins", "all members"))
+	fmt.Fprintf(table, "Who can edit details:\t%s\n", choose(group.MembersCanEditAttributes, "all members", "only admins"))
+	fmt.Fprintf(table, "Who can add members:\t%s\n", choose(group.MembersCanAddMembers, "all members", "only admins"))
 
 	err := flush(table)
 	if err != nil {
