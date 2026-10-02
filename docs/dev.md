@@ -289,6 +289,38 @@ An accepted patch whose notification fails may only log that failure; phone obse
 required separately from the server-state checks. Leave live acceptance open until both
 backends and the peer-phone observations have been checked.
 
+### Group-avatar live check
+
+This manual check is separately opt-in. Use a disposable linked account, an online peer phone
+and disposable groups, with explicit `--data-dir` and `--account` on every command. Run once
+with `just build` (pure Go) and once with `just build-cgo`, using separate groups. Ordinary
+tests use offline fixtures; completing those tests does not establish phone rendering.
+
+1. Create a group with the peer and fetch `groups show <id> -o json`. Save its description,
+   permissions, revision and avatar image separately. An opaque `avatarPath` cannot restore
+   an avatar: keep the original local image or use a disposable group that starts without one.
+2. Prepare a small PNG and JPEG (each at most 2 MiB and 2048 pixels in each dimension).
+   Run `groups update <id> --avatar test.png --description "Avatar test"`. Fetch again and
+   confirm a nonempty `avatarPath`, the new description and one revision increment. Inspect
+   the peer's phone for the image and group-change notification. Replace with the JPEG and
+   confirm the same behavior. Images are uploaded unchanged; no resize or crop is performed.
+3. Set the same file again and confirm a new upload and revision. Update only the description
+   and confirm the avatar path is preserved. Run `--remove-avatar`, verify the path is absent
+   and the phone avatar clears; repeat removal and confirm no revision increment.
+4. In another group where the test account is an ordinary member, use the administrator's
+   phone to allow and forbid members from editing group information. Verify set and removal
+   succeed only when allowed. A mixed avatar/administrator-only permission update must fail
+   without changing any field; changing permissions in that request cannot authorize itself.
+   Invalid/truncated images, oversized files and mutually exclusive flags must fail locally.
+5. Restore the recorded description and permissions, and re-upload the original image or
+   remove the test avatar. Confirm fresh server and peer-phone state, then clean up the groups.
+
+If an error reports an accepted or uncertain patch, inspect `groups show <id>` before retrying.
+Upload errors submit no group patch. A successful upload followed by a conflict or failed patch
+can leave unused encrypted ciphertext on the CDN. Notification failures after acceptance may
+only be logged, so verify phone observations separately. Leave live acceptance open until both
+backends and these observations have been checked.
+
 ### Group-role live check
 
 This manual check is separately opt-in. Use a disposable linked account, an online peer

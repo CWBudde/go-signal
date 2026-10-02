@@ -316,6 +316,7 @@ func convertGroup(raw *signalmeow.Group, ownACI string) Group {
 		MasterKey:         string(raw.GroupMasterKey),
 		Title:             raw.Title,
 		Description:       raw.Description,
+		AvatarPath:        raw.AvatarPath,
 		Revision:          raw.Revision,
 		Timer:             time.Duration(raw.DisappearingMessagesDuration) * time.Second,
 		AnnouncementsOnly: raw.AnnouncementsOnly,
@@ -365,12 +366,17 @@ func convertGroup(raw *signalmeow.Group, ownACI string) Group {
 	group.Banned = convertBannedMembers(raw.BannedMembers)
 
 	group.Membership, group.Role = group.MembershipOf(ownACI)
-	group.MembersCanEditAttributes = raw.AccessControl != nil &&
-		raw.AccessControl.Attributes == signalmeow.AccessControl_MEMBER
-	group.MembersCanAddMembers = raw.AccessControl != nil &&
-		raw.AccessControl.Members == signalmeow.AccessControl_MEMBER
+	group.MembersCanEditAttributes, group.MembersCanAddMembers = convertGroupAccess(raw.AccessControl)
 
 	return group
+}
+
+func convertGroupAccess(access *signalmeow.GroupAccessControl) (bool, bool) {
+	if access == nil {
+		return false, false
+	}
+
+	return access.Attributes == signalmeow.AccessControl_MEMBER, access.Members == signalmeow.AccessControl_MEMBER
 }
 
 func convertRole(role signalmeow.GroupMemberRole) GroupRole {

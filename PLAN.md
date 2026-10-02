@@ -114,6 +114,7 @@ go-signal contacts list [--blocked] [--query <q>] | show <recipient> | block <re
 go-signal groups list | show <group> | leave <group> --yes [--promote <member>]...   # <group>: ID, master key or title
 go-signal groups create <title> [--member <number|ACI|@username>]...
 go-signal groups rename <group> <title>
+go-signal groups update <group> [--description <text>] [--timer <seconds>] [--avatar <file> | --remove-avatar]   # combine settings in one patch
 go-signal groups link show <group>
 go-signal groups link update <group> [--state disabled|enabled|enabled-with-approval] [--reset]
 go-signal groups add-members <group> <recipient>...
@@ -780,9 +781,9 @@ being listed, as `left`), and a failure to tell the members is only logged by si
 can't be told apart as "left on another device" versus "removed" (both a 403). Creation,
 renaming, member addition/removal, settings updates (`groups update`), standalone
 administrator-role changes (`groups promote|demote`), banned-member management
-(`groups ban|unban`) and invite-link management (`groups link show|update`) are implemented
-under "Later / on demand", with live acceptance tracked separately there. Avatars and joining
-remain open.
+(`groups ban|unban`), invite-link management (`groups link show|update`) and avatar updates
+(`groups update --avatar|--remove-avatar`) are implemented under "Later / on demand", with
+live acceptance tracked separately there. Joining remains open.
 
 #### 4.3 Identities and safety numbers
 
@@ -1920,6 +1921,32 @@ These remain optional/on demand. Checked foundations do not imply the user-facin
         rejection, permissions, no-op, peer-phone notifications and access-mode restoration
         live on both backends with disposable groups, following
         [the live procedure](docs/dev.md#group-link-live-check). No production mutations were run.
+  - [x] Group avatar updates (`groups update <group> --avatar <file>|--remove-avatar`,
+        2026-10-03), combinable with existing settings. Local regular PNG/JPEG files are
+        bounded to 2 MiB and 2048 pixels per dimension, fully decoded for validation and
+        uploaded unchanged. Prepared bytes are owned before account opening, without
+        reopening the file. Omission preserves the avatar; setting always uploads and
+        advances the revision, while clearing an absent avatar is a fresh-authorized no-op.
+        Original fresh membership and permissions authorize every supplied field before
+        upload; malformed keys and revision overflow fail before upload. One combined
+        patch is attempted without conflict retries or re-uploading. Upload failures submit
+        no patch; rejected patches can leave unused encrypted ciphertext on the CDN.
+        Fresh server state supplies the avatar path, including later concurrent changes;
+        accepted follow-up failures retain only the committed ID/revision, while uncertain
+        patch failures request inspection. Ordinary group JSON adds optional `avatarPath`
+        with schema version 1 retained; plain output quotes the path and neither downloads
+        images nor prints paths for inaccessible groups.
+  - [x] Avatars: format/size/dimension/corruption, permission/no-op/revision/ownership,
+        exact combined patch, stale-cache and transport failure tests; account-aware fake,
+        application/CLI preflight and eight plain/JSON goldens, documentation and independent
+        review. Controller integrated checks, `just fmt`, `just check`, `just check-purego`
+        and the no-cgo fallback suite passed. `just build` and `just docs-gen` passed with
+        automatic Go VCS stamping disabled for the sandbox's spurious `/tmp/.git`;
+        justfile version metadata is retained. No dependency changes or production requests.
+  - [ ] Avatars: verify PNG/JPEG rendering, combined settings, omission, repeated sets,
+        clearing/no-op, permissions, peer notifications and restoration live on both
+        backends with disposable groups, following
+        [the live procedure](docs/dev.md#group-avatar-live-check). Live acceptance remains open.
   - [ ] Add command/output tests, documentation and live verification for the remaining operations.
 - [ ] Stickers, stories, polls and pinned messages.
   - [x] Receive and render sticker metadata (pack ID, sticker ID and emoji), with conversion

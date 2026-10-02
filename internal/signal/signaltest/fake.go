@@ -130,6 +130,10 @@ type Fake struct {
 	RenameErr error
 	// UpdateGroupErr makes a settings mutation fail before changing the group.
 	UpdateGroupErr error
+	// GroupAvatarUploadErr fails an avatar upload before applying the group update.
+	GroupAvatarUploadErr error
+	// GroupAvatarData contains accepted avatar bytes by group ID; stored bytes are cloned.
+	GroupAvatarData map[string][]byte
 	// GroupUpdateFollowUpErr fails verification after the settings were accepted.
 	GroupUpdateFollowUpErr error
 	// SetGroupMemberRoleErr rejects a validated role mutation before changing the group.

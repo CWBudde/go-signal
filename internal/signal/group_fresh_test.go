@@ -68,6 +68,15 @@ func TestGroupFetchCannotAuthorizeFromCachedState(t *testing.T) { //nolint:cyclo
 				}
 			}
 
+			for _, avatar := range []signal.GroupAvatarUpdate{{Data: avatarPNG(t, 1)}, {Remove: true}} {
+				seedGroupCache(cache, cached)
+
+				_, avatarErr := client.UpdateGroup(t.Context(), ref, signal.GroupUpdate{Avatar: &avatar})
+				if !errors.Is(avatarErr, errTest) {
+					t.Fatalf("avatar update authorized cached state: %v", avatarErr)
+				}
+			}
+
 			for _, role := range []signal.GroupRole{signal.GroupRoleAdmin, signal.GroupRoleMember} {
 				seedGroupCache(cache, cached)
 

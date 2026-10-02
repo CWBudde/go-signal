@@ -4,12 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"time"
 	"unicode/utf8"
 )
 
 var (
-	// ErrInvalidGroupUpdate means the settings update is empty or contains an invalid description.
+	// ErrInvalidGroupUpdate means the settings update is empty or contains invalid attributes.
 	ErrInvalidGroupUpdate = errors.New("invalid group update")
 	// ErrGroupUpdateUncertain means a group PATCH may have been accepted despite its error.
 	// Inspect the group before retrying; the result does not claim an accepted revision.
@@ -19,6 +20,7 @@ var (
 // GroupUpdate contains optional group settings. Nil preserves the current value;
 // empty descriptions, zero timers and false booleans explicitly clear or disable them.
 type GroupUpdate struct {
+	Avatar                   *GroupAvatarUpdate
 	Description              *string
 	TimerSeconds             *uint32
 	AnnouncementsOnly        *bool
@@ -28,12 +30,16 @@ type GroupUpdate struct {
 
 // Check validates a settings update before an account is opened.
 func (update GroupUpdate) Check() error {
-	if update.Description == nil && update.TimerSeconds == nil && !update.adminSettings() {
+	if update.Avatar == nil && update.Description == nil && update.TimerSeconds == nil && !update.adminSettings() {
 		return fmt.Errorf("%w: provide at least one setting", ErrInvalidGroupUpdate)
 	}
 
 	if update.Description != nil && !utf8.ValidString(*update.Description) {
 		return fmt.Errorf("%w: description must be valid UTF-8", ErrInvalidGroupUpdate)
+	}
+
+	if update.Avatar != nil {
+		return update.Avatar.check()
 	}
 
 	return nil
@@ -55,7 +61,7 @@ func (g Group) CheckUpdate(self string, update GroupUpdate) error {
 		return fmt.Errorf("%w: only administrators can change announcement mode or group permissions", ErrGroupPermission)
 	}
 
-	if (update.Description != nil || update.TimerSeconds != nil) && role != GroupRoleAdmin && !g.MembersCanEditAttributes {
+	if update.attributeSettings() && role != GroupRoleAdmin && !g.MembersCanEditAttributes {
 		return fmt.Errorf("%w: only administrators can edit group attributes", ErrGroupPermission)
 	}
 
@@ -69,7 +75,30 @@ func (g Group) WithUpdate(self string, update GroupUpdate) (Group, error) {
 		return Group{}, err
 	}
 
+	next := g.updatedSettings(update)
+
+	if !next.sameSettings(g) || (update.Avatar != nil && !update.Avatar.Remove) {
+		if g.Revision == math.MaxUint32 {
+			return Group{}, fmt.Errorf("%w: group revision cannot be incremented", ErrUnknownGroup)
+		}
+
+		next.Revision++
+	}
+
+	return next, nil
+}
+
+func (g Group) updatedSettings(update GroupUpdate) Group {
 	next := g
+	next.Members = slices.Clone(g.Members)
+	next.Pending = slices.Clone(g.Pending)
+	next.Requesting = slices.Clone(g.Requesting)
+	next.Banned = slices.Clone(g.Banned)
+
+	if update.Avatar != nil && update.Avatar.Remove {
+		next.AvatarPath = ""
+	}
+
 	if update.Description != nil {
 		next.Description = *update.Description
 	}
@@ -90,15 +119,11 @@ func (g Group) WithUpdate(self string, update GroupUpdate) (Group, error) {
 		next.MembersCanAddMembers = *update.MembersCanAddMembers
 	}
 
-	if !next.sameSettings(g) {
-		if g.Revision == math.MaxUint32 {
-			return Group{}, fmt.Errorf("%w: group revision cannot be incremented", ErrUnknownGroup)
-		}
+	return next
+}
 
-		next.Revision++
-	}
-
-	return next, nil
+func (update GroupUpdate) attributeSettings() bool {
+	return update.Avatar != nil || update.Description != nil || update.TimerSeconds != nil
 }
 
 func (update GroupUpdate) adminSettings() bool {
@@ -106,7 +131,7 @@ func (update GroupUpdate) adminSettings() bool {
 }
 
 func (g Group) sameSettings(other Group) bool {
-	return g.Description == other.Description && g.Timer == other.Timer &&
+	return g.AvatarPath == other.AvatarPath && g.Description == other.Description && g.Timer == other.Timer &&
 		g.AnnouncementsOnly == other.AnnouncementsOnly &&
 		g.MembersCanEditAttributes == other.MembersCanEditAttributes &&
 		g.MembersCanAddMembers == other.MembersCanAddMembers

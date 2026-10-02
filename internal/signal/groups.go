@@ -98,6 +98,8 @@ func (m Membership) String() string {
 
 // Group is a Signal group (groups v2) as the server reports it.
 type Group struct {
+	// AvatarPath is the opaque CDN path from fetched group state; it contains no image bytes.
+	AvatarPath string
 	// ID is the base64 group identifier (standard encoding), which is derived from MasterKey.
 	ID string
 	// MasterKey is the base64 group master key. Whoever has it can read the group's state and
@@ -111,7 +113,7 @@ type Group struct {
 	Timer time.Duration
 	// AnnouncementsOnly means that only admins can send messages.
 	AnnouncementsOnly bool
-	// MembersCanEditAttributes allows ordinary members to change the title and description.
+	// MembersCanEditAttributes allows ordinary members to change the title, description and avatar.
 	// Otherwise only administrators can edit them.
 	MembersCanEditAttributes bool
 	// MembersCanAddMembers allows ordinary members to add or invite users.
