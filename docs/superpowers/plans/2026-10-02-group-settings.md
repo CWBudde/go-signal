@@ -40,7 +40,8 @@
 - [x] Update README, JSON reference, development live procedure and PLAN.md's stale Phase 4 note. Tick only verified implementation, leaving both-backend live acceptance open.
 - [x] Obtain independent backend and CLI/output reviews; resolve material findings.
 - [x] Run `just fmt`, `just check`, `just check-purego`, and `CGO_ENABLED=0 go test ./...`.
-- [ ] Commit the verified batch on `feat/group-settings`, push and open a PR.
+- [x] Commit the verified batch on `feat/group-settings`, push and open a PR:
+      [#18](https://github.com/CWBudde/go-signal/pull/18).
 
 ## Review focus
 
