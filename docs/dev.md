@@ -321,8 +321,9 @@ state. Leave live acceptance open until both backends and phone observations are
 This manual check is separately opt-in. Use disposable linked accounts, an online peer phone
 and disposable groups, with explicit `--data-dir` and `--account` for every command. Run once
 with `just build` (pure Go) and once with `just build-cgo` using separate groups. Enable a
-group link on the administrator's phone; invite-link management and joining are not yet CLI
-commands. Record the original membership, bans and revision with `groups show <id> -o json`.
+group link with `groups link update <id> --state enabled` or on the administrator's phone;
+joining remains a phone operation. Record the original membership, bans and revision with
+`groups show <id> -o json`.
 
 1. As a full administrator, run `groups ban <id> <peer-number> <peer-ACI>`. Verify one revision
    increment, the peer removed from `members` and one ACI entry in `banned` with a ban time.
@@ -348,6 +349,43 @@ Inspect `groups show <id>` before retrying accepted or uncertain failures. Notif
 failures after acceptance are logged; phone observations and link-joining attempts must be
 checked independently of server state. Leave live acceptance open until both backends and
 those observations have been verified. Ordinary tests use offline fixtures only.
+
+### Group-link live check
+
+This manual check is separately opt-in. Use disposable linked accounts, an online peer phone
+and disposable groups, with explicit `--data-dir` and `--account` for every command. Run once
+with `just build` (pure Go) and once with `just build-cgo`, using separate groups. Resetting
+invalidates the previous invite URL permanently; use disposable links for these checks.
+
+1. Create a group with the test account as administrator and the peer as a full member.
+   Record `groups link show <id> -o json` and `groups show <id> -o json`. Confirm the initial
+   link is disabled and the link document omits `url`. Ordinary group output must contain
+   neither invite URL nor password/master key.
+2. Enable the link with `groups link update <id> --state enabled`. Confirm a fresh link fetch
+   reports an active URL and exactly one revision increment. Check the administrator and
+   peer phones for the link setting and group-change notification. Repeat the command and
+   confirm no further increment. A full ordinary member may show the active link but may
+   not update it, even with the currently selected state.
+3. Disable the link, then re-enable it. Confirm the disabled result omits `url`, the phone
+   rejects joining through it while disabled, and the re-enabled URL matches the earlier one.
+   Set `enabled-with-approval`; use another disposable phone account to request joining.
+   Confirm approval is required and that `groups add-members <id> <requester>` approves it.
+4. Run `groups link update <id> --reset`. Confirm one revision increment, a different URL,
+   unchanged access mode, and rejection of the old link on the phone. Also check a combined
+   `--state enabled --reset` change uses one revision. Disable, then reset without state;
+   confirm the result remains disabled and has no URL. Re-enable and check the newly active
+   URL differs from the previously recorded one.
+5. Check invited, requesting and removed accounts cannot show the link. Confirm updates by
+   an ordinary member fail without changing state, password or revision. Verify invalid
+   states and an empty update fail locally. Inspect peer-phone state independently of the
+   server response.
+6. Restore the original access mode, remove disposable peers and leave the test groups.
+   A reset cannot restore an old URL; do not record this as password restoration.
+
+Inspect `groups link show <id>` before retrying accepted or uncertain errors. Notification
+failures after acceptance are logged. Leave live acceptance open until both backends and the
+phone observations, old-link rejection, joining and approval have been verified. Ordinary
+tests use offline fixtures only.
 
 ### Own-profile live check
 

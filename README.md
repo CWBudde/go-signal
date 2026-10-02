@@ -219,6 +219,29 @@ roles are skipped; an entirely unchanged request preserves the revision. The out
 the freshly fetched group. Conflicts are not retried. If a failure reports an accepted or
 uncertain change, inspect `groups show` before retrying; notification failures are logged.
 
+Inspect or manage a group's invite link:
+
+```sh
+go-signal groups link show "Family"
+go-signal groups link update "Family" --state enabled-with-approval
+go-signal groups link update "Family" --reset
+go-signal groups link update "Family" --state disabled
+```
+
+States are `disabled`, `enabled` (anyone with the link can join) and
+`enabled-with-approval` (an administrator must approve requests). Showing a link requires
+full membership; changing it requires an administrator, even for an unchanged request.
+Supply `--state`, `--reset`, or both. Omitted state is preserved. Disabling preserves the
+password, so re-enabling restores the same link. Resetting invalidates the old URL and does
+not enable a disabled link. First enabling a link creates its password in the same change.
+
+Success prints fresh link state and, only when enabled, the URL. Invite URLs contain the
+group master key and password; they appear only in these explicit link commands, never in
+ordinary group output. An unchanged state without reset leaves the revision unchanged.
+Changes are submitted once without retries. Inspect `groups link show <id>` before retrying
+accepted or uncertain failures; member notification failures are logged separately. Joining
+through links remains a phone operation. See [the live check](docs/dev.md#group-link-live-check).
+
 Read or update the selected account's own profile:
 
 ```sh
