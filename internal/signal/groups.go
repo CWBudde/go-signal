@@ -123,6 +123,8 @@ type Group struct {
 	Pending []PendingMember
 	// Requesting are the users who asked to join through a group link.
 	Requesting []RequestingMember
+	// Banned includes ACI and PNI service IDs; mutations accept only ACI targets.
+	Banned []BannedMember
 
 	// Membership and Role are ours (the selected account's). Role is the role we have as a
 	// member, or will get once we accept an invitation.
@@ -188,6 +190,12 @@ type PendingMember struct {
 type RequestingMember struct {
 	Recipient   Recipient
 	RequestedAt time.Time
+}
+
+// BannedMember is a user prohibited from joining a group.
+type BannedMember struct {
+	Recipient Recipient
+	BannedAt  time.Time
 }
 
 // LeaveOptions configures Client.LeaveGroup.

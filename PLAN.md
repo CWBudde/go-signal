@@ -776,10 +776,10 @@ also prints its caught panic about the empty endorsements to stderr, which we ca
 the new revision probably fails (only logged), its `signalmeow_groups` row stays (the group keeps
 being listed, as `left`), and a failure to tell the members is only logged by signalmeow. Groups
 can't be told apart as "left on another device" versus "removed" (both a 403). Creation,
-renaming, member addition/removal, settings updates (`groups update`) and standalone
-administrator-role changes (`groups promote|demote`) are implemented under "Later / on demand",
-with live acceptance tracked separately there. Avatars, banned members, invite links and joining
-remain open.
+renaming, member addition/removal, settings updates (`groups update`), standalone
+administrator-role changes (`groups promote|demote`) and banned-member management
+(`groups ban|unban`) are implemented under "Later / on demand", with live acceptance tracked
+separately there. Avatars, invite links and joining remain open.
 
 #### 4.3 Identities and safety numbers
 
@@ -1871,6 +1871,29 @@ These remain optional/on demand. Checked foundations do not imply the user-facin
         self-demotion, last-admin refusal, peer-phone updates and restoration live on both
         backends with disposable groups, following
         [the live procedure](docs/dev.md#group-role-live-check). No production mutations were run.
+  - [x] Banned-member management (`groups ban|unban <group> <recipient>...`, 2026-10-02).
+        Numbers, ACIs and usernames resolve before one patch; fresh full-administrator
+        authorization is required even for no-ops. Self targets are rejected atomically.
+        Banning removes full membership, revokes ACI invitations or rejects join requests
+        in the same change; absent users can also be banned. Unbanning does not add membership.
+        Duplicates and unchanged bans are skipped, preserving ban times and revision;
+        inconsistent active membership of an already-banned user is removed. Existing PNI
+        bans are displayed and preserved, while mutation targets remain ACI-only.
+        Fresh accepted state is returned without retries; accepted follow-up failures retain
+        ID/revision, while opaque failures report uncertainty with inspection guidance.
+        Only removed requesters join the original members/invitees as notification recipients;
+        absent preventive targets and unbanned users receive no group update.
+  - [x] Bans: policy/ownership/revision, exact-wire and stale-cache authorization tests,
+        transport failure paths, account-aware fake/application tests, ban/add/unban
+        regression, CLI preflight and plain/JSON goldens, documentation and independent
+        reviews. `just fmt`, `just check`, `just check-purego` and the no-cgo fallback suite
+        passed. `just build` and `just docs-gen` passed with automatic Go VCS stamping
+        disabled for the sandbox's spurious `/tmp/.git`; justfile version metadata is retained.
+        Group JSON adds `banned` and optional `bannedAt` with schema version 1 retained.
+  - [ ] Bans: verify membership removal, invitation revocation, request rejection, denied
+        link joining, unbanning, duplicates/no-op, permissions, peer-phone updates and
+        restoration live on both backends with disposable groups, following
+        [the live procedure](docs/dev.md#group-ban-live-check). No production mutations were run.
   - [ ] Add command/output tests, documentation and live verification for the remaining operations.
 - [ ] Stickers, stories, polls and pinned messages.
   - [x] Receive and render sticker metadata (pack ID, sticker ID and emoji), with conversion

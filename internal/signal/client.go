@@ -248,6 +248,13 @@ type Client interface { //nolint:interfacebloat // the one facade over signalmeo
 	// failures return ErrGroupUpdateUncertain with inspection guidance.
 	SetGroupMemberRole(ctx context.Context, ref string, members []Recipient, role GroupRole) (Group, error)
 
+	// SetGroupBanned bans or unbans non-self ACI targets against fresh full administrator
+	// membership, even for no-ops. Banning removes existing membership atomically; absent
+	// users can be banned preventively. Unbanning never adds membership. Duplicate and
+	// unchanged targets are skipped. Conflicts are not retried; accepted follow-up failures
+	// return ID/revision, and uncertain requests return ErrGroupUpdateUncertain.
+	SetGroupBanned(ctx context.Context, ref string, members []Recipient, banned bool) (Group, error)
+
 	// GroupTitles returns what the title cache knows about the groups fetched before (by Groups,
 	// Group, CreateGroup, RenameGroup or LeaveGroup), by group ID, from the store: it needs no
 	// Connect. Groups never fetched are missing. It fails with ErrClosed after Close.

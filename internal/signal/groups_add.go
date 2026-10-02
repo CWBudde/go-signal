@@ -36,5 +36,15 @@ func (g Group) CheckAddMembers(self string, members []Recipient) ([]Recipient, e
 		targets = append(targets, member)
 	}
 
+	return g.checkedBannedAddTargets(targets)
+}
+
+func (g Group) checkedBannedAddTargets(targets []Recipient) ([]Recipient, error) {
+	for _, member := range targets {
+		if g.bannedACI(member.ACI) {
+			return nil, fmt.Errorf("%w: %s is banned from the group", ErrInvalidGroupMember, member)
+		}
+	}
+
 	return targets, nil
 }

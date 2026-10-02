@@ -30,6 +30,7 @@ type GroupJSON struct {
 	Members                  []GroupMemberJSON      `json:"members,omitzero"`
 	Pending                  []PendingMemberJSON    `json:"pending,omitzero"`
 	Requesting               []RequestingMemberJSON `json:"requesting,omitzero"`
+	Banned                   []BannedMemberJSON     `json:"banned,omitzero"`
 	LeftAt                   time.Time              `json:"leftAt,omitzero"`
 	Error                    string                 `json:"error,omitempty"`
 }
@@ -56,6 +57,13 @@ type RequestingMemberJSON struct {
 	recipientJSON
 
 	RequestedAt time.Time `json:"requestedAt,omitzero"`
+}
+
+// BannedMemberJSON is a banned recipient and the server's optional ban time.
+type BannedMemberJSON struct {
+	recipientJSON
+
+	BannedAt time.Time `json:"bannedAt,omitzero"`
 }
 
 type groupsDoc struct {
@@ -140,6 +148,20 @@ func NewGroupJSON(group signal.Group, names app.Names) GroupJSON {
 		})
 	}
 
+	out.Banned = newBannedMembersJSON(group.Banned, names)
+
+	return out
+}
+
+func newBannedMembersJSON(banned []signal.BannedMember, names app.Names) []BannedMemberJSON {
+	out := make([]BannedMemberJSON, 0, len(banned))
+	for _, member := range banned {
+		out = append(out, BannedMemberJSON{
+			recipientJSON: newRecipientJSON(member.Recipient, names),
+			BannedAt:      utc(member.BannedAt),
+		})
+	}
+
 	return out
 }
 
@@ -190,7 +212,7 @@ func (p *Printer) Groups(groups []signal.Group) error {
 }
 
 // Group prints one group (`groups show`): its details, then the members, pending (invited) and
-// requesting members.
+// requesting and banned members.
 func (p *Printer) Group(group signal.Group) error {
 	if p.format == JSON {
 		return p.writeJSON(groupDoc{Version: SchemaVersion, Group: NewGroupJSON(group, p.names)})
@@ -233,6 +255,14 @@ func (p *Printer) Group(group signal.Group) error {
 
 		for _, requesting := range group.Requesting {
 			fmt.Fprintf(table, "  %s\t%s\n", p.who(requesting.Recipient), p.dateTime(requesting.RequestedAt))
+		}
+	}
+
+	if len(group.Banned) > 0 {
+		fmt.Fprintf(table, "\nBanned (%d):\n", len(group.Banned))
+
+		for _, banned := range group.Banned {
+			fmt.Fprintf(table, "  %s\t%s\n", p.who(banned.Recipient), p.dateTime(banned.BannedAt))
 		}
 	}
 

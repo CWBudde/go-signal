@@ -33,6 +33,8 @@ func newGroupsCmd(clients *clientOpener, printers *printerFactory) *cobra.Comman
 		newGroupsRemoveMembersCmd(clients, printers),
 		newGroupsPromoteCmd(clients, printers),
 		newGroupsDemoteCmd(clients, printers),
+		newGroupsBanCmd(clients, printers),
+		newGroupsUnbanCmd(clients, printers),
 		newGroupsLeaveCmd(clients, printers),
 	)
 
@@ -76,7 +78,7 @@ message from the group) from the server. Groups we left or were removed from are
 func newGroupsShowCmd(clients *clientOpener, printers *printerFactory) *cobra.Command {
 	return &cobra.Command{
 		Use:   "show <group>",
-		Short: "Show a group's details, members, invited and requesting members",
+		Short: "Show a group's details, membership and banned users",
 		Long:  "Show fetches the group's current state from the server.\n\n" + groupArgHelp,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

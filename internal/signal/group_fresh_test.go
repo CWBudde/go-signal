@@ -18,7 +18,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestGroupFetchCannotAuthorizeFromCachedState(t *testing.T) { //nolint:cyclop,funlen // fresh authorization checks
+func TestGroupFetchCannotAuthorizeFromCachedState(t *testing.T) { //nolint:cyclop,funlen,gocognit // fresh state
 	t.Parallel()
 
 	for _, useMasterKey := range []bool{false, true} {
@@ -75,6 +75,15 @@ func TestGroupFetchCannotAuthorizeFromCachedState(t *testing.T) { //nolint:cyclo
 					[]signal.Recipient{{ACI: memberACI}}, role)
 				if !errors.Is(roleErr, errTest) {
 					t.Fatalf("SetGroupMemberRole authorized cached state: %v", roleErr)
+				}
+			}
+
+			for _, banned := range []bool{true, false} {
+				seedGroupCache(cache, cached)
+
+				_, banErr := client.SetGroupBanned(t.Context(), ref, []signal.Recipient{{ACI: memberACI}}, banned)
+				if !errors.Is(banErr, errTest) {
+					t.Fatalf("SetGroupBanned authorized cached state: %v", banErr)
 				}
 			}
 

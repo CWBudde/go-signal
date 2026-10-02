@@ -4,6 +4,7 @@ package signal
 
 import (
 	"context"
+	"time"
 
 	"github.com/cwbudde/mautrix-signal/pkg/signalmeow"
 	"github.com/cwbudde/mautrix-signal/pkg/signalmeow/types"
@@ -139,4 +140,17 @@ func SetGroupMemberRoleOnce(ctx context.Context, cli GroupAdditionSender,
 	raw *signalmeow.Group, change *signalmeow.GroupChange, invalidate func(),
 ) (*signalmeow.Group, error) {
 	return setGroupMemberRoleOnce(ctx, cli, raw, change, invalidate)
+}
+
+// BannedMembersChange exposes the ban change builder.
+func BannedMembersChange(raw *signalmeow.Group, self string, members []Recipient, banned bool, at time.Time,
+) (*signalmeow.GroupChange, error) {
+	return bannedMembersChange(raw, self, members, banned, at)
+}
+
+// SetGroupBannedOnce exposes the single-attempt ban transport.
+func SetGroupBannedOnce(ctx context.Context, cli GroupAdditionSender, raw *signalmeow.Group,
+	change *signalmeow.GroupChange, invalidate func(),
+) (*signalmeow.Group, error) {
+	return setGroupBannedOnce(ctx, cli, raw, change, invalidate)
 }
