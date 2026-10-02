@@ -74,16 +74,24 @@ func settingsAccess(members bool) signalmeow.AccessControl {
 func updateGroupSettingsOnce(ctx context.Context, cli groupAdditionSender,
 	raw *signalmeow.Group, change *signalmeow.GroupChange, invalidate func(),
 ) (*signalmeow.Group, error) {
+	return updateGroupAndFetchOnce(ctx, cli, raw, change, invalidate, "Group settings updated")
+}
+
+// updateGroupAndFetchOnce submits one change and returns authoritative server state.
+// It preserves acceptance separately from uncertain PATCH and verification failures.
+func updateGroupAndFetchOnce(ctx context.Context, cli groupAdditionSender,
+	raw *signalmeow.Group, change *signalmeow.GroupChange, invalidate func(), operation string,
+) (*signalmeow.Group, error) {
 	var committed *signalmeow.Group
 
 	err := changeGroupOnce(ctx, cli, raw, change, func() {
 		committed = &signalmeow.Group{GroupIdentifier: raw.GroupIdentifier, Revision: change.Revision}
 
 		invalidate()
-	}, "Group settings updated")
+	}, operation)
 	if err != nil {
 		if committed == nil {
-			err = settingsPatchError(raw, change.Revision, err)
+			err = groupPatchError(raw, change.Revision, err)
 		}
 
 		return committed, err
@@ -160,9 +168,9 @@ func (c *meowClient) UpdateGroup(ctx context.Context, ref string, update GroupUp
 	return group, nil
 }
 
-// settingsPatchError cannot distinguish encryption/request errors from errors decoding an
+// groupPatchError cannot distinguish encryption/request errors from errors decoding an
 // already accepted PATCH response. Only explicit rejections or our preflight are definite.
-func settingsPatchError(raw *signalmeow.Group, revision uint32, err error) error {
+func groupPatchError(raw *signalmeow.Group, revision uint32, err error) error {
 	for _, rejected := range []error{
 		ErrUnknownGroup, ErrGroupChanged,
 		signalmeow.AuthorizationFailedError, signalmeow.NotFoundError,

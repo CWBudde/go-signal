@@ -18,7 +18,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestGroupFetchCannotAuthorizeFromCachedState(t *testing.T) {
+func TestGroupFetchCannotAuthorizeFromCachedState(t *testing.T) { //nolint:cyclop,funlen // fresh authorization checks
 	t.Parallel()
 
 	for _, useMasterKey := range []bool{false, true} {
@@ -65,6 +65,16 @@ func TestGroupFetchCannotAuthorizeFromCachedState(t *testing.T) {
 				_, updateErr := client.UpdateGroup(t.Context(), ref, signal.GroupUpdate{Description: new(description)})
 				if !errors.Is(updateErr, errTest) {
 					t.Fatalf("UpdateGroup authorized cached state: %v", updateErr)
+				}
+			}
+
+			for _, role := range []signal.GroupRole{signal.GroupRoleAdmin, signal.GroupRoleMember} {
+				seedGroupCache(cache, cached)
+
+				_, roleErr := client.SetGroupMemberRole(t.Context(), ref,
+					[]signal.Recipient{{ACI: memberACI}}, role)
+				if !errors.Is(roleErr, errTest) {
+					t.Fatalf("SetGroupMemberRole authorized cached state: %v", roleErr)
 				}
 			}
 

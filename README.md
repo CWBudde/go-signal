@@ -182,6 +182,22 @@ yourself. Success confirms the server update; member notification failures are l
 Invitations known only by phone-number identity (PNI), which the current backend cannot
 decrypt, cannot be removed with this command.
 
+Administrators can promote or demote full members:
+
+```sh
+go-signal groups promote "Family" +4915112345678 @alice.42
+go-signal groups demote "Family" @alice.42
+go-signal groups demote "Family" self   # another administrator must remain
+```
+
+Numbers, ACIs, usernames and `self` are accepted; duplicates count once. Every target must
+be a full member, and all targets are checked against fresh server state before one combined
+change. Invitations and join requests cannot have their roles changed. At least one full
+administrator must remain, including in a group containing only you. Existing requested
+roles are skipped; an entirely unchanged request preserves the revision. The output shows
+the freshly fetched group. Conflicts are not retried. If a failure reports an accepted or
+uncertain change, inspect `groups show` before retrying; notification failures are logged.
+
 Read or update the selected account's own profile:
 
 ```sh

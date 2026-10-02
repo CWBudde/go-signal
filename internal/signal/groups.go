@@ -15,9 +15,10 @@ var (
 	// or only asked to join and weren't approved yet. Leaving a group we are not in fails with it
 	// too.
 	ErrNotAMember = errors.New("not a member of the group")
-	// ErrLastAdmin means that we can't leave a group because we are its only admin and other
-	// members remain: another member has to be promoted to admin first (LeaveOptions.Promote).
-	ErrLastAdmin = errors.New("we are the only admin of the group; promote another member to admin first")
+	// ErrLastAdmin means a role change would leave no full administrator, or the
+	// only administrator would leave while other members remain. Promote another
+	// member first (LeaveOptions.Promote can do so atomically while leaving).
+	ErrLastAdmin = errors.New("at least one administrator must remain; promote another member first")
 	// ErrInvalidPromotion means that LeaveOptions.Promote names someone who can't be promoted: not
 	// another member of the group, or we are no admin ourselves.
 	ErrInvalidPromotion = errors.New("invalid promotion")

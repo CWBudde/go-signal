@@ -240,6 +240,14 @@ type Client interface { //nolint:interfacebloat // the one facade over signalmeo
 	// Invitations known only by PNI cannot be removed through this ACI-based API.
 	RemoveGroupMembers(ctx context.Context, ref string, members []Recipient) (Group, error)
 
+	// SetGroupMemberRole changes full members to admin or member against fresh state.
+	// It requires a full administrator, nonempty ACI targets, and at least one admin
+	// remaining after demotion. Self targets are permitted. Duplicates and already
+	// desired roles are no-ops. It submits at most one change without conflict retries;
+	// accepted follow-up failures return the accepted group ID/revision. Ambiguous
+	// failures return ErrGroupUpdateUncertain with inspection guidance.
+	SetGroupMemberRole(ctx context.Context, ref string, members []Recipient, role GroupRole) (Group, error)
+
 	// GroupTitles returns what the title cache knows about the groups fetched before (by Groups,
 	// Group, CreateGroup, RenameGroup or LeaveGroup), by group ID, from the store: it needs no
 	// Connect. Groups never fetched are missing. It fails with ErrClosed after Close.
