@@ -1,7 +1,7 @@
 # Inherit disappearing-message timers
 
 Date: 2026-10-03. Baseline: `9e1781d`, after merged PR #26.
-Status: conversational design approved; written spec awaiting review.
+Status: written spec approved by the user; implementation plan being prepared.
 
 ## Intent and scope
 
