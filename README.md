@@ -275,7 +275,8 @@ Each invocation attempts at most one membership change. An accepted follow-up
 failure differs from an uncertain submission: inspect the reported group ID before
 retrying. A retained key alone does not prove membership, and an account awaiting
 approval may get an inaccessible result from `groups show`; inspect the request
-on the phone or through an administrator. Request cancellation remains deferred.
+on the phone or through an administrator. Use `groups cancel-request <group> --yes`
+to cancel your pending request.
 Server acceptance and phone behavior remain covered by
 the separately opt-in [live check](docs/dev.md#group-join-live-check).
 
@@ -299,9 +300,38 @@ JSON result distinguishes HTTP acceptance from fresh membership verification;
 cache or notification errors can follow both. Errors leave stdout empty and
 preserve inspection guidance: check the reported group with `groups show`, your
 phone or an administrator before retrying accepted or uncertain failures.
-Join-request cancellation and PNI invitation decline remain deferred. Server and
+PNI invitation decline remains deferred. Server and
 phone behavior are covered by the separately opt-in
 [live check](docs/dev.md#group-invitation-live-check).
+
+Cancel the selected account's pending ACI join request:
+
+```sh
+go-signal groups cancel-request 'Family' --yes
+go-signal --account +4915112345678 groups cancel-request 'group:<id>' --yes -o json
+```
+
+Use a known group ID, master key or unique cached title; invite links and unknown
+keys are refused. This command only removes your pending request. Full membership
+and invitations remain unchanged; use `groups leave` to leave full membership or
+decline an ACI invitation. Leave requires readable full group state, which a
+requester may not have. PNI invitation decline remains deferred.
+
+A fresh authenticated preview showing no pending request returns `No pending join
+request`; HTTP 403/404 remains an error, including on repeat calls. Cancellation
+submits at most one PATCH, without retries or a full-state fetch. A successful
+`Join request cancelled` result verifies the exact signed deletion at its reported
+revision. It does not promise that a new request cannot appear later. The title
+comes from the preview; cached titles only resolve references and are not refreshed.
+Known keys and existing title/left records are retained. No member notification or
+linked-device sync is sent.
+
+JSON distinguishes HTTP acceptance from signed verification. Operation failures leave
+stdout empty; library callers receive partial outcomes. After an accepted or uncertain
+error, inspect `groups show`, your phone or an administrator before retrying;
+requesters may be unable to use `groups show`. Server and phone behavior remain
+covered by the separately opt-in
+[live check](docs/dev.md#group-join-request-cancellation-live-check).
 
 Read or update the selected account's own profile:
 

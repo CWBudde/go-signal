@@ -769,7 +769,55 @@ acceptance and any fresh verification completed before a cache/notification erro
 No document contains a master key, invitation secret or credential. This additive
 document retains schema version 1.
 
+## `groups cancel-request`
+
+`groups cancel-request <group> --yes` returns a dedicated document on success:
+
+```json
+{
+  "version": 1,
+  "groupCancelRequest": {
+    "id": "Z3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXA=",
+    "title": "Family",
+    "revision": 13,
+    "changed": true,
+    "accepted": true,
+    "verified": true
+  }
+}
+```
+
+| Field      | Type    | Description                                                                     |
+| ---------- | ------- | ------------------------------------------------------------------------------- |
+| `id`       | string  | Canonical group ID bound to the selected account's known key, never the key     |
+| `title`    | string  | Title from the fresh authenticated join preview                                 |
+| `revision` | number  | Exact signed deletion revision, or fresh preview revision for a no-op           |
+| `changed`  | boolean | This invocation received HTTP 200 for its cancellation PATCH                    |
+| `accepted` | boolean | HTTP acceptance of this invocation's cancellation PATCH                         |
+| `verified` | boolean | Exact signed own ACI request deletion, or fresh preview with no pending request |
+
+All six fields are present, including false values and empty titles. Successful
+cancellation has all three booleans true. A no-op has `changed: false`,
+`accepted: false`, `verified: true` and does not increment the revision. A no-op
+requires fresh authenticated preview evidence; HTTP 403/404 is an error, including
+on repeat calls. Verification establishes deletion at that revision, not continuous
+absence of future requests or delivery to other devices.
+
+Operation failures leave stdout empty. Library callers receive partial results: the attempted
+revision survives rejection or uncertainty; HTTP 200 preserves `changed` and
+`accepted` even if response reading, decoding or signed verification fails.
+Inspect the reported group on the phone or through an administrator before manually
+retrying accepted or uncertain outcomes; `groups show` may be unavailable to a
+requester. No member notification, linked-device sync, cache title update or
+full-state fetch follows this operation. It preserves known keys and existing
+title/left records. No document exposes master keys, invite secrets or credentials.
+This additive document retains schema version 1.
+
 ## `groups leave`
+
+Leave requires readable full group state. Requesters should use
+`groups cancel-request <group> --yes`; its dedicated result is documented above.
+The existing `left.membership` values remain compatible with older output.
 
 ```json
 {
@@ -785,14 +833,14 @@ document retains schema version 1.
 }
 ```
 
-| Field        | Type   | Description                                                                                            |
-| ------------ | ------ | ------------------------------------------------------------------------------------------------------ |
-| `id`         | string | Group ID (base64)                                                                                      |
-| `title`      | string | Title of the group                                                                                     |
-| `membership` | string | What we gave up: `member`, `pending` (declined the invitation) or `requesting` (cancelled the request) |
-| `revision`   | number | The group's revision after leaving                                                                     |
-| `promoted`   | array  | [Recipients](#common-objects) made admins in the same change (`--promote`); may be empty               |
-| `leftAt`     | string | When we left                                                                                           |
+| Field        | Type   | Description                                                                                                     |
+| ------------ | ------ | --------------------------------------------------------------------------------------------------------------- |
+| `id`         | string | Group ID (base64)                                                                                               |
+| `title`      | string | Title of the group                                                                                              |
+| `membership` | string | What we gave up: `member`, `pending` (declined the invitation) or `requesting` (legacy full-state cancellation) |
+| `revision`   | number | The group's revision after leaving                                                                              |
+| `promoted`   | array  | [Recipients](#common-objects) made admins in the same change (`--promote`); may be empty                        |
+| `leftAt`     | string | When we left                                                                                                    |
 
 ## `identities list`
 

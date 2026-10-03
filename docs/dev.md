@@ -69,8 +69,9 @@ How it fits together:
   [`cwbudde/libsignal-go`](https://github.com/cwbudde/libsignal-go). The fork's `PUREGO.md` and
   `internal/stubgen` (stub generator and API parity check) describe the details. The cgo build uses upstream libsignal. The fork also corrects
   the CGO endorsement wrapper to use the combined result supplied by Rust. It also
-  exposes narrowly scoped invite preview and single-attempt joining in signalmeow,
-  with opt-in request/response log redaction for credential-bearing operations.
+  exposes narrowly scoped invite preview, single-attempt joining and pending-request
+  cancellation in signalmeow, with opt-in request/response log redaction for
+  credential-bearing operations.
 - `cwbudde/libsignal-go` is a fork of `GoCodeAlone/libsignal-go` whose Rust compat harness is
   pinned to the libsignal tag libsignalgo expects (its `decisions/0007-cwbudde-fork-policy.md`).
   Fork releases are tagged `vX.Y.Z-cw.N`.
@@ -447,8 +448,8 @@ Restore membership, bans and link settings afterwards; never use a production gr
 4. Prepare a known ACI invitation on the phone. Verify CLI joining reports the
    invitation-acceptance requirement without submitting a new request; use
    `groups accept <known-group>` or the phone. For ACI/PNI acceptance, follow
-   [the invitation live check](#group-invitation-live-check). Request cancellation
-   remains deferred.
+   [the invitation live check](#group-invitation-live-check). Pending requests use
+   [the cancellation live check](#group-join-request-cancellation-live-check).
 5. Exercise a concurrent change between preview and submission where practical.
    Verify a conflict is not retried. For an accepted change followed by a fetch,
    storage or notification failure, inspect the phone/group before manually
@@ -463,6 +464,50 @@ Restore membership, bans and link settings afterwards; never use a production gr
 Keep live joining acceptance unchecked until both backend runs and peer-phone
 observations are documented. Offline cryptographic/transport tests remain the
 repeatable evidence for malformed, oversized, tampered and ambiguous responses.
+
+### Group join-request cancellation live check
+
+Cancellation checks are manual and separately opt-in. Use two disposable accounts:
+a group administrator and a requester linked to go-signal, both with online phones.
+Use a disposable approval-required group, explicit `--data-dir`/`--account` flags
+and no concurrent receiver for the requester data dir. Ordinary tests and CI make
+no live Signal calls. Keep live cancellation acceptance unchecked until both
+backend runs and peer-phone observations are recorded.
+
+1. Run `just build` for pure Go; complete all observations and restoration before
+   running `just build-cgo` and repeating the procedure. Both write `bin/go-signal`.
+   Record the backend/version and initial group settings and membership.
+2. From the requester, use `groups join '<approval-link>'` and confirm the
+   administrator sees one pending request. Run
+   `groups cancel-request '<known-group-id>' --yes -o json` on that selected account.
+   Confirm `changed`, `accepted`, `verified` are true and the administrator's phone
+   shows the request removed. Record the reported revision. The signature proves
+   exact deletion at that revision; delayed phone refresh is separate evidence.
+3. Repeat cancellation. If a fresh authenticated preview remains accessible and
+   shows no pending request, expect false/false/true and no revision increment.
+   If access is refused with 403/404, expect an error and empty stdout. Do not
+   treat refusal as proof of absence or automatically retry. Inspect on the
+   administrator's phone; the requester may be unable to use `groups show`.
+4. Request again, then disable the invite link or reset its password on the
+   administrator's phone before cancelling via the known group reference.
+   Check the pending request can still be cancelled without the old invite password.
+   Observe administrator visibility and preserve both accounts' membership.
+5. Exercise an approval race where practical: approve the requester between preview
+   and submission. Confirm conflicts are not retried and full membership is never
+   removed by cancellation. With full membership, a fresh pending=false preview
+   permits only a no-op. Prepare an ACI invitation and check cancellation does not
+   decline it; invitation acceptance and ordinary leave remain separate operations.
+6. On an accepted or uncertain error, record the safe ID/revision evidence and
+   inspect the administrator/requester phones before another write. Do not inject
+   production-key faults. The command sends no member notification or linked-device
+   sync; record other-device refresh behavior without claiming delivery guarantees.
+   Cached titles only resolve references; preview titles do not refresh full-state
+   or title/left caches. Check another selected account cannot use the requester's
+   known key unless it independently knows the group.
+7. Restore invite-link settings/password policy, requests, invitations, bans and
+   membership from the initial record. Reopen the disposable requester with the
+   other backend and repeat all checks and restoration; record outcomes and any
+   service refusal or phone-refresh limitations.
 
 ### Own-profile live check
 

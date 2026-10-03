@@ -207,7 +207,8 @@ type Client interface { //nolint:interfacebloat // the one facade over signalmeo
 	CreateGroup(ctx context.Context, opts CreateGroupOptions) (Group, error)
 
 	// LeaveGroup leaves the group ref (as for Group): it removes us as a member, declines an
-	// invitation or cancels a join request, and tells the other members. See Group.CheckLeave
+	// ACI invitation, and tells the other members. Requesters should use CancelGroupJoinRequest:
+	// leave requires readable full group state. See Group.CheckLeave
 	// for when that is refused (ErrNotAMember, ErrLastAdmin, ErrInvalidPromotion); opts.Promote
 	// makes members admins in the same change. The group's master key stays in the store, and
 	// the title cache remembers that we left (Group.LeftAt). A change that conflicts with one made
@@ -266,6 +267,10 @@ type Client interface { //nolint:interfacebloat // the one facade over signalmeo
 	// AcceptGroupInvitation accepts only a known invitation for this selected account.
 	// Accepted records HTTP acceptance; Verified requires fresh full own ACI membership.
 	AcceptGroupInvitation(ctx context.Context, ref string) (GroupAcceptResult, error)
+
+	// CancelGroupJoinRequest cancels only the selected account's pending ACI request.
+	// It requires a known account-local key and never leaves full membership.
+	CancelGroupJoinRequest(ctx context.Context, ref string) (GroupCancelRequestResult, error)
 
 	// UpdateGroupLink changes invite access and/or rotates its password against fresh full
 	// administrator membership, even for no-ops. It submits one patch without retries and

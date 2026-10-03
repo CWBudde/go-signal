@@ -775,7 +775,8 @@ The current fork retains ACI and PNI pending members, but ordinary list/show/joi
 self-membership recognition remains ACI-only. `groups accept` matches own ACI first,
 then own PNI, through a strict uncached full-state read without endorsement processing.
 A requesting user may not fetch full group state (403); generic `UpdateGroup` fetches
-it first, so join-request cancellation still needs a separate password-free flow.
+it first. `groups cancel-request` instead uses a password-free authenticated preview and
+one signed own-ACI request deletion, without full-state reads or member notifications.
 Ordinary reads of invited groups retain their existing missing-endorsement behavior:
 the log bridge demotes those cache errors to debug, while cgo may print a caught empty-
 endorsement panic to stderr. The dedicated acceptance reader avoids that path. After leaving, signalmeow's endorsement update for
@@ -787,7 +788,8 @@ administrator-role changes (`groups promote|demote`), banned-member management
 (`groups ban|unban`), invite-link management (`groups link show|update`), avatar updates
 (`groups update --avatar|--remove-avatar`) and invite-link joining (`groups join <link>`)
 are implemented under "Later / on demand", with live acceptance tracked separately
-there. Join-request cancellation and PNI invitation decline remain open.
+there. Join-request cancellation is also implemented there, with live verification
+tracked separately. PNI invitation decline remains open.
 
 #### 4.3 Identities and safety numbers
 
@@ -1987,8 +1989,25 @@ These remain optional/on demand. Checked foundations do not imply the user-facin
         with disposable accounts/groups, following
         [the live procedure](docs/dev.md#group-invitation-live-check). No production mutations
         were run; live acceptance remains open.
-  - [ ] Join-request cancellation and PNI invitation decline. Global PNI self-membership
-        reporting remains separate work.
+  - [x] Join-request cancellation (`groups cancel-request <group> --yes`). Uses only
+        selected-account known keys and a password-free authenticated preview. Fresh
+        pending=false is a verified no-op; 403/404 refusals do not prove absence.
+        One PATCH at most deletes only own ACI request; signed removal is verified at
+        its revision, with accepted/uncertain outcomes preserved and no automatic retries.
+        Full membership, invitations, keys and title/left records are preserved.
+  - [x] Cancellation: exact wire/signature/group/source/target binding, bounded sensitive
+        HTTP, approval races, malformed/secret preflight, lifecycle/Close, account-aware
+        fake isolation and repeat-after-accepted-failure; App/CLI/output tests and four
+        new goldens, task reviews and integrated cgo/pure-Go/no-backend checks. Additive
+        six-field `groupCancelRequest` JSON retains version 1; fork pin
+        `v0.2609.0-purego.14`, without `replace` or other pin changes. No member
+        notifications or linked-device sync; preview title is not cached full state.
+  - [ ] Cancellation: verify approval requests, cancellation, repeats/no-ops/refusals,
+        disabled/reset links, approval races, administrator visibility and restoration
+        live on both backends with disposable accounts/groups, following
+        [the live procedure](docs/dev.md#group-join-request-cancellation-live-check).
+        No production Signal calls were run; live acceptance remains open.
+  - [ ] PNI invitation decline. Global PNI self-membership reporting remains separate work.
   - [ ] Add command/output tests, documentation and live verification for the remaining operations.
 - [ ] Stickers, stories, polls and pinned messages.
   - [x] Receive and render sticker metadata (pack ID, sticker ID and emoji), with conversion

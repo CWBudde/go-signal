@@ -62,9 +62,10 @@ type LeaveRequest struct {
 }
 
 // GroupsLeave leaves the group req.Group (signal.Client.LeaveGroup): as a member, it removes us
-// and tells the other members; an invitation is declined and a join request cancelled. It
-// connects like GroupsList. It fails with signal.ErrLastAdmin when we are the only admin and
-// req.Promote names nobody, and with signal.ErrNotAMember when we are not in the group.
+// and tells the other members; an ACI invitation is declined. Requesters should use
+// GroupsCancelRequest because leave requires readable full state. It connects like GroupsList.
+// It fails with signal.ErrLastAdmin when we are the only admin and req.Promote names nobody,
+// and with signal.ErrNotAMember when we are not in the group.
 func (a *App) GroupsLeave(ctx context.Context, req LeaveRequest) (signal.LeaveResult, error) {
 	ref, err := a.ResolveGroup(ctx, req.Group)
 	if err != nil {
