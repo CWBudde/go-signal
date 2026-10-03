@@ -1,7 +1,8 @@
 # Group join-request cancellation
 
 Date: 2026-10-03. Baseline: `e1de4e9` (merged PR #25).
-Status: user approved the complete in-chat plan and explicitly requested implementation.
+Status: approved plan implemented; three task reviews and integrated offline checks pass.
+Whole-branch review and PR publication pending; live acceptance remains open.
 
 ## Intent
 
