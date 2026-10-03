@@ -267,6 +267,10 @@ type Client interface { //nolint:interfacebloat // the one facade over signalmeo
 	// Accepted records HTTP acceptance; Verified requires fresh full own ACI membership.
 	AcceptGroupInvitation(ctx context.Context, ref string) (GroupAcceptResult, error)
 
+	// CancelGroupJoinRequest cancels only the selected account's pending ACI request.
+	// It requires a known account-local key and never leaves full membership.
+	CancelGroupJoinRequest(ctx context.Context, ref string) (GroupCancelRequestResult, error)
+
 	// UpdateGroupLink changes invite access and/or rotates its password against fresh full
 	// administrator membership, even for no-ops. It submits one patch without retries and
 	// returns accepted ID/revision separately from uncertain or follow-up failures.

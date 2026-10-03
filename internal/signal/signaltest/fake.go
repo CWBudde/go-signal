@@ -160,6 +160,10 @@ type Fake struct {
 	AcceptGroupInvitationErr error
 	// GroupAcceptFollowUpErr fails fresh verification after committed acceptance.
 	GroupAcceptFollowUpErr error
+	// CancelGroupJoinRequestErr rejects or makes a cancellation uncertain before mutation.
+	CancelGroupJoinRequestErr error
+	// GroupCancelRequestVerificationErr fails signed verification after committed HTTP acceptance.
+	GroupCancelRequestVerificationErr error
 	// SetGroupBannedErr rejects a validated ban change before mutation.
 	SetGroupBannedErr error
 	// GroupBanFollowUpErr fails the fetch after a committed ban change.
