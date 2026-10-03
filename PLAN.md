@@ -1959,7 +1959,7 @@ These remain optional/on demand. Checked foundations do not imply the user-facin
         One membership PATCH at most, with distinct accepted/uncertain outcomes,
         retained account-local keys and no invite secrets in join output/errors/logs.
         Direct joins verify fresh membership; requesters may not fetch full state.
-  - [ ] Joining: strict preflight/parser, exact wire/signature/group binding, bounded
+  - [x] Joining: strict preflight/parser, exact wire/signature/group binding, bounded
         secret-safe HTTP and websocket logging, lifecycle/cancellation, persistence,
         account-aware fake and partial-outcome tests; four plain/JSON outcomes,
         docs, independent reviews and integrated checks. Dedicated `groupJoin` JSON

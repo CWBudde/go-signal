@@ -3,8 +3,8 @@
 Date: 2026-10-03
 
 Status: written spec and implementation plan approved on 2026-10-03.
-Implementation and offline checks complete; independent whole-change review and
-shipping pending. Live acceptance is tracked separately and has not been run.
+Implementation, offline checks and independent whole-change review complete;
+PR shipping pending. Live acceptance is tracked separately and has not been run.
 
 ## Intent and scope
 
