@@ -12,6 +12,9 @@ go-signal depends on three pinned pieces that have to move together:
   (its `PUREGO.md`). Since `v0.2609.0-purego.11`, it also deliberately extends
   signalmeow with bounded invite previews, one-shot joining and signed-response
   binding, plus opt-in websocket request/response logging redaction for credentials.
+  `v0.2609.0-purego.14` adds authenticated password-free join-request previews and
+  exact signed own-ACI request cancellation in one PATCH, without generic mutation
+  retries, full-state reads, profile credentials, member notification or device sync.
 - [`cwbudde/libsignal-go`](https://github.com/cwbudde/libsignal-go) (tags `vX.Y.Z-cw.N`), the
   pure-Go libsignal that the default backend runs on. Its Rust compat harness is pinned to the
   libsignal tag libsignalgo was generated against (its `decisions/0007-cwbudde-fork-policy.md`).
@@ -21,6 +24,15 @@ go-signal depends on three pinned pieces that have to move together:
 
 Always move to an upstream release tag, never a pseudo-version of `main`. Commit to the forks'
 release branches and push; don't open PRs.
+
+The cancellation release is the immutable
+[`v0.2609.0-purego.14`](https://github.com/cwbudde/mautrix-signal/tree/v0.2609.0-purego.14)
+tag at [commit `9cd9cbd`](https://github.com/cwbudde/mautrix-signal/commit/9cd9cbd51b0b37b575a0d8d737b35b969967bd66). Its two pure-Go CI runs passed, including the tested old
+and latest Go toolchains. Fork lint still fails on six inherited formatting paths
+that are byte-identical to `.13`; the broad Matrix bridge pure-Go SQLite failure
+also reproduces at `.13`. These are inherited dependency limitations, not passing
+whole-fork checks. Offline membership tests passed on both backends; live server
+and phone behavior remains separately opt-in and unverified by those tests.
 
 ### 1. Rebase the mautrix fork
 
@@ -45,11 +57,14 @@ go run ./pkg/libsignalgo/internal/stubgen -check       # exported API parity of 
 ```
 
 Resolve shim conflicts in `pkg/libsignalgo`. Take upstream's side elsewhere except
-for the deliberate membership extension (`groups_join*.go`, `groups_accept*.go`,
+for the deliberate membership extension (`groups_join*.go`, `groups_accept*.go`, `groups_cancel_request*.go`,
 shared `groups_membership_http.go`, scoped websocket logging policy/tests and
 pure-Go CI coverage): preserve or port those changes until upstream offers
 equivalent behavior. Retain strict fresh invitation reads, own ACI/PNI promotion
-and signed/fresh-state verification. Run the offline tests on both backends after
+and signed/fresh-state verification. Preserve cancellation's key/group/revision/own-ACI
+binding, sole-action and epoch checks, bounded password-free GET/PATCH transport,
+accepted-but-unverified outcomes and fresh-preview-only no-op evidence. Server
+403/404 must remain errors. Run the offline tests on both backends after
 rebasing and confirm no mutation retries or credential logging are introduced. Keep
 the fork's fixes that upstream doesn't have yet (the cgo clock fix in `message.go`,
 `prekeybundle.go` and `sessionrecord.go`, the combined endorsement result; see `PUREGO.md`).
