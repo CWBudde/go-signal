@@ -25,6 +25,7 @@ func newGroupsCmd(clients *clientOpener, printers *printerFactory) *cobra.Comman
 
 	cmd.AddCommand(
 		newGroupsCreateCmd(clients, printers),
+		newGroupsJoinCmd(clients, printers),
 		newGroupsListCmd(clients, printers),
 		newGroupsShowCmd(clients, printers),
 		newGroupsRenameCmd(clients, printers),
