@@ -4,7 +4,8 @@ Date: 2026-10-03
 
 Status: written spec and implementation plan approved on 2026-10-03.
 Implementation, offline checks and independent whole-change review complete;
-PR shipping pending. Live acceptance is tracked separately and has not been run.
+shipped in [PR #24](https://github.com/CWBudde/go-signal/pull/24). Live acceptance
+is tracked separately and has not been run.
 
 ## Intent and scope
 

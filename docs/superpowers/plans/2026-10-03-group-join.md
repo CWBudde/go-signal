@@ -3,7 +3,7 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 Status: approved by the user on 2026-10-03; implementation, offline verification
-and independent reviews complete. PR shipping pending; live acceptance open.
+and independent reviews complete. Shipped in [PR #24](https://github.com/CWBudde/go-signal/pull/24); live acceptance open.
 
 **Goal:** Implement `groups join <link>` for direct membership and administrator-approval requests, with truthful partial outcomes and no mutation retries.
 
@@ -178,7 +178,7 @@ user docs, planning records and one go-signal PR. Controller owns this task.
 - [x] **Step 3: Independently run final checks.** Run `just fmt`, `just check`, `just check-purego`, `CGO_ENABLED=0 go test -count=1 ./...`, `GOFLAGS=-buildvcs=false just build`, and `GOFLAGS=-buildvcs=false just docs-gen`. Inspect `groups join --help`, fmt-check and git diff --check. Expected: all exit 0, lint 0 issues, no tests fail. Re-run affected/full checks after substantive fixes, not after unchanged code.
 - [x] **Step 4: Request whole-change review.** Supply both the fork diff/tag evidence and go-signal diff plus approved spec, task reports and parked concerns. Review protocol binding/secrecy, failure-state semantics, account isolation, CLI contract and documented limits. Resolve blockers and independently verify resulting fixes.
 - [x] **Step 5: Update PLAN.md honestly.** Add checked joining implementation/offline verification entries under Later; update the Phase 4.2 note and CLI design. Leave invitation acceptance/cancellation and all live criteria open. Mark spec/plan implementation status only to the extent verified; controller owns checkbox updates.
-- [ ] **Step 6: Commit, push and open the PR.** Inspect branch history/existing PR, stage only this batch, commit, push normally and use `gh pr create --body-file` with an exact temporary description. Report implemented behavior, actual checks, pinned fork tag and remaining live acceptance. Do not merge or mark the whole group-management parent complete.
+- [x] **Step 6: Commit, push and open the PR.** Inspect branch history/existing PR, stage only this batch, commit, push normally and use `gh pr create --body-file` with an exact temporary description. Report implemented behavior, actual checks, pinned fork tag and remaining live acceptance. Do not merge or mark the whole group-management parent complete.
 
 ## Plan self-review
 
@@ -219,7 +219,9 @@ classification gap; the fix has actual RED/GREEN app/CLI regressions, preserves
 error identity and has passed affected-suite/race/lint verification. Independent scoped
 re-review approved spec compliance and quality with no residual findings.
 Whole-change review approved specification compliance and code quality with no
-Critical, Important or Minor findings. PR shipping remains pending.
+Critical, Important or Minor findings. The feature branch was pushed normally and
+[PR #24](https://github.com/CWBudde/go-signal/pull/24) opened against `main`; no merge
+was performed. The isolated worktree is retained for PR feedback.
 
 Integrated `just fmt`, `just check`, `just check-purego`, full no-backend fallback,
 build, docs generation, help inspection and diff checks passed. Both repository
