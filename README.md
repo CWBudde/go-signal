@@ -266,7 +266,8 @@ go-signal --account +4915112345678 groups join 'sgnl://signal.group/#…' -o jso
 An open link joins as an ordinary member. A link requiring administrator approval
 submits a request and reports `requesting`; it does not claim full membership.
 Freshly established membership or an existing request is a successful no-op.
-If fresh state identifies an existing invitation, accept it on the phone.
+If fresh state identifies an existing invitation, use `groups accept <group>`
+with a known group reference or accept it on the phone.
 Invite links contain the group master key and password: quote them, treat them as
 secrets. Join output and errors exclude the link and its secrets.
 
@@ -274,9 +275,33 @@ Each invocation attempts at most one membership change. An accepted follow-up
 failure differs from an uncertain submission: inspect the reported group ID before
 retrying. A retained key alone does not prove membership, and an account awaiting
 approval may get an inaccessible result from `groups show`; inspect the request
-on the phone or through an administrator. Invitation acceptance and request
-cancellation are deferred. Server acceptance and phone behavior remain covered by
+on the phone or through an administrator. Request cancellation remains deferred.
+Server acceptance and phone behavior remain covered by
 the separately opt-in [live check](docs/dev.md#group-join-live-check).
+
+Accept an invitation already known to the selected account:
+
+```sh
+go-signal groups accept 'Family'
+go-signal --account +4915112345678 groups accept 'group:<id>' -o json
+```
+
+This accepts your own ACI or phone-number identity (PNI) invitation. Use a known
+group ID, known master key or unique cached title; first synchronize or receive
+the group's key if the account does not know it. A fresh full membership is a
+successful no-op. Acceptance prefers an ACI invitation and falls back to your PNI.
+Ordinary list/show/join/leave self-membership reporting remains ACI-only, even
+though group reads retain PNI invitation entries.
+
+Each invocation submits at most one change. Success verifies your ACI membership
+from fresh group state, updates the local title cache and notifies members. The
+JSON result distinguishes HTTP acceptance from fresh membership verification;
+cache or notification errors can follow both. Errors leave stdout empty and
+preserve inspection guidance: check the reported group with `groups show`, your
+phone or an administrator before retrying accepted or uncertain failures.
+Join-request cancellation and PNI invitation decline remain deferred. Server and
+phone behavior are covered by the separately opt-in
+[live check](docs/dev.md#group-invitation-live-check).
 
 Read or update the selected account's own profile:
 

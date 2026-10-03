@@ -32,6 +32,9 @@ Layering, top to bottom:
   signalmeow/zerolog types stay inside this package and are converted to our own types
   (`convert.go`). The real client (`meow*.go`) is `//go:build cgo || libsignal_go`; `meow_nocgo.go`
   (`!cgo && !libsignal_go`) returns `ErrCGORequired`. signalmeow's zerolog output is bridged to slog (`logbridge.go`).
+  Invitation acceptance uses the fork's strict uncached full-state reader, bypassing
+  cached group state and endorsement processing while retaining authorization credential
+  caching. Own PNI matching is local to acceptance; ordinary self-membership remains ACI-only.
 - `internal/signal/signaltest/`: in-memory fake `Client` (no cgo) that mimics account selection,
   the per-account lock and remote-unlink behaviour of the real client. Command tests use it.
 - `internal/store/`: data-dir layout (`accounts.json` registry, `<aci>/account.db` SQLite with

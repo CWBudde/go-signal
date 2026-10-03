@@ -263,6 +263,10 @@ type Client interface { //nolint:interfacebloat // the one facade over signalmeo
 	// Accepted and Verified distinguish mutation acceptance from fresh membership evidence.
 	JoinGroup(ctx context.Context, link string) (GroupJoinResult, error)
 
+	// AcceptGroupInvitation accepts only a known invitation for this selected account.
+	// Accepted records HTTP acceptance; Verified requires fresh full own ACI membership.
+	AcceptGroupInvitation(ctx context.Context, ref string) (GroupAcceptResult, error)
+
 	// UpdateGroupLink changes invite access and/or rotates its password against fresh full
 	// administrator membership, even for no-ops. It submits one patch without retries and
 	// returns accepted ID/revision separately from uncertain or follow-up failures.

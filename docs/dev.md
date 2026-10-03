@@ -445,8 +445,10 @@ Restore membership, bans and link settings afterwards; never use a production gr
    joining becomes possible. A full member with a retained key remains a no-op
    even when its link is disabled.
 4. Prepare a known ACI invitation on the phone. Verify CLI joining reports the
-   invitation-acceptance requirement without submitting a new request; accept
-   through the phone. PNI invitations, CLI acceptance and cancellation are deferred.
+   invitation-acceptance requirement without submitting a new request; use
+   `groups accept <known-group>` or the phone. For ACI/PNI acceptance, follow
+   [the invitation live check](#group-invitation-live-check). Request cancellation
+   remains deferred.
 5. Exercise a concurrent change between preview and submission where practical.
    Verify a conflict is not retried. For an accepted change followed by a fetch,
    storage or notification failure, inspect the phone/group before manually
@@ -660,3 +662,51 @@ Perform it with both the pure-Go and cgo binaries, recording app versions and ea
 6. Remove all pins made by the procedure and restore any permission/timer changes. Record
    backend, commands, transport results, phone results and cleanup. Leave PLAN.md live checks
    open until both backend runs and phone observations are complete.
+
+### Group invitation live check
+
+This is separately opt-in production acceptance work and was not run during
+implementation. Use two disposable accounts with linked CLI devices and phones,
+plus disposable groups. Run every scenario with both `just build-cgo` and
+`just build` (pure-Go), selecting the invitee account explicitly. Synchronize or
+receive the group key before accepting; acceptance cannot import an unknown key.
+Record only backend, safe group IDs/revisions and phone observations, without
+recording master keys, invitation URLs or credentials.
+
+1. Prepare an ACI invitation from the administrator's phone. Confirm fresh admin
+   group state shows the invitee as pending, rather than already a full member.
+   Run `groups accept '<known-id-or-title>' -o json` as that invitee. Verify all
+   three booleans are true, fresh own ACI membership, the offered role, revision
+   and phone membership/notifications. Repeat: already-member no-op, with
+   `changed` and `accepted` false and no revision increment.
+2. Prepare a phone-number invitation before the invitee has shared its profile
+   key. Confirm the administrator's fresh group state identifies the pending
+   recipient by PNI. If the server creates an ACI invitation or adds a full
+   member, the fixture does not satisfy the PNI criterion. Accept as the invitee
+   and verify the exact PNI invitation is removed, own ACI is a full ordinary
+   member, unrelated invitations remain, and both phones show the result.
+   Repeat the no-op check. Leave PNI live acceptance open if no PNI fixture can
+   be established.
+3. Test a known group with no own invitation, a revoked invitation and a foreign
+   invitation. Verify refusal creates no membership. Disable the invite link
+   while an own invitation exists: invitation acceptance uses full-state auth,
+   without requiring the link password. Check selected-account isolation: an
+   account without the known key/invitation must not consume another account's
+   invitation or obtain its cached group through a title/key alias.
+4. Exercise a concurrent group change between read and submission where
+   practical. Verify conflict refusal is not retried. After any accepted or
+   uncertain error, inspect `groups show <id>`, the phone or the administrator
+   before a manual retry. If another device accepted during a failed follow-up,
+   the next fresh invocation must be a no-op. If the invitee is removed before
+   verification, output must not claim current membership. Use offline fixtures
+   for malformed/tampered/oversized bodies, transport faults and cancellation;
+   do not change production cryptographic keys to inject failures.
+5. Reopen the same disposable account using the other backend. Verify retained
+   key visibility, fresh membership and cached title; a successful fetch clears
+   a local left marker. Restore disposable group membership/settings and remove
+   temporary peers afterwards.
+
+Keep live invitation acceptance unchecked until the ACI and actual PNI scenarios,
+both backend runs and peer-phone observations are documented. Ordinary tests use
+offline cryptographic and transport fixtures. Request cancellation, PNI decline
+and global PNI self-membership reporting remain separate work.

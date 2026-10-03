@@ -734,6 +734,41 @@ follow-up and uncertain errors; their text distinguishes these outcomes and advi
 inspection before retrying. Requesting accounts may not be able to fetch full group
 state. This additive document retains schema version 1.
 
+## `groups accept`
+
+`groups accept` returns a dedicated document on success:
+
+```json
+{
+  "version": 1,
+  "groupAccept": {
+    "id": "Z3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXA=",
+    "title": "Family",
+    "revision": 13,
+    "changed": true,
+    "accepted": true,
+    "verified": true
+  }
+}
+```
+
+| Field      | Type    | Description                                                                            |
+| ---------- | ------- | -------------------------------------------------------------------------------------- |
+| `id`       | string  | Canonical group ID in base64; never the master key                                     |
+| `title`    | string  | Title from freshly verified full group state                                           |
+| `revision` | number  | Freshly verified membership revision, which may exceed the submitted change's revision |
+| `changed`  | boolean | The server accepted this invocation's invitation promotion                             |
+| `accepted` | boolean | HTTP acceptance of this invocation's change                                            |
+| `verified` | boolean | Fresh full state established own ACI membership                                        |
+
+All six fields are present. Successful acceptance has all three booleans true;
+an already-member no-op has `changed: false`, `accepted: false`, `verified: true`
+and does not increment the revision. Errors leave stdout empty, including accepted
+changes whose follow-up fails. Library callers receive partial results preserving
+acceptance and any fresh verification completed before a cache/notification error.
+No document contains a master key, invitation secret or credential. This additive
+document retains schema version 1.
+
 ## `groups leave`
 
 ```json

@@ -5,7 +5,6 @@ package signal
 import (
 	"context"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"math"
 
@@ -16,8 +15,6 @@ import (
 	"github.com/rs/zerolog"
 	"google.golang.org/protobuf/proto"
 )
-
-var errInvalidGroupChangeResponse = errors.New("invalid group change response; inspect groups show before retrying")
 
 func (c *meowClient) RemoveGroupMembers(ctx context.Context, ref string, members []Recipient) (Group, error) {
 	members, err := NormalizeGroupRemovalMembers(members)
