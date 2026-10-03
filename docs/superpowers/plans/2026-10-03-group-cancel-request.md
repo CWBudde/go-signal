@@ -90,7 +90,7 @@ GOFLAGS=-buildvcs=false only when needed for builds/docs/stubgen due /tmp/.git s
 - [x] Baseline recorded before implementation; self-review of plan covers all spec sections, interfaces and five review-focus cases.
 - [x] Three task gates complete, controller independently verified changes; one whole-branch review includes fork and main actual ranges and any deferred findings.
 - [x] Final review follow-up: one documentation clarification worker and scoped re-review; no executable findings or unresolved issues. Durable rulings record all seven declined-to-judge dispositions.
-- [ ] Commit durable evidence/rulings; push main normally, create one PR, inspect final-head CI and report actual outcomes. No merge or live calls. Clean only this plan's owned SDD workspace after successful finish; retain worktrees/branches.
+- [x] Commit durable evidence/rulings and normally publish `feat/group-cancel-request` as [PR #26](https://github.com/CWBudde/go-signal/pull/26), targeting main. No merge or live calls. Final-head CI outcomes are reported in the PR after this publication-record commit; clean only this plan's owned SDD workspace after verification and retain worktrees/branches.
 
 ## Execution record
 
@@ -101,7 +101,7 @@ All three task gates approved without findings. Task3 commit bc6ec42. Controller
 build and doc generation passed; generated cancel-request/leave help and man page
 were inspected. All six AES assembly targets passed. `just fmt` reformatted one
 JSON documentation file before passing integration checks; existing goldens are
-unchanged. No production calls. Whole-branch review approved; PR publication pending.
+unchanged. No production calls. Whole-branch review approved; published as PR #26.
 
 Final whole-change review at main f34c269 and fork 9cd9cbd approved spec alignment
 and code quality with no findings at any severity. The reviewer explicitly
@@ -131,3 +131,14 @@ section-aware diff checks. No executable change, fork repin or unresolved findin
    reviewer identified an exact prose-only correction, verified directly by the
    controller without a second agent fix wave. Cost if wrong: the public output
    contract could remain misleading or unrelated command documentation could change.
+
+## Publication record
+
+[PR #26](https://github.com/CWBudde/go-signal/pull/26) targets main from
+`feat/group-cancel-request`. The fork is already pinned to reviewed immutable .14.
+All executable changes passed the integrated checks and broad review; subsequent
+commits contain documentation only. Publication initially encountered an automatic
+approval rejection for missing visible authorization; the reviewer approved the
+normal push and PR after the controller supplied the approved plan and user
+implementation instruction. Final-head CI is checked after pushing this record
+and its actual outcome is recorded in the PR body. No merge or live calls.
