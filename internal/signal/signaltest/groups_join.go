@@ -117,7 +117,7 @@ func (c *client) commitGroupJoin(key string, group signal.Group,
 
 	if status == signal.GroupJoinMember {
 		group.LeftAt = time.Time{}
-		c.fake.cacheGroup(group)
+		c.fake.cacheJoinGroup(c.connected, group)
 	}
 
 	result.Title, result.Status, result.Verified = group.Title, status, true
@@ -171,7 +171,7 @@ func (c *client) knownJoinGroup(key string, group signal.Group) (signal.GroupJoi
 	}
 
 	group.LeftAt = time.Time{}
-	c.fake.cacheGroup(group)
+	c.fake.cacheJoinGroup(c.connected, group)
 
 	return signal.GroupJoinResult{
 		ID: group.ID, Title: group.Title, Revision: group.Revision, Status: signal.GroupJoinMember, Verified: true,
@@ -236,4 +236,49 @@ func (f *Fake) knowsJoinID(account, groupID string) bool {
 	}
 
 	return false
+}
+
+// joinFixtureID recognizes join IDs and aliases before legacy resolution can expose them.
+func (f *Fake) joinFixtureID(ref string) (string, bool) {
+	if group, ok := f.GroupJoinServer[ref]; ok {
+		return group.ID, true
+	}
+
+	if f.joinServerKnows(ref) {
+		return ref, true
+	}
+
+	alias := f.GroupKeys[ref]
+	if f.joinServerKnows(alias) {
+		return alias, true
+	}
+
+	return "", false
+}
+
+// cacheJoinGroup writes only selected-account metadata after verified full membership.
+func (f *Fake) cacheJoinGroup(account string, group signal.Group) {
+	if f.GroupJoinTitleCache == nil {
+		f.GroupJoinTitleCache = make(map[string]map[string]signal.CachedGroup)
+	}
+
+	if f.GroupJoinTitleCache[account] == nil {
+		f.GroupJoinTitleCache[account] = make(map[string]signal.CachedGroup)
+	}
+
+	cached := signal.CachedGroup{Title: group.Title, LeftAt: group.LeftAt}
+	if cached.Title == "" {
+		cached.Title = f.GroupJoinTitleCache[account][group.ID].Title
+	}
+
+	f.GroupJoinTitleCache[account][group.ID] = cached
+}
+
+// cachedGroup keeps join-fixture metadata separate from legacy global fixtures.
+func (f *Fake) cachedGroup(account, groupID string) signal.CachedGroup {
+	if f.joinServerKnows(groupID) {
+		return f.GroupJoinTitleCache[account][groupID]
+	}
+
+	return f.GroupTitleCache[groupID]
 }

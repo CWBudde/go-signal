@@ -44,7 +44,7 @@ func (c *client) Groups(context.Context) ([]signal.Group, error) {
 		group, err := c.fetch(groupID)
 		if errors.Is(err, signal.ErrNotAMember) || errors.Is(err, signal.ErrUnknownGroup) {
 			// Like the real client: what the title cache knows.
-			cached := c.fake.GroupTitleCache[groupID]
+			cached := c.fake.cachedGroup(c.connected, groupID)
 			out = append(out, signal.Group{ID: groupID, Title: cached.Title, LeftAt: cached.LeftAt, Err: err})
 
 			continue
@@ -127,8 +127,18 @@ func (c *client) GroupTitles(context.Context) (map[string]signal.CachedGroup, er
 
 	titles := maps.Clone(c.fake.GroupTitleCache)
 	for groupID := range titles {
-		if c.fake.joinServerKnows(groupID) && !c.fake.knowsJoinID(account.ACI, groupID) {
+		if c.fake.joinServerKnows(groupID) {
 			delete(titles, groupID)
+		}
+	}
+
+	for groupID, cached := range c.fake.GroupJoinTitleCache[account.ACI] {
+		if c.fake.joinServerKnows(groupID) && c.fake.knowsJoinID(account.ACI, groupID) {
+			if titles == nil {
+				titles = make(map[string]signal.CachedGroup)
+			}
+
+			titles[groupID] = cached
 		}
 	}
 
@@ -216,6 +226,14 @@ func (c *client) groupID(ref string) (string, error) {
 		return group.ID, nil
 	}
 
+	if id, joinFixture := c.fake.joinFixtureID(ref); joinFixture {
+		if c.fake.knowsJoinID(c.connected, id) {
+			return id, nil
+		}
+
+		return "", signal.ErrUnknownGroup
+	}
+
 	if c.fake.knows(ref) {
 		return ref, nil
 	}
@@ -243,7 +261,7 @@ func (c *client) fetch(groupID string) (signal.Group, error) {
 		}
 
 		group.LeftAt = time.Time{}
-		c.fake.cacheGroup(group)
+		c.fake.cacheJoinGroup(c.connected, group)
 
 		return group, nil
 	}
@@ -312,6 +330,10 @@ func CachedTitles(groups map[string]signal.Group) map[string]signal.CachedGroup 
 // knownGroupIDs scopes new join fixtures to the selected account's retained keys.
 func (c *client) knownGroupIDs() []string {
 	groupIDs := slices.Sorted(maps.Keys(c.fake.GroupInfo))
+	groupIDs = slices.DeleteFunc(groupIDs, func(id string) bool {
+		return c.fake.joinServerKnows(id) && !c.fake.knowsJoinID(c.connected, id)
+	})
+
 	for _, id := range c.fake.GroupJoinKnownKeys[c.connected] {
 		if !slices.Contains(groupIDs, id) {
 			groupIDs = append(groupIDs, id)

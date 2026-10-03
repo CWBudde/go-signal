@@ -149,6 +149,9 @@ type Fake struct {
 	GroupJoinServer map[string]signal.Group
 	// GroupJoinKnownKeys holds retained master keys per account ACI, mapping key to ID.
 	GroupJoinKnownKeys map[string]map[string]string
+	// GroupJoinTitleCache holds title/left metadata for join fixtures by account ACI then group ID.
+	// The global GroupTitleCache is ignored for IDs belonging to GroupJoinServer.
+	GroupJoinTitleCache map[string]map[string]signal.CachedGroup
 	// JoinGroupErr rejects submission; ErrGroupUpdateUncertain models an uncertain write.
 	JoinGroupErr error
 	// GroupJoinFollowUpErr fails verification after acceptance.

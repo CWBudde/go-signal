@@ -4,6 +4,7 @@ package signaltest_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/url"
 	"strings"
@@ -45,7 +46,7 @@ func TestFakeGroupJoin(t *testing.T) {
 
 			left := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
-			fake.GroupTitleCache = map[string]signal.CachedGroup{roleFakeGroupID: {Title: "previous join title", LeftAt: left}}
+			fake.GroupJoinTitleCache = map[string]map[string]signal.CachedGroup{profileBobACI: {roleFakeGroupID: {Title: "previous join title", LeftAt: left}}}
 
 			got, err := cli.JoinGroup(t.Context(), link)
 
@@ -63,11 +64,11 @@ func TestFakeGroupJoin(t *testing.T) {
 				t.Fatal("key not retained")
 			}
 
-			if state == signal.GroupLinkApproval && fake.GroupTitleCache[roleFakeGroupID].LeftAt != left {
+			if state == signal.GroupLinkApproval && fake.GroupJoinTitleCache[profileBobACI][roleFakeGroupID].LeftAt != left {
 				t.Fatal("pending erased left marker")
 			}
 
-			if state == signal.GroupLinkEnabled && !fake.GroupTitleCache[roleFakeGroupID].LeftAt.IsZero() {
+			if state == signal.GroupLinkEnabled && !fake.GroupJoinTitleCache[profileBobACI][roleFakeGroupID].LeftAt.IsZero() {
 				t.Fatal("member retained left marker")
 			}
 
@@ -340,5 +341,153 @@ func TestFakeGroupJoinRetainedInspection(t *testing.T) {
 	_, err = bob.Group(t.Context(), roleFakeGroupID)
 	if !errors.Is(err, signal.ErrNotAMember) {
 		t.Fatal("retained key made full state accessible", err)
+	}
+}
+
+func TestFakeGroupJoinUnretainedReference(t *testing.T) {
+	t.Parallel()
+
+	for _, reference := range []string{roleFakeGroupID, fakeLinkKey, "legacy-join-alias"} {
+		t.Run(reference, func(t *testing.T) {
+			t.Parallel()
+
+			fake, _ := joinFake(t, signal.GroupLinkApproval)
+			fake.GroupJoinKnownKeys = map[string]map[string]string{profileBobACI: {fakeLinkKey: roleFakeGroupID}}
+			fake.GroupKeys = map[string]string{fakeLinkKey: roleFakeGroupID, "legacy-join-alias": roleFakeGroupID}
+			fake.GroupInfo = map[string]signal.Group{roleFakeGroupID: fake.GroupJoinServer[fakeLinkKey]}
+			injected := &url.Error{Op: "GET", URL: "https://private-invite-secret", Err: io.ErrClosedPipe}
+			fake.GroupErrs = map[string]error{roleFakeGroupID: injected}
+			alice := profileClient(t, fake, profileAliceACI, true)
+
+			_, err := alice.Group(t.Context(), reference)
+			if !errors.Is(err, signal.ErrUnknownGroup) || errors.Is(err, io.ErrClosedPipe) || strings.Contains(err.Error(), "private-invite-secret") {
+				t.Fatalf("unretained join reference exposed server fixture: %v", err)
+			}
+
+			groups, err := alice.Groups(t.Context())
+			if err != nil || len(groups) != 0 {
+				t.Fatalf("unretained join fixture listed through legacy state: %+v,%v", groups, err)
+			}
+		})
+	}
+}
+
+//nolint:funlen // Two retained accounts across pending/uncertain and member refresh paths.
+func TestFakeGroupJoinRetainedCacheIsolation(t *testing.T) {
+	t.Parallel()
+
+	for _, pending := range []bool{true, false} {
+		for _, refresh := range []string{"join-no-op", "show", "list"} {
+			t.Run(fmt.Sprintf("pending=%t/%s", pending, refresh), func(t *testing.T) {
+				t.Parallel()
+
+				state := signal.GroupLinkEnabled
+				if pending {
+					state = signal.GroupLinkApproval
+				}
+
+				fake, link := joinFake(t, state)
+				fake.GroupJoinKnownKeys = map[string]map[string]string{
+					profileAliceACI: {fakeLinkKey: roleFakeGroupID},
+					profileBobACI:   {fakeLinkKey: roleFakeGroupID},
+				}
+				previous := signal.CachedGroup{Title: "Bob previous title", LeftAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+				fake.GroupJoinTitleCache = map[string]map[string]signal.CachedGroup{
+					profileBobACI:   {roleFakeGroupID: previous},
+					profileAliceACI: {roleFakeGroupID: {Title: "Alice previous title", LeftAt: time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)}},
+				}
+
+				fake.GroupTitleCache = map[string]signal.CachedGroup{roleFakeGroupID: {Title: "global decoy"}}
+				if !pending {
+					fake.JoinGroupErr = signal.ErrGroupUpdateUncertain
+				}
+
+				bob := profileClient(t, fake, profileBobACI, true)
+
+				result, err := bob.JoinGroup(t.Context(), link)
+				if pending {
+					if err != nil || result.Status != signal.GroupJoinRequesting {
+						t.Fatal(result, err)
+					}
+				} else if !errors.Is(err, signal.ErrGroupUpdateUncertain) {
+					t.Fatal(result, err)
+				}
+
+				err = bob.Close()
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				alice := profileClient(t, fake, profileAliceACI, true)
+
+				switch refresh {
+				case "join-no-op":
+					result, err = alice.JoinGroup(t.Context(), link)
+					if err != nil || !result.Verified || result.Changed || result.Status != signal.GroupJoinMember {
+						t.Fatal(result, err)
+					}
+				case "show":
+					_, err = alice.Group(t.Context(), roleFakeGroupID)
+					if err != nil {
+						t.Fatal(err)
+					}
+				case "list":
+					_, err = alice.Groups(t.Context())
+					if err != nil {
+						t.Fatal(err)
+					}
+				}
+
+				titles, err := alice.GroupTitles(t.Context())
+				if err != nil || titles[roleFakeGroupID].Title != "Join group" || !titles[roleFakeGroupID].LeftAt.IsZero() {
+					t.Fatalf("verified member failed to refresh own cache: %+v,%v", titles, err)
+				}
+
+				err = alice.Close()
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				bob = profileClient(t, fake, profileBobACI, true)
+
+				titles, err = bob.GroupTitles(t.Context())
+				if err != nil || titles[roleFakeGroupID] != previous {
+					t.Fatalf("member refresh overwrote other account cache: %+v,%v", titles, err)
+				}
+
+				groups, err := bob.Groups(t.Context())
+				if err != nil || len(groups) != 1 || !errors.Is(groups[0].Err, signal.ErrNotAMember) ||
+					groups[0].Title != previous.Title || groups[0].LeftAt != previous.LeftAt {
+					t.Fatalf("nonmember row used another account cache: %+v,%v", groups, err)
+				}
+			})
+		}
+	}
+}
+
+func TestFakeGroupJoinIgnoresGlobalTitleCache(t *testing.T) {
+	t.Parallel()
+
+	fake, link := joinFake(t, signal.GroupLinkApproval)
+	fake.GroupTitleCache = map[string]signal.CachedGroup{
+		roleFakeGroupID: {Title: "legacy global decoy", LeftAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)},
+	}
+
+	bob := profileClient(t, fake, profileBobACI, true)
+
+	_, err := bob.JoinGroup(t.Context(), link)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	titles, err := bob.GroupTitles(t.Context())
+	if err != nil || len(titles) != 0 {
+		t.Fatalf("join fixture inherited global cache: %+v,%v", titles, err)
+	}
+
+	groups, err := bob.Groups(t.Context())
+	if err != nil || len(groups) != 1 || groups[0].Title != "" || !groups[0].LeftAt.IsZero() ||
+		!errors.Is(groups[0].Err, signal.ErrNotAMember) {
+		t.Fatalf("join fixture inherited global unavailable row: %+v,%v", groups, err)
 	}
 }
