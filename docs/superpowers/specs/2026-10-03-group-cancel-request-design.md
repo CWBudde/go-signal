@@ -2,7 +2,8 @@
 
 Date: 2026-10-03. Baseline: `e1de4e9` (merged PR #25).
 Status: approved plan implemented; three task reviews and integrated offline checks pass.
-Whole-branch review and PR publication pending; live acceptance remains open.
+Whole-branch review approved; documentation clarification and PR publication pending.
+Live acceptance remains open.
 
 ## Intent
 
@@ -36,7 +37,7 @@ Successful cancellation has all three booleans true. A no-op has false/false/tru
 Plain headings are `Join request cancelled` and `No pending join request`, followed
 by canonical ID, quoted title and revision. JSON is
 `{"version":1,"groupCancelRequest":{"id":...,"title":...,"revision":...,"changed":...,"accepted":...,"verified":...}}`.
-All six fields are always present; SchemaVersion stays 1. Errors leave stdout
+All six fields are always present; SchemaVersion stays 1. Operation failures leave stdout
 empty; typed partial results remain available to app callers.
 
 Reuse acceptance's 4096-byte pre-trim reference validation, four base64 forms,

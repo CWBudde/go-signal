@@ -18,7 +18,7 @@
 - Fixed authenticated GET /v2/groups/join/ and PATCH /v2/groups/, no password or query; 1 MiB bounded bodies, numeric nonoverflowing GET timestamp, no redirects/replay/secret logging.
 - Delete only encrypted selected-account own ACI request; source own ACI, fresh revision+1; verify exact signed group/revision/source/target/action and epoch <=7.
 - Six result fields ID, Title, Revision, Changed, Accepted, Verified. Changed follows HTTP acceptance. Verified is exact signed removal at its revision, or fresh pending=false preview for a no-op.
-- JSON envelope version 1 / groupCancelRequest; six lower-camel fields always present. Plain headings Join request cancelled / No pending join request; quoted title; no stdout result on errors.
+- JSON envelope version 1 / groupCancelRequest; six lower-camel fields always present. Plain headings Join request cancelled / No pending join request; quoted title; no stdout result on operation failures.
 - One group argument, --yes before account opening; 4096-byte pre-trim validation; known account-local keys only, no unknown key import.
 - Preserve cgo || libsignal_go real facade, no-backend Open ErrCGORequired policy, errors.Is/As and exit codes.
 - Invalidate group cache before/after; preserve keys and title/left records; preview is not cached full membership. No member notifications or linked-device sync.
@@ -89,7 +89,7 @@ GOFLAGS=-buildvcs=false only when needed for builds/docs/stubgen due /tmp/.git s
 
 - [x] Baseline recorded before implementation; self-review of plan covers all spec sections, interfaces and five review-focus cases.
 - [x] Three task gates complete, controller independently verified changes; one whole-branch review includes fork and main actual ranges and any deferred findings.
-- [ ] If final review has findings, one fix worker and one scoped re-review, with durable rulings for residual findings. No silent unresolved items.
+- [ ] Final review follow-up: one documentation clarification worker and scoped re-review; no executable findings or unresolved issues. Durable rulings record all seven declined-to-judge dispositions.
 - [ ] Commit durable evidence/rulings; push main normally, create one PR, inspect final-head CI and report actual outcomes. No merge or live calls. Clean only this plan's owned SDD workspace after successful finish; retain worktrees/branches.
 
 ## Execution record
@@ -102,3 +102,25 @@ build and doc generation passed; generated cancel-request/leave help and man pag
 were inspected. All six AES assembly targets passed. `just fmt` reformatted one
 JSON documentation file before passing integration checks; existing goldens are
 unchanged. No production calls. Whole-branch review and PR publication pending.
+
+Final whole-change review at main f34c269 and fork 9cd9cbd approved spec alignment
+and code quality with no findings at any severity. The reviewer explicitly
+distinguished operational errors before rendering from output I/O errors. One
+prose-only clarification is being reviewed; no executable change or fork repin.
+
+### Rulings, in chronological order
+
+1. Empty-stdout means operational failures before rendering, matching the approved
+   in-chat plan. Output I/O errors are safely propagated and may retain bytes
+   already accepted by the writer; clarify the new cancellation wording only.
+   A streaming writer cannot roll back bytes. Cost if wrong: consumers expecting
+   atomic empty output on I/O failure could see partial output. This resolves
+   final-review declined item 7.
+2. Adopt final-review declined items 1–6 as approved scope/evidence limits: live
+   server/phone behavior, PNI/global/other-user mutations, MCP/daemon tools,
+   notification/sync and inherited fork lint/bridge remediation stay deferred.
+   Publication and final-head PR CI remain mandatory controller checks. Approved
+   scope and independently verified baseline evidence govern this increment.
+   Cost if wrong: deferred production/device defects or inherited dependency debt
+   could remain unresolved; shipping defects would escape if CI verification were
+   skipped.

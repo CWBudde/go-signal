@@ -803,7 +803,7 @@ requires fresh authenticated preview evidence; HTTP 403/404 is an error, includi
 on repeat calls. Verification establishes deletion at that revision, not continuous
 absence of future requests or delivery to other devices.
 
-Errors leave stdout empty. Library callers receive partial results: the attempted
+Operation failures leave stdout empty. Library callers receive partial results: the attempted
 revision survives rejection or uncertainty; HTTP 200 preserves `changed` and
 `accepted` even if response reading, decoding or signed verification fails.
 Inspect the reported group on the phone or through an administrator before manually
