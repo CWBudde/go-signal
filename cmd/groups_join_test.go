@@ -341,3 +341,54 @@ func TestGroupsJoinInheritedSetupAndAccount(t *testing.T) {
 		})
 	}
 }
+
+//nolint:cyclop // independent connection identity, no-submission and secrecy assertions
+func TestGroupsJoinConnectUncertaintyDoesNotImplySubmission(t *testing.T) {
+	t.Parallel()
+
+	fake, link := commandJoinFixture(t, signal.GroupJoinMember, false)
+	key, password := strings.Repeat("k", 32), strings.Repeat("p", 16)
+	urlErr := &url.Error{
+		Op: "CONNECT", URL: link,
+		Err: fmt.Errorf("key=%s password=%s: %w", key, password, signal.ErrGroupUpdateUncertain),
+	}
+	secret := fmt.Errorf("transport: %w", urlErr)
+	fake.ConnectErr = secret
+
+	var observing *commandJoinClient
+
+	factory := func(ctx context.Context, opts signal.Options) (signal.Client, error) {
+		client, err := fake.Factory(ctx, opts)
+		if err != nil {
+			return nil, fmt.Errorf("test factory: %w", err)
+		}
+
+		observing = &commandJoinClient{Client: client}
+
+		return observing, nil
+	}
+
+	out, stderr, err := runJoinFactory(t, factory, groupsCmd, joinCmd, link)
+	if out != "" || observing.calls != 0 || !fake.AllClosed() {
+		t.Fatalf("output/calls/closed = %q / %d / %v", out, observing.calls, fake.AllClosed())
+	}
+
+	var nested *url.Error
+
+	if !errors.Is(err, signal.ErrGroupUpdateUncertain) || !errors.Is(err, secret) ||
+		!errors.As(err, &nested) || nested != urlErr {
+		t.Fatalf("connection error lost identity: %v", err)
+	}
+
+	if !strings.Contains(err.Error(), "connect") || !strings.Contains(err.Error(), "before submission") {
+		t.Fatalf("missing pre-submission connection guidance: %v", err)
+	}
+
+	for _, forbidden := range []string{
+		joinAcceptedLabel, "uncert", "attempted", "revision", "signal.group", key, password,
+	} {
+		if strings.Contains(err.Error()+stderr, forbidden) {
+			t.Fatalf("unsafe or false connection outcome: %v / %s", err, stderr)
+		}
+	}
+}

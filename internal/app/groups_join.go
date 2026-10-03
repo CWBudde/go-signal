@@ -17,6 +17,18 @@ func (r JoinGroupRequest) Check() error {
 	return signal.CheckGroupInviteLink(r.Link) //nolint:wrapcheck // validation is already secret-free
 }
 
+// groupJoinConnectError keeps transport identity without interpreting it as a
+// membership outcome: failure to connect occurs before the join is submitted.
+type groupJoinConnectError struct {
+	cause error
+}
+
+func (e groupJoinConnectError) Error() string {
+	return "groups join: connect failed before submission (details hidden to protect invite secrets)"
+}
+
+func (e groupJoinConnectError) Unwrap() error { return e.cause }
+
 // GroupsJoin joins or requests membership once in send-only mode. Partial results
 // survive errors; acceptance and verification are independent from the presence of an ID.
 func (a *App) GroupsJoin(ctx context.Context, req JoinGroupRequest) (signal.GroupJoinResult, error) {
@@ -27,8 +39,7 @@ func (a *App) GroupsJoin(ctx context.Context, req JoinGroupRequest) (signal.Grou
 
 	err = a.connectSendOnly(ctx)
 	if err != nil {
-		return signal.GroupJoinResult{}, fmt.Errorf("groups join: connect: %w",
-			signal.GroupJoinOperationError(err, signal.GroupJoinResult{}))
+		return signal.GroupJoinResult{}, groupJoinConnectError{cause: err}
 	}
 
 	result, err := a.client.JoinGroup(ctx, req.Link)

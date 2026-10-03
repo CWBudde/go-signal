@@ -203,3 +203,47 @@ func TestGroupsJoinSelectedAccounts(t *testing.T) { //nolint:cyclop // exact suc
 		})
 	}
 }
+
+//nolint:cyclop // independent connection identity, no-submission and secrecy assertions
+func TestGroupsJoinConnectUncertaintyDoesNotImplySubmission(t *testing.T) {
+	t.Parallel()
+
+	key, password := strings.Repeat("k", 32), strings.Repeat("p", 16)
+	urlErr := &url.Error{
+		Op: "CONNECT", URL: appJoinLink(),
+		Err: fmt.Errorf("key=%s password=%s: %w", key, password, signal.ErrGroupUpdateUncertain),
+	}
+	secret := fmt.Errorf("transport: %w", urlErr)
+	fake := &signaltest.Fake{Linked: []signal.Account{testAccount()}, ConnectErr: secret}
+
+	client, err := fake.Factory(t.Context(), signal.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() { _ = client.Close() })
+
+	observing := &joinFailureClient{Client: client, observeContext: func(context.Context) {}}
+
+	result, err := app.New(observing).GroupsJoin(t.Context(), app.JoinGroupRequest{Link: appJoinLink()})
+	if result != (signal.GroupJoinResult{}) || observing.calls != 0 {
+		t.Fatalf("result/calls = %+v / %d", result, observing.calls)
+	}
+
+	var nested *url.Error
+
+	if !errors.Is(err, signal.ErrGroupUpdateUncertain) || !errors.Is(err, secret) ||
+		!errors.As(err, &nested) || nested != urlErr {
+		t.Fatalf("connection error lost identity: %v", err)
+	}
+
+	if !strings.Contains(err.Error(), "connect") || !strings.Contains(err.Error(), "before submission") {
+		t.Fatalf("missing pre-submission connection guidance: %v", err)
+	}
+
+	for _, forbidden := range []string{"accept", "uncert", "attempted", "revision", "signal.group", key, password} {
+		if strings.Contains(err.Error(), forbidden) {
+			t.Fatalf("unsafe or false connection outcome: %v", err)
+		}
+	}
+}
