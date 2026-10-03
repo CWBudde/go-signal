@@ -186,3 +186,11 @@ func UpdateGroupLinkOnce(ctx context.Context, cli GroupAdditionSender, raw *sign
 func VerifiedGroupLink(raw *signalmeow.Group, self string, committedRevision uint32) (GroupLink, error) {
 	return verifiedGroupLink(raw, self, committedRevision)
 }
+
+// GroupJoinOperations exposes the isolated join orchestration dependencies.
+type GroupJoinOperations = groupJoinOperations
+
+// JoinGroupWithOperations runs the real orchestration with controlled storage/transport.
+func JoinGroupWithOperations(ctx context.Context, ops GroupJoinOperations, self, link string) (GroupJoinResult, error) {
+	return joinGroupWithOperations(ctx, ops, self, link)
+}

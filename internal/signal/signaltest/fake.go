@@ -145,6 +145,14 @@ type Fake struct {
 	GroupLinkErr         error
 	UpdateGroupLinkErr   error
 	GroupLinkFollowUpErr error
+	// GroupJoinServer holds independent server state keyed by standard-base64 master key.
+	GroupJoinServer map[string]signal.Group
+	// GroupJoinKnownKeys holds retained master keys per account ACI, mapping key to ID.
+	GroupJoinKnownKeys map[string]map[string]string
+	// JoinGroupErr rejects submission; ErrGroupUpdateUncertain models an uncertain write.
+	JoinGroupErr error
+	// GroupJoinFollowUpErr fails verification after acceptance.
+	GroupJoinFollowUpErr error
 	// SetGroupBannedErr rejects a validated ban change before mutation.
 	SetGroupBannedErr error
 	// GroupBanFollowUpErr fails the fetch after a committed ban change.
