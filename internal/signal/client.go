@@ -259,6 +259,10 @@ type Client interface { //nolint:interfacebloat // the one facade over signalmeo
 	// Disabled and unrecognized access states have no URL. Secrets appear only in this result.
 	GroupLink(ctx context.Context, ref string) (GroupLink, error)
 
+	// JoinGroup submits at most one self membership change from a sensitive invite link.
+	// Accepted and Verified distinguish mutation acceptance from fresh membership evidence.
+	JoinGroup(ctx context.Context, link string) (GroupJoinResult, error)
+
 	// UpdateGroupLink changes invite access and/or rotates its password against fresh full
 	// administrator membership, even for no-ops. It submits one patch without retries and
 	// returns accepted ID/revision separately from uncertain or follow-up failures.

@@ -698,6 +698,42 @@ State and reset can be combined in one patch. Validation, permission, conflict, 
 follow-up and uncertain errors produce no success document. Accepted errors retain only the
 group ID/revision and advise inspection; uncertain errors do not claim acceptance.
 
+## `groups join`
+
+`groups join` returns a dedicated document on success:
+
+```json
+{
+  "version": 1,
+  "groupJoin": {
+    "id": "Z3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXA=",
+    "title": "Family",
+    "revision": 13,
+    "status": "member",
+    "changed": true,
+    "accepted": true,
+    "verified": true
+  }
+}
+```
+
+| Field      | Type    | Description                                                                   |
+| ---------- | ------- | ----------------------------------------------------------------------------- |
+| `id`       | string  | Group ID in base64; never the master key                                      |
+| `title`    | string  | Verified group title                                                          |
+| `revision` | number  | Freshly verified membership or request revision                               |
+| `status`   | string  | `member` for full membership, `requesting` for administrator approval         |
+| `changed`  | boolean | This invocation changed membership or submitted a request                     |
+| `accepted` | boolean | The server accepted this invocation's change                                  |
+| `verified` | boolean | Fresh full state or a validated preview/signed change established the outcome |
+
+All seven fields are present. A successful no-op has `changed: false`,
+`accepted: false` and `verified: true`. No document contains the invite link,
+password, master key or credentials. Errors leave stdout empty, including accepted
+follow-up and uncertain errors; their text distinguishes these outcomes and advises
+inspection before retrying. Requesting accounts may not be able to fetch full group
+state. This additive document retains schema version 1.
+
 ## `groups leave`
 
 ```json

@@ -64,11 +64,13 @@ How it fits together:
   [`cwbudde/mautrix-signal`](https://github.com/cwbudde/mautrix-signal) (branch `purego`, tags
   `vX.YYMM.Z-purego.N`) under its own module path `github.com/cwbudde/mautrix-signal`, not as a
   `replace` of `go.mau.fi/mautrix-signal`: a `replace` would make `go install` fail. Apart from
-  the module path, the fork changes only `pkg/libsignalgo`: every cgo file builds with
+  the module path, the fork adapts `pkg/libsignalgo`: every cgo file builds with
   `!libsignal_go`, and `x_purego.go` twins implement the same API on top of
   [`cwbudde/libsignal-go`](https://github.com/cwbudde/libsignal-go). The fork's `PUREGO.md` and
   `internal/stubgen` (stub generator and API parity check) describe the details. The cgo build uses upstream libsignal. The fork also corrects
-  the CGO endorsement wrapper to use the combined result supplied by Rust.
+  the CGO endorsement wrapper to use the combined result supplied by Rust. It also
+  exposes narrowly scoped invite preview and single-attempt joining in signalmeow,
+  with opt-in request/response log redaction for credential-bearing operations.
 - `cwbudde/libsignal-go` is a fork of `GoCodeAlone/libsignal-go` whose Rust compat harness is
   pinned to the libsignal tag libsignalgo expects (its `decisions/0007-cwbudde-fork-policy.md`).
   Fork releases are tagged `vX.Y.Z-cw.N`.
@@ -124,8 +126,8 @@ CGO_LDFLAGS="-L $PWD/third_party/lib" scripts/test-zkgroup-integration.sh
 ```
 
 The integration script requires Python 3 to write Go's temporary overlay JSON. It
-injects tests into signalmeow only for that invocation, leaving the fork restricted
-to `pkg/libsignalgo`. It checks encrypted group attributes and member profile keys,
+injects tests into signalmeow only for that invocation without modifying the pinned
+module. It checks encrypted group attributes and member profile keys,
 returning a group despite invalid endorsements, and profile URL/access-key
 construction and decryption over a localhost WebSocket. It also verifies endorsement
 cache insertion and expiry, sends an encrypted group text through the actual
@@ -354,7 +356,7 @@ This manual check is separately opt-in. Use disposable linked accounts, an onlin
 and disposable groups, with explicit `--data-dir` and `--account` for every command. Run once
 with `just build` (pure Go) and once with `just build-cgo` using separate groups. Enable a
 group link with `groups link update <id> --state enabled` or on the administrator's phone;
-joining remains a phone operation. Record the original membership, bans and revision with
+joining can use `groups join` or the phone. Record the original membership, bans and revision with
 `groups show <id> -o json`.
 
 1. As a full administrator, run `groups ban <id> <peer-number> <peer-ACI>`. Verify one revision
@@ -418,6 +420,47 @@ Inspect `groups link show <id>` before retrying accepted or uncertain errors. No
 failures after acceptance are logged. Leave live acceptance open until both backends and the
 phone observations, old-link rejection, joining and approval have been verified. Ordinary
 tests use offline fixtures only.
+
+### Group join live check
+
+This is separately opt-in production acceptance work; it has not been run as part
+of implementation. Use two disposable accounts with linked CLI devices and their
+phones, plus disposable groups. Run each scenario with both `just build-cgo` and
+`just build` (pure-Go), selecting the joining account explicitly. Record backend,
+server revision and phone observations without recording invite links or credentials.
+Restore membership, bans and link settings afterwards; never use a production group.
+
+1. On the administrator's phone, create an open-link group. Obtain its link with
+   `groups link show`. On the other account run `groups join '<link>' -o json`. Verify
+   `member`, acceptance/change/verification, ordinary member role, fresh state on
+   both devices, and peer notification. Repeat: no change and no revision increment.
+2. Create a group requiring approval. Join from the second account and verify
+   `requesting`, a single pending request on the administrator's phone, and no
+   claim of full membership. Repeat: an already-requested no-op. `groups show`
+   may be inaccessible for the requester. Approve from the administrator, verify
+   phone membership, then join again and verify an already-member no-op.
+3. With a nonmember account, test a disabled link, an old link after reset, and an
+   account banned by the administrator. Verify refusals
+   contain no link secrets and create no membership/request. Unban and check that
+   joining becomes possible. A full member with a retained key remains a no-op
+   even when its link is disabled.
+4. Prepare a known ACI invitation on the phone. Verify CLI joining reports the
+   invitation-acceptance requirement without submitting a new request; accept
+   through the phone. PNI invitations, CLI acceptance and cancellation are deferred.
+5. Exercise a concurrent change between preview and submission where practical.
+   Verify a conflict is not retried. For an accepted change followed by a fetch,
+   storage or notification failure, inspect the phone/group before manually
+   retrying; distinguish accepted outcomes from transport uncertainty. If another
+   device removes the joiner before fresh verification, ensure output does not
+   claim current membership. Do not simulate faults by changing production keys.
+6. Reopen the same disposable account with the other backend. Check retained keys
+   allow inspection only when membership permits it, no account gains another
+   account's retained group, and ordinary group output contains no invite secrets.
+   Restore the original group settings, membership and bans, and record results.
+
+Keep live joining acceptance unchecked until both backend runs and peer-phone
+observations are documented. Offline cryptographic/transport tests remain the
+repeatable evidence for malformed, oversized, tampered and ambiguous responses.
 
 ### Own-profile live check
 

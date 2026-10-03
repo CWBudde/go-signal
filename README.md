@@ -253,8 +253,30 @@ Success prints fresh link state and, only when enabled, the URL. Invite URLs con
 group master key and password; they appear only in these explicit link commands, never in
 ordinary group output. An unchanged state without reset leaves the revision unchanged.
 Changes are submitted once without retries. Inspect `groups link show <id>` before retrying
-accepted or uncertain failures; member notification failures are logged separately. Joining
-through links remains a phone operation. See [the live check](docs/dev.md#group-link-live-check).
+accepted or uncertain failures; member notification failures are logged separately. See
+[the live check](docs/dev.md#group-link-live-check).
+
+Join a group through an invite link for the selected account:
+
+```sh
+go-signal groups join 'https://signal.group/#…'
+go-signal --account +4915112345678 groups join 'sgnl://signal.group/#…' -o json
+```
+
+An open link joins as an ordinary member. A link requiring administrator approval
+submits a request and reports `requesting`; it does not claim full membership.
+Freshly established membership or an existing request is a successful no-op.
+If fresh state identifies an existing invitation, accept it on the phone.
+Invite links contain the group master key and password: quote them, treat them as
+secrets. Join output and errors exclude the link and its secrets.
+
+Each invocation attempts at most one membership change. An accepted follow-up
+failure differs from an uncertain submission: inspect the reported group ID before
+retrying. A retained key alone does not prove membership, and an account awaiting
+approval may get an inaccessible result from `groups show`; inspect the request
+on the phone or through an administrator. Invitation acceptance and request
+cancellation are deferred. Server acceptance and phone behavior remain covered by
+the separately opt-in [live check](docs/dev.md#group-join-live-check).
 
 Read or update the selected account's own profile:
 

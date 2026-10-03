@@ -36,12 +36,7 @@ func (c *client) Groups(context.Context) ([]signal.Group, error) {
 		return nil, err
 	}
 
-	groupIDs := slices.Sorted(maps.Keys(c.fake.GroupInfo))
-	for failing := range c.fake.GroupErrs {
-		if _, ok := c.fake.GroupInfo[failing]; !ok {
-			groupIDs = append(groupIDs, failing)
-		}
-	}
+	groupIDs := c.knownGroupIDs()
 
 	out := make([]signal.Group, 0, len(groupIDs))
 
@@ -49,7 +44,7 @@ func (c *client) Groups(context.Context) ([]signal.Group, error) {
 		group, err := c.fetch(groupID)
 		if errors.Is(err, signal.ErrNotAMember) || errors.Is(err, signal.ErrUnknownGroup) {
 			// Like the real client: what the title cache knows.
-			cached := c.fake.GroupTitleCache[groupID]
+			cached := c.fake.cachedGroup(c.connected, groupID)
 			out = append(out, signal.Group{ID: groupID, Title: cached.Title, LeftAt: cached.LeftAt, Err: err})
 
 			continue
@@ -121,7 +116,7 @@ func (c *client) GroupTitles(context.Context) (map[string]signal.CachedGroup, er
 		return nil, signal.ErrClosed
 	}
 
-	_, err := c.fake.account(c.opts)
+	account, err := c.fake.account(c.opts)
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +125,24 @@ func (c *client) GroupTitles(context.Context) (map[string]signal.CachedGroup, er
 		return nil, c.fake.GroupTitlesErr
 	}
 
-	return maps.Clone(c.fake.GroupTitleCache), nil
+	titles := maps.Clone(c.fake.GroupTitleCache)
+	for groupID := range titles {
+		if c.fake.joinServerKnows(groupID) {
+			delete(titles, groupID)
+		}
+	}
+
+	for groupID, cached := range c.fake.GroupJoinTitleCache[account.ACI] {
+		if c.fake.joinServerKnows(groupID) && c.fake.knowsJoinID(account.ACI, groupID) {
+			if titles == nil {
+				titles = make(map[string]signal.CachedGroup)
+			}
+
+			titles[groupID] = cached
+		}
+	}
+
+	return titles, nil
 }
 
 // cacheGroup records a fetched group in the title cache like the real client: an empty title
@@ -210,6 +222,18 @@ func (c *client) checkGroupOp(action string) error {
 // groupID resolves ref, a group ID or master key, like the real client; the caller holds
 // c.fake.mu.
 func (c *client) groupID(ref string) (string, error) {
+	if group, ok := c.joinedGroup(ref); ok {
+		return group.ID, nil
+	}
+
+	if id, joinFixture := c.fake.joinFixtureID(ref); joinFixture {
+		if c.fake.knowsJoinID(c.connected, id) {
+			return id, nil
+		}
+
+		return "", signal.ErrUnknownGroup
+	}
+
 	if c.fake.knows(ref) {
 		return ref, nil
 	}
@@ -225,6 +249,23 @@ func (c *client) groupID(ref string) (string, error) {
 // fetch returns the group groupID as the server shows it to the connected account; the caller
 // holds c.fake.mu.
 func (c *client) fetch(groupID string) (signal.Group, error) {
+	if group, ok := c.joinedGroup(groupID); ok {
+		err := c.fake.GroupErrs[groupID]
+		if err != nil {
+			return signal.Group{}, err
+		}
+
+		group.Membership, group.Role = group.MembershipOf(c.connected)
+		if group.Membership != signal.MembershipMember {
+			return signal.Group{}, signal.ErrNotAMember
+		}
+
+		group.LeftAt = time.Time{}
+		c.fake.cacheJoinGroup(c.connected, group)
+
+		return group, nil
+	}
+
 	err := c.fake.GroupErrs[groupID]
 	if err != nil {
 		return signal.Group{}, fmt.Errorf("fetch group %s: %w", groupID, err)
@@ -284,4 +325,26 @@ func CachedTitles(groups map[string]signal.Group) map[string]signal.CachedGroup 
 	}
 
 	return out
+}
+
+// knownGroupIDs scopes new join fixtures to the selected account's retained keys.
+func (c *client) knownGroupIDs() []string {
+	groupIDs := slices.Sorted(maps.Keys(c.fake.GroupInfo))
+	groupIDs = slices.DeleteFunc(groupIDs, func(id string) bool {
+		return c.fake.joinServerKnows(id) && !c.fake.knowsJoinID(c.connected, id)
+	})
+
+	for _, id := range c.fake.GroupJoinKnownKeys[c.connected] {
+		if !slices.Contains(groupIDs, id) {
+			groupIDs = append(groupIDs, id)
+		}
+	}
+
+	for failing := range c.fake.GroupErrs {
+		if !slices.Contains(groupIDs, failing) && !c.fake.joinServerKnows(failing) {
+			groupIDs = append(groupIDs, failing)
+		}
+	}
+
+	return groupIDs
 }
