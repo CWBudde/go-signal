@@ -115,6 +115,7 @@ go-signal groups list | show <group> | leave <group> --yes [--promote <member>].
 go-signal groups create <title> [--member <number|ACI|@username>]...
 go-signal groups rename <group> <title>
 go-signal groups update <group> [--description <text>] [--timer <seconds>] [--avatar <file> | --remove-avatar]   # combine settings in one patch
+go-signal groups join <link>
 go-signal groups link show <group>
 go-signal groups link update <group> [--state disabled|enabled|enabled-with-approval] [--reset]
 go-signal groups add-members <group> <recipient>...
@@ -781,9 +782,10 @@ being listed, as `left`), and a failure to tell the members is only logged by si
 can't be told apart as "left on another device" versus "removed" (both a 403). Creation,
 renaming, member addition/removal, settings updates (`groups update`), standalone
 administrator-role changes (`groups promote|demote`), banned-member management
-(`groups ban|unban`), invite-link management (`groups link show|update`) and avatar updates
-(`groups update --avatar|--remove-avatar`) are implemented under "Later / on demand", with
-live acceptance tracked separately there. Joining remains open.
+(`groups ban|unban`), invite-link management (`groups link show|update`), avatar updates
+(`groups update --avatar|--remove-avatar`) and invite-link joining (`groups join <link>`)
+are implemented under "Later / on demand", with live acceptance tracked separately
+there. Invitation acceptance and join-request cancellation remain open.
 
 #### 4.3 Identities and safety numbers
 
@@ -1156,10 +1158,14 @@ and usernames. What signalmeow needs from `libsignalgo` but libsignal-go doesn't
 Integration seam: `libsignalgo` sits in the same Go module as `signalmeow`
 (`go.mau.fi/mautrix-signal`), so there's no way to swap it out from the outside. We'll use two
 forks. The first is `cwbudde/libsignal-go`, which gets the new implementations. The second is
-`cwbudde/mautrix-signal`, a thin fork whose **only** change is under `pkg/libsignalgo`: the
-existing CGO files get `//go:build !purego`, and new `//go:build purego` files implement the same
-exported API on top of libsignal-go. Keeping the mautrix fork to one package keeps rebases cheap,
-and the shim can be offered upstream later.
+`cwbudde/mautrix-signal`, originally a thin fork adapting `pkg/libsignalgo`: the
+existing CGO files and pure-Go twins implement the same exported API on top of
+libsignal-go (the current tag is `libsignal_go`). Since `v0.2609.0-purego.11`, the
+fork also deliberately exposes invite preview/single-attempt joining and opt-in
+websocket credential logging redaction. Keep those extensions bounded and tested
+on both backends; preserve them when rebasing until upstream offers equivalent
+behavior. The maintenance procedure records this exception, and the shim can
+still be offered upstream separately.
 
 #### 7.1 Fork and re-pin libsignal-go
 
@@ -1947,6 +1953,24 @@ These remain optional/on demand. Checked foundations do not imply the user-facin
         clearing/no-op, permissions, peer notifications and restoration live on both
         backends with disposable groups, following
         [the live procedure](docs/dev.md#group-avatar-live-check). Live acceptance remains open.
+  - [x] Invite-link joining (`groups join <link>`). Open links join as an ordinary
+        member; approval links submit a request. Fresh full membership and existing
+        requests are verified no-ops. Known invitations require phone acceptance.
+        One membership PATCH at most, with distinct accepted/uncertain outcomes,
+        retained account-local keys and no invite secrets in join output/errors/logs.
+        Direct joins verify fresh membership; requesters may not fetch full state.
+  - [ ] Joining: strict preflight/parser, exact wire/signature/group binding, bounded
+        secret-safe HTTP and websocket logging, lifecycle/cancellation, persistence,
+        account-aware fake and partial-outcome tests; four plain/JSON outcomes,
+        docs, independent reviews and integrated checks. Dedicated `groupJoin` JSON
+        is additive with schema version 1 retained; fork pin is
+        `v0.2609.0-purego.11` without `replace` or upstream/libsignal pin changes.
+  - [ ] Joining: verify open/approval links, repeats/no-ops, approval, disabled/reset/
+        banned refusals, conflict/failure inspection, notifications and restoration
+        live on both backends with disposable accounts/groups, following
+        [the live procedure](docs/dev.md#group-join-live-check). No production
+        mutations were run; live acceptance remains open.
+  - [ ] Invitation acceptance (including PNI invitations) and join-request cancellation.
   - [ ] Add command/output tests, documentation and live verification for the remaining operations.
 - [ ] Stickers, stories, polls and pinned messages.
   - [x] Receive and render sticker metadata (pack ID, sticker ID and emoji), with conversion
@@ -2037,13 +2061,13 @@ These remain optional/on demand. Checked foundations do not imply the user-facin
 
 ## 6. Risks
 
-| Risk                                                         | Mitigation                                                                                                |
-| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
-| Signal server/protocol changes break us                      | Track mautrix-signal releases; Renovate/Dependabot; the facade limits how far changes spread              |
-| libsignal version drift between the Go bindings and the `.a` | Pin the submodule to the SHA mautrix uses; fail the build if the versions differ                          |
-| CGO complicates builds and CI                                | Cache the Rust build; provide prebuilt `libsignal_ffi.a` artifacts; static musl release                   |
-| Linked devices get unlinked after ~30 days offline           | Document it; `receive` periodically (e.g. systemd timer) to keep the link alive                           |
-| Signal ToS / unofficial client                               | Same position as signal-cli. Document it and don't spam.                                                  |
-| Prompt injection via incoming messages (MCP)                 | Recipient allowlist, `--read-only`, attach-dir restriction, no automatic read receipts                    |
-| Bugs in the pure-Go crypto ports (zkgroup, attestation)      | Vectors + interop + differential tests, fuzzing, CGO stays default until Phase 10.3                       |
-| Two forks drift from upstream (libsignal-go, mautrix-signal) | mautrix fork limited to `pkg/libsignalgo`; harness pinned to our libsignal tag; documented bump procedure |
+| Risk                                                         | Mitigation                                                                                                                             |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Signal server/protocol changes break us                      | Track mautrix-signal releases; Renovate/Dependabot; the facade limits how far changes spread                                           |
+| libsignal version drift between the Go bindings and the `.a` | Pin the submodule to the SHA mautrix uses; fail the build if the versions differ                                                       |
+| CGO complicates builds and CI                                | Cache the Rust build; provide prebuilt `libsignal_ffi.a` artifacts; static musl release                                                |
+| Linked devices get unlinked after ~30 days offline           | Document it; `receive` periodically (e.g. systemd timer) to keep the link alive                                                        |
+| Signal ToS / unofficial client                               | Same position as signal-cli. Document it and don't spam.                                                                               |
+| Prompt injection via incoming messages (MCP)                 | Recipient allowlist, `--read-only`, attach-dir restriction, no automatic read receipts                                                 |
+| Bugs in the pure-Go crypto ports (zkgroup, attestation)      | Vectors + interop + differential tests, fuzzing, CGO stays default until Phase 10.3                                                    |
+| Two forks drift from upstream (libsignal-go, mautrix-signal) | Bounded shim/join/logging scope; backend parity and offline wire tests; harness pinned to our libsignal tag; documented bump procedure |

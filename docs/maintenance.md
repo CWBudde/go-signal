@@ -7,9 +7,11 @@ go-signal depends on three pinned pieces that have to move together:
 - signalmeow, from the fork [`cwbudde/mautrix-signal`](https://github.com/cwbudde/mautrix-signal)
   of upstream `go.mau.fi/mautrix-signal` (branch `purego`, tags `vX.YYMM.Z-purego.N`). The fork
   has its own module path, `github.com/cwbudde/mautrix-signal`, so that go-signal needs no
-  `replace` and `go install github.com/cwbudde/go-signal@latest` works. Otherwise it changes only
-  `pkg/libsignalgo`: every cgo file gets a `libsignal_go` twin on top of libsignal-go (its
-  `PUREGO.md`).
+  `replace` and `go install github.com/cwbudde/go-signal@latest` works. Its main adaptation
+  is `pkg/libsignalgo`: every cgo file gets a `libsignal_go` twin on top of libsignal-go
+  (its `PUREGO.md`). Since `v0.2609.0-purego.11`, it also deliberately extends
+  signalmeow with bounded invite previews, one-shot joining and signed-response
+  binding, plus opt-in websocket request/response logging redaction for credentials.
 - [`cwbudde/libsignal-go`](https://github.com/cwbudde/libsignal-go) (tags `vX.Y.Z-cw.N`), the
   pure-Go libsignal that the default backend runs on. Its Rust compat harness is pinned to the
   libsignal tag libsignalgo was generated against (its `decisions/0007-cwbudde-fork-policy.md`).
@@ -42,8 +44,12 @@ go run ./pkg/libsignalgo/internal/stubgen -gen         # stubs for new cgo files
 go run ./pkg/libsignalgo/internal/stubgen -check       # exported API parity of the two builds
 ```
 
-Resolve conflicts in `pkg/libsignalgo` only; everything else takes upstream's side. Keep the
-fork's fixes that upstream doesn't have yet (the cgo clock fix in `message.go`,
+Resolve shim conflicts in `pkg/libsignalgo`. Take upstream's side elsewhere except
+for the deliberate invite-joining extension (`groups_join*.go`, scoped websocket
+logging policy/tests and pure-Go CI coverage): preserve or port those changes until
+upstream offers equivalent behavior. Run their offline tests on both backends after
+rebasing and confirm no mutation retries or credential logging are introduced. Keep
+the fork's fixes that upstream doesn't have yet (the cgo clock fix in `message.go`,
 `prekeybundle.go` and `sessionrecord.go`, the combined endorsement result; see `PUREGO.md`).
 
 Read `pkg/libsignalgo/signalversion/version.go`: that is the libsignal tag `vA.B.C` everything

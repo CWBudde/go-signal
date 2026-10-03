@@ -2,13 +2,14 @@
 
 Date: 2026-10-03
 
-Status: written spec approved on 2026-10-03; implementation plan awaiting review.
-No implementation yet.
+Status: written spec and implementation plan approved on 2026-10-03.
+Implementation and offline checks complete; independent whole-change review and
+shipping pending. Live acceptance is tracked separately and has not been run.
 
 ## Intent and scope
 
 Continue the Phase 4 group-management work under `PLAN.md`'s “Later / on demand”.
-PR #23 delivered avatar updates; Phase 4.2 explicitly leaves joining open.
+At baseline `930de7e`, PR #23 delivered avatar updates and Phase 4.2 left joining open.
 The user approved the proposed invite-link joining approach and useful subagents.
 
 Add `groups join <link>` for a selected linked account. An open link adds that
@@ -306,7 +307,7 @@ criteria because offline checks pass.
 
 ## Evidence
 
-- Live repository `PLAN.md:787` leaves joining open. Existing group operations
+- Baseline `930de7e` `PLAN.md:787` leaves joining open. Existing group operations
   establish the facade/app/output boundary and accepted-versus-uncertain policy.
 - Pinned signalmeow `groups.go:352`, `:731`, `:743`, `:1169`, `:1379`, `:1452`
   expose auth/storage/verification while keeping action preparation/password
@@ -315,8 +316,8 @@ criteria because offline checks pass.
 - Read-only signal-cli `GroupInviteLinkUrl.java`, `GroupV2Helper.java:98–107` and
   `:446–470`, and `GroupHelper.java:406–434` establish parsing, own credentials,
   direct/request selection and requester limitations. Never edit that submodule.
-- Official [Signal-Android PushServiceSocket.java](https://raw.githubusercontent.com/signalapp/Signal-Android/main/lib/libsignal-service/src/main/java/org/whispersystems/signalservice/internal/push/PushServiceSocket.java),
+- Official [Signal-Android PushServiceSocket.java](https://raw.githubusercontent.com/signalapp/Signal-Android/b377bd213ad370dea96c46f75491b598983ebf7f/lib/libsignal-service/src/main/java/org/whispersystems/signalservice/internal/push/PushServiceSocket.java),
   inspected 2026-10-03, defines password URL encoding, preview timestamp and
-  refusal handling. [GroupsV2Operations.java](https://raw.githubusercontent.com/signalapp/Signal-Android/main/lib/libsignal-service/src/main/java/org/whispersystems/signalservice/api/groupsv2/GroupsV2Operations.java)
+  refusal handling. [GroupsV2Operations.java](https://raw.githubusercontent.com/signalapp/Signal-Android/b377bd213ad370dea96c46f75491b598983ebf7f/lib/libsignal-service/src/main/java/org/whispersystems/signalservice/api/groupsv2/GroupsV2Operations.java)
   supplies the direct/request action construction. Record source revisions in
   protocol tests when implementing so future drift is reviewable.

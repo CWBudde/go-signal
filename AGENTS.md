@@ -63,7 +63,9 @@ event counts as acked once it is read from the channel; unread events are redeli
 - Command output is checked against golden files in `cmd/testdata/`.
 - Build tags: `libsignal_go` selects the pure-Go backend, the default for releases (PLAN.md Phases 7–10). signalmeow comes from
   the fork `github.com/cwbudde/mautrix-signal` (own module path, so go.mod has no `replace` and
-  `go install` works; only `pkg/libsignalgo` differs from upstream `go.mau.fi/mautrix-signal`). Code that calls libsignal through cgo is `cgo && !libsignal_go` and gets a
+  `go install` works). Besides the `pkg/libsignalgo` adaptation, the fork deliberately adds
+  invite preview/single-attempt joining and opt-in websocket credential log redaction
+  (see `docs/maintenance.md`). Code that calls libsignal through cgo is `cgo && !libsignal_go` and gets a
   `libsignal_go` twin; tests that need real libsignal are `cgo && !libsignal_go`; `purego_diff_test.go`
   compares both implementations. Details in `docs/dev.md` ("Pure-Go backend").
 
