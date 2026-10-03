@@ -1,5 +1,56 @@
 # Changelog
 
+## [0.3.0](https://github.com/CWBudde/go-signal/compare/v0.2.1...v0.3.0) (2026-10-03)
+
+
+### Features
+
+* accept own ACI and PNI group invitations ([e1de4e9](https://github.com/CWBudde/go-signal/commit/e1de4e9136915f4822cb2aa51712489d17007e91))
+* add group administrator role commands ([07203cb](https://github.com/CWBudde/go-signal/commit/07203cb2897b47760f2e65b3eb7b970fb853ccec))
+* add group administrator role commands ([0f9bc86](https://github.com/CWBudde/go-signal/commit/0f9bc86ef531e62f173c0da8a3279ba1be0ecb47))
+* add group ban commands ([ff15fbc](https://github.com/CWBudde/go-signal/commit/ff15fbcf3af686d2d35f89e4ac8458647ceb9d07))
+* add group ban commands ([9107f14](https://github.com/CWBudde/go-signal/commit/9107f14cbec45132e5764a26bc235d83fa8f49f1))
+* add group invite link commands ([4e06f98](https://github.com/CWBudde/go-signal/commit/4e06f98e3e44465512e0d7468ebb22843c9f7ca6))
+* add group invite link commands ([2723404](https://github.com/CWBudde/go-signal/commit/2723404388fe72c08e83afc6206fe87acb2806e4))
+* add group settings updates ([3127e85](https://github.com/CWBudde/go-signal/commit/3127e8559f23334b3a82db20aad4461ee96309d7))
+* add group settings updates ([ecde7d1](https://github.com/CWBudde/go-signal/commit/ecde7d17c242f030a4ec2fd01f19453c2a996590))
+* cancel own group join requests ([fb6e082](https://github.com/CWBudde/go-signal/commit/fb6e0826bee33b9b88bbddee8592be7758e7e850))
+* **cmd:** accept group invitations ([78a8402](https://github.com/CWBudde/go-signal/commit/78a8402467830725fa6a9eaa3e49757598c138ef))
+* **cmd:** cancel group join requests ([bc6ec42](https://github.com/CWBudde/go-signal/commit/bc6ec423901d695a21194b67061c489594f5450b))
+* **cmd:** join groups with invite links ([c36ed8b](https://github.com/CWBudde/go-signal/commit/c36ed8bd57c50273f05a1e8c2a8ff4498eda0a72))
+* join groups through invite links ([7f7247b](https://github.com/CWBudde/go-signal/commit/7f7247bdbdbf510de040e7602acb5f95d06ab1aa))
+* **signal:** accept own group invitations ([8027ca1](https://github.com/CWBudde/go-signal/commit/8027ca1f9e48bff0e259080acfe977642bc121c8))
+* **signal:** cancel own group join requests ([1182d7b](https://github.com/CWBudde/go-signal/commit/1182d7b8b768f2a317312240486458e3a128f63b))
+* **signal:** join groups with invite links once ([89f7728](https://github.com/CWBudde/go-signal/commit/89f7728236cce4fd4c7a7d184c55356fba74cf01))
+* support group avatar updates ([930de7e](https://github.com/CWBudde/go-signal/commit/930de7e13f65ae8371bd83c69a46442ce8244ef0))
+* support group avatar updates ([7f89c0d](https://github.com/CWBudde/go-signal/commit/7f89c0dca3b1b62eab48840fea78af61b3561b28))
+
+
+### Bug Fixes
+
+* **app:** distinguish join connection failures from submissions ([9ebf6dc](https://github.com/CWBudde/go-signal/commit/9ebf6dc23d0b09108d4d26ca563c9394643f9908))
+* **signaltest:** isolate joined group account state ([fcecb2e](https://github.com/CWBudde/go-signal/commit/fcecb2ef051fed10363d394d668dca7a7f282ae3))
+
+
+### Documentation
+
+* clarify cancellation output and record final review ([b720953](https://github.com/CWBudde/go-signal/commit/b7209534c6e4b1e2f13816d938ac158641e955fb))
+* condense PLAN.md to open work ([9e1781d](https://github.com/CWBudde/go-signal/commit/9e1781dcbd0674c8989ad2a2f3cb6f7f4ad31202))
+* correct cancellation clarification section ([f16faf8](https://github.com/CWBudde/go-signal/commit/f16faf8b07ff4086ae8e7073cd24e360603c2732))
+* design group invitation acceptance ([2a23fed](https://github.com/CWBudde/go-signal/commit/2a23fed25b4ba7f932eb6a4828d95127e44a74ef))
+* design invite-link group joining ([2740e8d](https://github.com/CWBudde/go-signal/commit/2740e8ddf33958198eeb5fea9f225560315777d2))
+* document invite joins and offline verification ([c2e5e80](https://github.com/CWBudde/go-signal/commit/c2e5e807fced740730487b8c28c4aa75f1c3219d))
+* plan group invitation acceptance ([09506cc](https://github.com/CWBudde/go-signal/commit/09506cc9d44e81e542e9bde36e7e40968a589550))
+* plan group join-request cancellation ([fdc2d8a](https://github.com/CWBudde/go-signal/commit/fdc2d8a9ded94483058cebac97302cef5a6cb655))
+* plan invite-link group joining ([293cd3c](https://github.com/CWBudde/go-signal/commit/293cd3c585cdad2839dfda81f694075475a47445))
+* record acceptance review and final verification ([cc9fff7](https://github.com/CWBudde/go-signal/commit/cc9fff752be11b45cfbaf4b36d972b1b3c3d7296))
+* record cancellation PR publication ([6ddc875](https://github.com/CWBudde/go-signal/commit/6ddc875a844aad4fa546911cc0e74e67f2e604c1))
+* record completed invite-join review ([6999c8a](https://github.com/CWBudde/go-signal/commit/6999c8afa665a97d40b82a505c0e2645f6314005))
+* record group acceptance PR publication ([7cbdd4c](https://github.com/CWBudde/go-signal/commit/7cbdd4c9751b8df70b75cffb35504670cafd9fdd))
+* record group settings delivery ([9a22ebe](https://github.com/CWBudde/go-signal/commit/9a22ebea69440a5e3a9b1d39125b40bb5a406e9f))
+* record invite-join PR shipping ([9d35b73](https://github.com/CWBudde/go-signal/commit/9d35b736a514855de9a40d75e019131d57ab4dc9))
+* record verified group request cancellation ([f34c269](https://github.com/CWBudde/go-signal/commit/f34c26962e349323807cd961e361473dd3f4c0d6))
+
 ## [0.2.1](https://github.com/CWBudde/go-signal/compare/v0.2.0...v0.2.1) (2026-10-01)
 
 
