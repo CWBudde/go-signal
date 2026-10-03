@@ -445,12 +445,12 @@ integration reruns; do not claim a criterion from unrelated passing tests.
       fixes affect it. Complete planning evidence, inspect clean tracked state and
       dependency integrity. Existing production/live acceptance limitations remain
       explicit, with no unsupported completion claims.
-- [ ] Inspect remote/branch PR state; push the feature normally and create one
+- [x] Inspect remote/branch PR state; push the feature normally and create one
       PR against main. Write the exact final description to a temporary file and use
       `gh pr create --body-file`; report implemented behavior and actual verification.
       No merge or force push. Check head/remote hashes and CI status; record PR URL
       and truthful pending/failing status in the plan.
-- [ ] Report the PR, controller-verified acceptance, remaining cancellation/PNI
+- [x] Report the PR, controller-verified acceptance, remaining cancellation/PNI
       decline/live work, and every required ruling. Retain worktrees/branch for review
       feedback and clean only owned execution scratch after durable records exist.
 
@@ -470,7 +470,7 @@ The private invalid-response sentinel is relocated without changing its identity
 or text so that the same policy compiles under the no-backend/fake build.
 
 Status: user-approved plan implemented and checked offline; whole-change review
-approved; shipping pending. Live acceptance and deferred operations remain open.
+approved; PR published. Live acceptance and deferred operations remain open. Live acceptance and deferred operations remain open.
 
 ## Offline execution evidence
 
@@ -564,3 +564,21 @@ findings, verified byte-identical to `.11`. No new dependency CI failure.
 Final post-pin `just check` and `just check-purego` passed in full, including
 unchanged tidy, cgo race tests, pure-Go vet/lint/tests and six-target AES assembly.
 All review findings are resolved; implementation/dependency provenance is verified.
+
+## Publication record
+
+PR [#25](https://github.com/CWBudde/go-signal/pull/25) is open against `main`:
+`feat: accept own ACI and PNI group invitations`. The feature was pushed normally,
+with no merge or force push. At the 2026-10-03 13:16 UTC publication checkpoint,
+local/remote/PR head matched `cc9fff752be11b45cfbaf4b36d972b1b3c3d7296`; remote
+main remained `7f7247b`. CI was running at that checkpoint; this documentation
+record creates a follow-up commit and CI evaluates the resulting PR head. The
+PR's checks are the authoritative latest remote status. All local gates and
+independent reviews are complete; the controller checks final head/CI before
+reporting. Inherited fork lint limitations remain disclosed in the PR.
+
+Both feature worktrees and branches are retained for review feedback. Only this
+plan's ignored SDD execution scratch is removed after the final remote check;
+all required review evidence and chronological rulings are preserved here. Live
+Signal validation, cancellation, PNI decline and global PNI self reporting remain
+unchecked. No production mutations were run.
