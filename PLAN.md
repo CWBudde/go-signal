@@ -116,6 +116,7 @@ go-signal groups create <title> [--member <number|ACI|@username>]...
 go-signal groups rename <group> <title>
 go-signal groups update <group> [--description <text>] [--timer <seconds>] [--avatar <file> | --remove-avatar]   # combine settings in one patch
 go-signal groups join <link>
+go-signal groups accept <group>
 go-signal groups link show <group>
 go-signal groups link update <group> [--state disabled|enabled|enabled-with-approval] [--reset]
 go-signal groups add-members <group> <recipient>...
@@ -769,14 +770,15 @@ ACI as a quote author now shows as `me` (one line of the `receive_events` golden
 unit tests for the conversion, master key derivation, the leave change and the title cache; not
 yet verified against the live server.)
 
-Notes: every `groups` command fetches every group (one request per group, sequentially). Users
-invited by phone number (PNI) are missing from the pending members, and we can't see a group we
-were invited to by number: signalmeow skips PNI pending members when decrypting. A requesting
-user probably can't fetch the group at all (403), and `UpdateGroup` fetches it first, so
-cancelling a join request likely fails with `ErrNotAMember` despite the code path for it. For a
-group we are only invited to, the server sends no send endorsements; signalmeow's resulting cache
-errors are demoted to debug in the log bridge (only that case, recognised by the error text; libsignal
-also prints its caught panic about the empty endorsements to stderr, which we can't catch). After leaving, signalmeow's endorsement update for
+Notes: `groups list` fetches every known group (one request per group, sequentially).
+The current fork retains ACI and PNI pending members, but ordinary list/show/join/leave
+self-membership recognition remains ACI-only. `groups accept` matches own ACI first,
+then own PNI, through a strict uncached full-state read without endorsement processing.
+A requesting user may not fetch full group state (403); generic `UpdateGroup` fetches
+it first, so join-request cancellation still needs a separate password-free flow.
+Ordinary reads of invited groups retain their existing missing-endorsement behavior:
+the log bridge demotes those cache errors to debug, while cgo may print a caught empty-
+endorsement panic to stderr. The dedicated acceptance reader avoids that path. After leaving, signalmeow's endorsement update for
 the new revision probably fails (only logged), its `signalmeow_groups` row stays (the group keeps
 being listed, as `left`), and a failure to tell the members is only logged by signalmeow. Groups
 can't be told apart as "left on another device" versus "removed" (both a 403). Creation,
@@ -785,7 +787,7 @@ administrator-role changes (`groups promote|demote`), banned-member management
 (`groups ban|unban`), invite-link management (`groups link show|update`), avatar updates
 (`groups update --avatar|--remove-avatar`) and invite-link joining (`groups join <link>`)
 are implemented under "Later / on demand", with live acceptance tracked separately
-there. Invitation acceptance and join-request cancellation remain open.
+there. Join-request cancellation and PNI invitation decline remain open.
 
 #### 4.3 Identities and safety numbers
 
@@ -1955,7 +1957,7 @@ These remain optional/on demand. Checked foundations do not imply the user-facin
         [the live procedure](docs/dev.md#group-avatar-live-check). Live acceptance remains open.
   - [x] Invite-link joining (`groups join <link>`). Open links join as an ordinary
         member; approval links submit a request. Fresh full membership and existing
-        requests are verified no-ops. Known invitations require phone acceptance.
+        requests are verified no-ops. Known invitations use `groups accept` or the phone.
         One membership PATCH at most, with distinct accepted/uncertain outcomes,
         retained account-local keys and no invite secrets in join output/errors/logs.
         Direct joins verify fresh membership; requesters may not fetch full state.
@@ -1970,7 +1972,23 @@ These remain optional/on demand. Checked foundations do not imply the user-facin
         live on both backends with disposable accounts/groups, following
         [the live procedure](docs/dev.md#group-join-live-check). No production
         mutations were run; live acceptance remains open.
-  - [ ] Invitation acceptance (including PNI invitations) and join-request cancellation.
+  - [x] Invitation acceptance (`groups accept <group>`), including own PNI invitations.
+        Uses only selected-account known keys, prefers ACI invitations and returns a fresh
+        already-member no-op. One PATCH at most; signed promotion and fresh own ACI membership
+        are verified independently, with authoritative title/revision and preserved partial
+        outcomes after cancellation, persistence or notification errors.
+  - [x] Acceptance: strict bounded invitation reads, ACI/PNI wire/signature binding,
+        malformed/secret preflight, lifecycle/cancellation, selected-account fake isolation,
+        repeat-after-accepted-failure, App/CLI/output tests and four new goldens; task reviews
+        and integrated cgo/pure-Go/fallback checks. Additive six-field `groupAccept` JSON
+        retains version 1; fork pin `v0.2609.0-purego.12`, without `replace` or other pin changes.
+  - [ ] Acceptance: verify actual ACI and PNI invitations, no-ops, revoked/foreign refusals,
+        conflict/failure inspection, notifications and restoration live on both backends
+        with disposable accounts/groups, following
+        [the live procedure](docs/dev.md#group-invitation-live-check). No production mutations
+        were run; live acceptance remains open.
+  - [ ] Join-request cancellation and PNI invitation decline. Global PNI self-membership
+        reporting remains separate work.
   - [ ] Add command/output tests, documentation and live verification for the remaining operations.
 - [ ] Stickers, stories, polls and pinned messages.
   - [x] Receive and render sticker metadata (pack ID, sticker ID and emoji), with conversion

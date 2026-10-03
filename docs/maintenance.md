@@ -45,9 +45,11 @@ go run ./pkg/libsignalgo/internal/stubgen -check       # exported API parity of 
 ```
 
 Resolve shim conflicts in `pkg/libsignalgo`. Take upstream's side elsewhere except
-for the deliberate invite-joining extension (`groups_join*.go`, scoped websocket
-logging policy/tests and pure-Go CI coverage): preserve or port those changes until
-upstream offers equivalent behavior. Run their offline tests on both backends after
+for the deliberate membership extension (`groups_join*.go`, `groups_accept*.go`,
+shared `groups_membership_http.go`, scoped websocket logging policy/tests and
+pure-Go CI coverage): preserve or port those changes until upstream offers
+equivalent behavior. Retain strict fresh invitation reads, own ACI/PNI promotion
+and signed/fresh-state verification. Run the offline tests on both backends after
 rebasing and confirm no mutation retries or credential logging are introduced. Keep
 the fork's fixes that upstream doesn't have yet (the cgo clock fix in `message.go`,
 `prekeybundle.go` and `sessionrecord.go`, the combined endorsement result; see `PUREGO.md`).

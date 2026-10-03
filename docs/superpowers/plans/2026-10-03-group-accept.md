@@ -117,7 +117,7 @@ func (cli *Client) AcceptGroupInvitationOnce(
   parameters into these production flows; they do not replace production crypto
   or change production server constants.
 
-- [ ] **Step 1: Write failing strict-read tests.** `TestGroupAcceptanceRead`
+- [x] **Step 1: Write failing strict-read tests.** `TestGroupAcceptanceRead`
       serves a bound encrypted full group with ACI and PNI invitations, no endorsements,
       fresh revision 7, title `Test group`; assert exact GET path, fresh owned result,
       both identity types retained and zero cache/profile-key/storage writes.
@@ -128,12 +128,12 @@ func (cli *Client) AcceptGroupInvitationOnce(
       Assert ordinary errors, closed bodies, preserved sentinels and no panic/secret
       diagnostics on either backend. Unknown unrelated full-state metadata may survive.
 
-- [ ] **Step 2: Run the read tests RED.**
+- [x] **Step 2: Run the read tests RED.**
       `CGO_ENABLED=0 go test -tags libsignal_go -count=1 -run '^TestGroupAcceptanceRead' ./pkg/signalmeow/`
       must fail for missing API/behavior, not fixture setup. Save the discriminating
       failure tail in the controller's execution record.
 
-- [ ] **Step 3: Implement the uncached reader.** Add `FetchGroupForAcceptance`
+- [x] **Step 3: Implement the uncached reader.** Add `FetchGroupForAcceptance`
       in `groups_accept_read.go` with the spec's key/public-parameter binding, strict
       nested/length/decryption guards and owned data. Add/factor only the static
       acceptance GET path in the bounded transport. Avoid `parseGroupResponse`,
@@ -141,11 +141,11 @@ func (cli *Client) AcceptGroupInvitationOnce(
       Declare the shared acceptance sentinels in `groups_accept.go` at this point;
       the mutation method/outcome implementation follows the mutation RED tests.
 
-- [ ] **Step 4: Run strict-read tests GREEN on both backends.** Repeat Step 2;
+- [x] **Step 4: Run strict-read tests GREEN on both backends.** Repeat Step 2;
       then run `CGO_ENABLED=1 go test -race -count=1 -run '^TestGroupAcceptanceRead' ./pkg/signalmeow/`
       with the explicit cgo library path. Expected: all pass, no stderr panic output.
 
-- [ ] **Step 5: Write failing acceptance wire/outcome tests.** Reuse private
+- [x] **Step 5: Write failing acceptance wire/outcome tests.** Reuse private
       join credential/notary fixtures and sign adversarial responses with those keys.
       `TestGroupAcceptanceActions` asserts own ACI credential lookup, fresh+1,
       plaintext invited source, no request group ID, exactly one presentation-only
@@ -167,11 +167,11 @@ if !outcome.Attempted || !outcome.Accepted || outcome.Verified ||
 }
 ```
 
-- [ ] **Step 6: Run acceptance tests RED.**
+- [x] **Step 6: Run acceptance tests RED.**
       `CGO_ENABLED=0 go test -tags libsignal_go -count=1 -run '^TestGroupAcceptance' ./pkg/signalmeow/`
       must fail for missing acceptance behavior; record the reason.
 
-- [ ] **Step 7: Implement acceptance and response verification.** Put the API,
+- [x] **Step 7: Implement acceptance and response verification.** Put the API,
       outcome and sentinels in `groups_accept.go`. Prepare only the own credential
       presentation and selected promotion; perform one PATCH. Record HTTP acceptance
       before reading; signed verification binds exact group/revision/typed identities,
@@ -180,7 +180,7 @@ if !outcome.Attempted || !outcome.Accepted || outcome.Verified ||
       side effects. Keep all contextual dependency/WS logging sensitive and errors
       redacted with `Unwrap` identity.
 
-- [ ] **Step 8: Run acceptance and existing join/privacy tests GREEN.**
+- [x] **Step 8: Run acceptance and existing join/privacy tests GREEN.**
       `CGO_ENABLED=0 go test -tags libsignal_go -count=1 ./pkg/signalmeow/... ./pkg/libsignalgo/...`
       and `CGO_ENABLED=1 go test -race -count=1 -run 'TestGroup(Acceptance|Join)|TestWebsocketCredentialLoggingPrivacy' ./pkg/signalmeow/...`
       must pass, including the actual websocket loop logging regressions. Also run
@@ -189,7 +189,7 @@ if !outcome.Attempted || !outcome.Accepted || outcome.Verified ||
       Format only touched files; verify new
       paths against fork lint/hooks without reformatting unrelated inherited files.
 
-- [ ] **Step 9: Review and commit the fork deliverable (controller).** Inspect
+- [x] **Step 9: Review and commit the fork deliverable (controller).** Inspect
       allowed changed paths, acceptance evidence and both spec/quality review results.
       Resume the same implementer for findings. Run
       `CGO_ENABLED=0 GOFLAGS=-buildvcs=false go run ./pkg/libsignalgo/internal/stubgen -gen`
@@ -197,7 +197,7 @@ if !outcome.Attempted || !outcome.Accepted || outcome.Verified ||
       must remain unchanged. After scoped checks pass, commit only
       reviewed changes as `feat(signalmeow): accept group invitations once`.
 
-- [ ] **Step 10: Publish and pin the reviewed fork (controller).** Document the
+- [x] **Step 10: Publish and pin the reviewed fork (controller).** Document the
       bounded extension in `PUREGO.md`, check `purego`/remote history and next unused
       tag, publish by normal fast-forward and fresh immutable tag, inspect CI and
       download that exact module. Confirm published changed files match reviewed
@@ -213,7 +213,7 @@ if !outcome.Attempted || !outcome.Accepted || outcome.Verified ||
 - Create: `internal/signal/groups_accept.go`, `internal/signal/groups_accept_test.go` — owned result, selection/error policy.
 - Create: `internal/signal/meow_groups_accept.go`, `internal/signal/meow_groups_accept_test.go`, `internal/signal/groups_accept_export_test.go` — protected state flow and test adapters.
 - Create: `internal/signal/signaltest/groups_accept.go`, `internal/signal/signaltest/groups_accept_test.go` — fixture mutation/account isolation.
-- Modify: `internal/signal/client.go`, `internal/signal/meow_nocgo.go`, `internal/signal/signaltest/fake.go` — contract, fallback and error injections.
+- Modify: `internal/signal/client.go`, `internal/signal/signaltest/fake.go` — contract and error injections. Verify unchanged `internal/signal/meow_nocgo.go`: `Open` returns nil and `ErrCGORequired`; no fallback client type/method exists.
 - Modify only if needed: `internal/signal/signaltest/groups.go`, `internal/signal/signaltest/groups_join.go` — reuse account-local fixture resolution/cache without changing legacy policy.
 - Correct narrowly: obsolete PNI-skipping comment in `internal/signal/groups.go`;
   relocate the unchanged private `errInvalidGroupChangeResponse` declaration there
@@ -251,7 +251,7 @@ if !outcome.Attempted || !outcome.Accepted || outcome.Verified ||
   `AcceptGroupWithOperations(ctx context.Context, ops GroupAcceptOperations, self Recipient, ref string) (GroupAcceptResult, error)` exposes orchestration
   only in `groups_accept_export_test.go` (`cgo || libsignal_go`).
 
-- [ ] **Step 1: Write failing selection/error tests.** `TestCheckAcceptInvitation`
+- [x] **Step 1: Write failing selection/error tests.** `TestCheckAcceptInvitation`
       tables cover ACI and PNI, same UUID/different type, zero own PNI, foreign
       invitations, ACI priority, duplicate selected identity, unknown role, own
       requester, simultaneous own request/invitation, bans and revision overflow.
@@ -259,11 +259,11 @@ if !outcome.Attempted || !outcome.Accepted || outcome.Verified ||
       no invitation, terminated, canceled/unlinked and arbitrary secret nested errors.
       Verify no input/master key in text and `errors.Is` for the original causes.
 
-- [ ] **Step 2: Run policy tests RED.**
+- [x] **Step 2: Run policy tests RED.**
       `CGO_ENABLED=0 go test -count=1 -run 'TestCheckAcceptInvitation|TestGroupAcceptResultErrors' ./internal/signal/`
       must fail for missing behavior.
 
-- [ ] **Step 3: Implement the owned policy/contract.** Add exact result/helper
+- [x] **Step 3: Implement the owned policy/contract.** Add exact result/helper
       signatures in `groups_accept.go` and relocate the unchanged invalid-response
       sentinel to the backend-independent group file. Defer the Client interface
       addition and implementation methods to Steps 7–8, keeping policy GREEN runnable
@@ -271,10 +271,10 @@ if !outcome.Attempted || !outcome.Accepted || outcome.Verified ||
       Redacted accepted/uncertain messages contain only validated canonical ID and
       revision with `groups show`/phone/admin inspection guidance, never nested text.
 
-- [ ] **Step 4: Run policy tests GREEN.** Repeat Step 2, requiring all cases to
+- [x] **Step 4: Run policy tests GREEN.** Repeat Step 2, requiring all cases to
       pass without libsignal or network.
 
-- [ ] **Step 5: Write failing real-flow and fake tests.** Expose a narrow
+- [x] **Step 5: Write failing real-flow and fake tests.** Expose a narrow
       operations adapter for protected resolution/read/submit/cache/notify. The
       harness pins cache invalidation, one fresh read before selection, one PATCH,
       signed gate, fresh >= accepted revision, cache then notify and final invalidation.
@@ -301,11 +301,11 @@ accepted server state, cleared local left marker and reopen/repeat no-op.
 A second account with a colliding ACI UUID must neither consume the first
 account's PNI invitation nor gain its key/title/left cache through legacy aliases.
 
-- [ ] **Step 6: Run the new flow/fake tests RED.**
+- [x] **Step 6: Run the new flow/fake tests RED.**
       `CGO_ENABLED=0 go test -tags libsignal_go -count=1 -run 'TestGroupAccept|TestFakeGroupAccept' ./internal/signal/...`
       must fail for incomplete state-flow/account behavior, not fixture initialization.
 
-- [ ] **Step 7: Implement protected real acceptance.** Add the operations-driven
+- [x] **Step 7: Implement protected real acceptance.** Add the operations-driven
       algorithm in `meow_groups_accept.go`. Validate local input, acquire closing/
       connection/operation guards before any connected-store access, then resolve and
       validate selected key/ID under that guard. Read through Task 1's uncached API,
@@ -313,23 +313,24 @@ account's PNI invitation nor gain its key/title/left cache through legacy aliase
       validated signed artifacts; fresh-read membership before cache/notification.
       Set verification metadata before persistence, preserve accepted/attempted
       evidence and keep every backend stage inside the sensitive caller context.
-      Add the interface and fallback method together with the real method and Step 8's
-      fake implementation before the next compile/GREEN gate.
+      Add the interface together with the real method and Step 8's fake implementation
+      before the next compile/GREEN gate. Keep the existing no-backend `Open` refusal
+      unchanged; do not introduce an unused fallback client type.
 
-- [ ] **Step 8: Implement fake acceptance.** Add the interface method in
+- [x] **Step 8: Implement fake acceptance.** Add the interface method in
       `signaltest/groups_accept.go` using the owned policy and selected registered
       account PNI. Operate on cloned fixture state under the fake mutex; retain
       existing account-local key visibility, preserve unrelated data, apply exact
       invitation removal and committed revision once, isolate caches and distinguish
       submission/follow-up errors. Do not add acceptance keys for unknown accounts.
 
-- [ ] **Step 9: Run real/fake tests GREEN and scoped quality checks.** Repeat
+- [x] **Step 9: Run real/fake tests GREEN and scoped quality checks.** Repeat
       Step 6; run focused cgo race tests with the explicit library path, the complete
       fake suite and no-cgo fallback suite for `./internal/signal/...`. Run scoped
       vet and lint on both builds sequentially. Expected: no new failures; existing
       join, ordinary PNI pending conversion and ACI-only leave behavior remain green.
 
-- [ ] **Step 10: Review and commit the facade deliverable (controller).** Inspect
+- [x] **Step 10: Review and commit the facade deliverable (controller).** Inspect
       every changed path and execute discriminating policy/account/partial-outcome
       checks independently. After task spec/quality approval, run `just fmt` and
       `just lint`; commit reviewed paths as `feat(signal): accept own group invitations`.
@@ -355,7 +356,7 @@ account's PNI invitation nor gain its key/title/left cache through legacy aliase
   and `WithLocation`; new command's help explains known invitations, both identity
   types, one attempt and follow-up inspection. No new global configuration hook.
 
-- [ ] **Step 1: Write failing application tests.** `TestGroupAcceptRequestCheck`
+- [x] **Step 1: Write failing application tests.** `TestGroupAcceptRequestCheck`
       rejects blank, 4097-byte-before-trim, malformed `group:` and HTTPS/sgnl invite
       inputs; valid title/group ID/key inputs survive. `TestGroupsAccept` covers
       selected account, title/ID/key resolution, fresh member no-op, ACI/PNI acceptance,
@@ -364,19 +365,19 @@ account's PNI invitation nor gain its key/title/left cache through legacy aliase
       especially Connect errors carrying an uncertainty sentinel; preserves typed
       accepted/verified results, `errors.Is`, unlink and context, with secret-free text.
 
-- [ ] **Step 2: Run application tests RED.**
+- [x] **Step 2: Run application tests RED.**
       `CGO_ENABLED=0 go test -tags libsignal_go -count=1 -run 'TestGroupAcceptRequest|TestGroupsAccept' ./internal/app/`
       must fail for missing request/use-case behavior.
 
-- [ ] **Step 3: Implement the request and use case.** Put exact signatures in
+- [x] **Step 3: Implement the request and use case.** Put exact signatures in
       `internal/app/groups_accept.go`: Check first, resolve before connecting, connect
       once, call once and return partial result/error. Give resolution/connect their
       own redacted pre-submission boundary; operation guidance uses Task 2's formatter.
 
-- [ ] **Step 4: Run application tests GREEN.** Repeat Step 2, requiring all
+- [x] **Step 4: Run application tests GREEN.** Repeat Step 2, requiring all
       account/preflight/partial-result cases to pass.
 
-- [ ] **Step 5: Write failing output and command tests.** `TestPrinterGroupAccept`
+- [x] **Step 5: Write failing output and command tests.** `TestPrinterGroupAccept`
       checks both headings, quoted title and all six JSON fields under `version:1`.
       `TestGroupsAcceptCommand` uses selected-account fake invitations for ACI/PNI
       acceptance and unchanged full membership. New four goldens use revision 8 and
@@ -386,22 +387,22 @@ account's PNI invitation nor gain its key/title/left cache through legacy aliase
       exactly one inherited setup call, zero account open on invalid preflight, empty
       operation-error stdout and preserved ExitCode 3. No existing golden is rewritten.
 
-- [ ] **Step 6: Run output/command tests RED.**
+- [x] **Step 6: Run output/command tests RED.**
       `CGO_ENABLED=0 go test -tags libsignal_go -count=1 -run 'TestPrinterGroupAccept|TestGroupsAccept' ./internal/output/ ./cmd/`
       must fail for missing renderer/command behavior.
 
-- [ ] **Step 7: Implement the renderer and scoped command.** Add the six-field
+- [x] **Step 7: Implement the renderer and scoped command.** Add the six-field
       `groupAccept` envelope with `version`, spec headings and existing write helpers.
       Register `groups accept <group>`, exactly one argument, scoped flag/setup/Close
       redaction boundaries and the request/use-case/renderer flow. Reuse join's setup
       pattern without changing root or sibling command behavior.
 
-- [ ] **Step 8: Run command/output tests GREEN.** Repeat Step 6 and run full
+- [x] **Step 8: Run command/output tests GREEN.** Repeat Step 6 and run full
       affected app/output/cmd suites on pure Go; run focused cgo race cases, then vet
       and scoped lint sequentially. Manually inspect all four new goldens and confirm
       the existing files are unchanged. Return changed paths and test tails for review.
 
-- [ ] **Step 9: Review the task, document and verify integration (controller).**
+- [x] **Step 9: Review the task, document and verify integration (controller).**
       Complete task spec/quality review, inspect every task's diff, then document
       `groups accept` examples, known-key and PNI limitations, no-op/outcome semantics,
       `groupAccept` field table and fork extension maintenance policy. Correct the
@@ -429,7 +430,7 @@ targets; build/help/man-page output includes `groups accept`. No production
 requests. Relevant failures require diagnosis, correction and affected/full
 integration reruns; do not claim a criterion from unrelated passing tests.
 
-- [ ] **Step 10: Commit verified command/docs deliverable (controller).** After
+- [x] **Step 10: Commit verified command/docs deliverable (controller).** After
       the checks pass, stage only this task's reviewed paths and planning updates;
       commit as `feat(cmd): accept group invitations`. Preserve honest remaining
       live/deferred markers and spec/plan status.
@@ -468,4 +469,55 @@ during key access. The spec is updated to make that order explicit.
 The private invalid-response sentinel is relocated without changing its identity
 or text so that the same policy compiles under the no-backend/fake build.
 
-Status: plan written and self-reviewed; awaiting user review before implementation.
+Status: user-approved plan implemented and checked offline; whole-change review
+and shipping pending. Live acceptance and deferred operations remain open.
+
+## Offline execution evidence
+
+Task 1 fork review approved spec compliance and quality; published commit
+`44abf3b405db809cca9778332e0ddb93fb871b95` as immutable
+`v0.2609.0-purego.12`. Downloaded module origin and all nine changed file bytes
+matched the reviewed source. Main pin commit: `daf9dd3`. Fork private
+acceptance/join cryptographic and transport fixtures passed on both backends;
+API parity/stub generation passed without generated changes.
+
+Task 2 review found malformed Signal URL preflight, fresh metadata loss on
+cancellation and duplicated real/fake normalization. One worker fix round
+reproduced the failures, corrected all three and passed scoped re-review;
+controller regressions and lint passed. Facade commit: `8027ca1`.
+
+Task 3 review approved spec compliance and quality with no findings. Controller
+verified all eleven frozen command/App/output/golden hashes immediately before
+committing the deliverable. Existing goldens remained byte-identical.
+
+Controller integrated verification passed: `just check` (fmt, lint, matching
+libsignal, full cgo race tests and unchanged tidy), `just check-purego` (vet, lint,
+all pure-Go tests and AES assembly on six release targets),
+`CGO_ENABLED=0 go test -count=1 ./...`, `GOFLAGS=-buildvcs=false just build`,
+`GOFLAGS=-buildvcs=false just docs-gen`, command help/man-page inspection and
+`git diff --check`. Associated docs were followed by `just fmt` and `just lint`
+(0 issues), with the reviewed source hashes unchanged. No live Signal calls.
+
+Published fork pure-Go CI passed for branch and tag; both Go backend test jobs
+passed. The broad Go lint jobs failed on six inherited EOF/goimports findings
+in unchanged libsignalgo files, confirmed byte-identical against `.11`. Baseline
+local bridge builds also require unavailable olm headers/pure-Go SQLite support,
+and staticcheck has sixteen identical inherited findings. These baseline limits
+do not replace the passing affected-suite and main integration checks.
+
+Deferred Task 1 Minor for final review: the fork reader comment and PUREGO.md
+say cache bypass too broadly. Group-state caching is bypassed; authorization
+credentials still use the existing cache. Final review must triage this wording.
+
+## Controller rulings (chronological)
+
+1. Review frozen working-tree diff packages before controller commits, including
+   untracked files and fingerprints. The plan gives workers no Git mutation
+   authority, while the skill's range-only script requires commits first. Cost
+   if wrong: a stale candidate could be committed without review. Workers freeze
+   after reports, controller hashes are checked before commits, and final review
+   uses actual whole-branch commit ranges.
+2. Keep no-backend Open unchanged instead of adding an acceptance fallback
+   method: it has no client type and already returns nil/ErrCGORequired before
+   operations. Cost if wrong: acceptance would lack an operation-level fallback.
+   Full no-backend tests and the existing command Open assertion passed.
