@@ -437,11 +437,11 @@ integration reruns; do not claim a criterion from unrelated passing tests.
 
 ## Final review and shipping gate
 
-- [ ] Request a fresh whole-change review of go-signal baseline..feature HEAD
+- [x] Request a fresh whole-change review of go-signal baseline..feature HEAD
       and published fork `.11`..new tag against this approved spec/plan, with actual
       test evidence and disclosed scope limits. Apply the selected execution skill's
       review/fix-round rules; keep factual findings and controller rulings recorded.
-- [ ] Resolve required findings; verify affected checks and full integration when
+- [x] Resolve required findings; verify affected checks and full integration when
       fixes affect it. Complete planning evidence, inspect clean tracked state and
       dependency integrity. Existing production/live acceptance limitations remain
       explicit, with no unsupported completion claims.
@@ -470,7 +470,7 @@ The private invalid-response sentinel is relocated without changing its identity
 or text so that the same policy compiles under the no-backend/fake build.
 
 Status: user-approved plan implemented and checked offline; whole-change review
-and shipping pending. Live acceptance and deferred operations remain open.
+approved; shipping pending. Live acceptance and deferred operations remain open.
 
 ## Offline execution evidence
 
@@ -505,9 +505,8 @@ local bridge builds also require unavailable olm headers/pure-Go SQLite support,
 and staticcheck has sixteen identical inherited findings. These baseline limits
 do not replace the passing affected-suite and main integration checks.
 
-Deferred Task 1 Minor for final review: the fork reader comment and PUREGO.md
-say cache bypass too broadly. Group-state caching is bypassed; authorization
-credentials still use the existing cache. Final review must triage this wording.
+Task 1 deferred cache-wording Minor was triaged in final review and corrected
+in the single final fix wave below; no finding remains open.
 
 ## Controller rulings (chronological)
 
@@ -521,3 +520,47 @@ credentials still use the existing cache. Final review must triage this wording.
    method: it has no client type and already returns nil/ErrCGORequired before
    operations. Cost if wrong: acceptance would lack an operation-level fallback.
    Full no-backend tests and the existing command Open assertion passed.
+
+## Final review and documentation fix
+
+Final whole-change review of main `7f7247b..78a8402` and fork
+`2a6b959..44abf3b` approved spec compliance and quality, ready to merge, with no
+Critical or Important findings. It independently confirmed the deferred cache-
+wording Minor in four API/comment descriptions. One final fix worker corrected
+all four, with a single scoped re-review approving the complete fix and finding
+no new breakage or outside observations. Controller verified frozen file hashes
+and AST equality with comments omitted: executable source is unchanged.
+
+Fork documentation fix commit `6bb5f56c9e9d6a1811fcf760f58a89be84f423a0` was
+published by normal fast-forward as immutable `v0.2609.0-purego.13`; `.12` still
+points to `44abf3b`. The main dependency pin advances only to that documentation
+release. No functional implementation or live acceptance claim changed.
+
+3. Adopt the final review's nine declined-to-judge dispositions against approved
+   scope and evidence limits: production server/phone effects and actual PNI
+   normalization/roles stay opt-in live gates; cancellation, PNI decline/global
+   self recognition, other-user PNI mutations and MCP/daemon interfaces remain
+   separate work. Ordinary reader policy is unchanged, with shared HTTP
+   regressions reviewed. Inherited fork lint/bridge/staticcheck debt stays
+   disclosed; no-backend handling follows ruling 2. Publication/CI must be
+   assessed on actual later results, without merging. Cost if wrong: deferred
+   defects or missing production/CI evidence could remain unaddressed. The
+   explicit roadmap, live procedure and CI records preserve those limits.
+
+Controller verified `.13` downloaded module origin `6bb5f56` and exact bytes
+for all nine fork-changed files; the delta from `.12` contains only the three
+reviewed comment/documentation paths. Only mautrix's version/checksums changed;
+other pins and `replace` policy are unchanged. Repeated `go mod tidy` preserves
+module files byte-for-byte. The first post-pin `just check` passed formatting,
+lint, libsignal and all cgo race tests; its final tidy gate compares against
+Git HEAD and flagged the intentionally uncommitted pin. Pin commit `6418874`
+closes that comparison boundary before the final gate rerun.
+
+Dependency `.13` pure-Go branch/tag CI passed (runs `37125208612` and
+`37125208733`). Both Go test jobs passed on branch/tag (runs `37125208623` and
+`37125208720`); their lint jobs retain the same six inherited formatting
+findings, verified byte-identical to `.11`. No new dependency CI failure.
+
+Final post-pin `just check` and `just check-purego` passed in full, including
+unchanged tidy, cgo race tests, pure-Go vet/lint/tests and six-target AES assembly.
+All review findings are resolved; implementation/dependency provenance is verified.

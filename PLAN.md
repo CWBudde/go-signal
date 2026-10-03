@@ -1981,7 +1981,7 @@ These remain optional/on demand. Checked foundations do not imply the user-facin
         malformed/secret preflight, lifecycle/cancellation, selected-account fake isolation,
         repeat-after-accepted-failure, App/CLI/output tests and four new goldens; task reviews
         and integrated cgo/pure-Go/fallback checks. Additive six-field `groupAccept` JSON
-        retains version 1; fork pin `v0.2609.0-purego.12`, without `replace` or other pin changes.
+        retains version 1; fork pin `v0.2609.0-purego.13`, without `replace` or other pin changes.
   - [ ] Acceptance: verify actual ACI and PNI invitations, no-ops, revoked/foreign refusals,
         conflict/failure inspection, notifications and restoration live on both backends
         with disposable accounts/groups, following

@@ -2,7 +2,7 @@
 
 Date: 2026-10-03. Baseline: `7f7247b` (merged invite-link joining, PR #24).
 Status: scope, written design and implementation plan approved by the user.
-Implementation and offline checks complete; whole-change review/shipping pending.
+Implementation and offline checks complete; whole-change review approved; shipping pending.
 Live acceptance, cancellation and PNI decline remain open.
 
 ## Intent and scope
