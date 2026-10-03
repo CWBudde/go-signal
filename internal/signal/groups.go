@@ -11,6 +11,7 @@ import (
 )
 
 var (
+	errInvalidGroupChangeResponse = errors.New("invalid group change response; inspect groups show before retrying")
 	// ErrNotAMember means that the server doesn't let us see the group: we left it, were removed,
 	// or only asked to join and weren't approved yet. Leaving a group we are not in fails with it
 	// too.
@@ -120,8 +121,8 @@ type Group struct {
 	// Approving join requests always requires an administrator.
 	MembersCanAddMembers bool
 	Members              []GroupMember
-	// Pending are the invited users who haven't accepted yet. Users invited by phone number
-	// (PNI) are missing: signalmeow can't decrypt them.
+	// Pending retains ACI and PNI invitations. MembershipOf and ordinary leave policy
+	// recognize only ACI; invitation acceptance matches both typed self identities.
 	Pending []PendingMember
 	// Requesting are the users who asked to join through a group link.
 	Requesting []RequestingMember
