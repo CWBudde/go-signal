@@ -1,7 +1,8 @@
 # Group invitation acceptance
 
 Date: 2026-10-03. Baseline: `7f7247b` (merged invite-link joining, PR #24).
-Status: scope approved; written design awaiting user review. No implementation yet.
+Status: scope and written design approved by the user. Implementation plan
+written and awaiting user review; no implementation yet.
 
 ## Intent and scope
 
@@ -77,9 +78,11 @@ acceptance, even when later verification fails. Neither ID nor revision alone
 proves acceptance or membership.
 
 Plain output says `Invitation accepted` or `Already a member`, followed by ID,
-quoted title and revision. JSON is `{"schemaVersion":1,"groupAccept":{...}}`,
+quoted title and revision. JSON is `{"version":1,"groupAccept":{...}}`,
 with `id`, `title`, `revision`, `changed`, `accepted` and `verified` always present.
-This additive document retains schema version 1. Errors produce no result on
+This additive document retains schema version 1 and the existing `version` key
+(the initial design example's `schemaVersion` label was corrected during planning).
+Errors produce no result on
 stdout; typed partial results remain available to application callers.
 
 The CLI takes exactly one `<group>` using existing reference conventions:
@@ -94,14 +97,16 @@ operation; retain the existing selected-account and configuration behavior.
 
 ## Facade state flow
 
-1. Validate input; resolve its known ID/key under the selected account. Keep
+1. Validate input locally before store/network work. The App resolves the local
+   title/reference before connecting once in send-only mode.
+2. Use existing connection/Close lifecycle guards and the operation wait group
+   before connected-store access. Check closing, cancellation and permanent
+   connection loss so Close cannot release the store during key resolution.
+3. Apply the sensitive websocket policy and a no-op dependency logger to the
+   whole backend operation, including resolution, authorization, reads and
+   notifications. Resolve its known ID/key under the selected account; keep
    arbitrary resolution/storage errors behind a redacted boundary. Validate the
    stored master key length and derived ID before exposing an ID or sending HTTP.
-2. Use existing connection/Close lifecycle guards and the operation wait group.
-   Check closing, cancellation and permanent connection loss. The App connects
-   once in send-only mode after local reference resolution.
-3. Apply the sensitive websocket policy and a no-op dependency logger to the
-   whole backend operation, including authorization, reads and notifications.
    Invalidate the group cache before the first read and on all exits.
 4. Fetch uncached, authenticated full group state with the new fork reader.
    Require the returned identity to match the stored key/derived ID.
