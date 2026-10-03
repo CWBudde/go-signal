@@ -2,7 +2,8 @@
 
 Date: 2026-10-03
 
-Status: approach approved; written spec awaiting review. No implementation yet.
+Status: written spec approved on 2026-10-03; implementation plan awaiting review.
+No implementation yet.
 
 ## Intent and scope
 
