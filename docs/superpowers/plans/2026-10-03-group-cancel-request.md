@@ -89,7 +89,7 @@ GOFLAGS=-buildvcs=false only when needed for builds/docs/stubgen due /tmp/.git s
 
 - [x] Baseline recorded before implementation; self-review of plan covers all spec sections, interfaces and five review-focus cases.
 - [x] Three task gates complete, controller independently verified changes; one whole-branch review includes fork and main actual ranges and any deferred findings.
-- [ ] Final review follow-up: one documentation clarification worker and scoped re-review; no executable findings or unresolved issues. Durable rulings record all seven declined-to-judge dispositions.
+- [x] Final review follow-up: one documentation clarification worker and scoped re-review; no executable findings or unresolved issues. Durable rulings record all seven declined-to-judge dispositions.
 - [ ] Commit durable evidence/rulings; push main normally, create one PR, inspect final-head CI and report actual outcomes. No merge or live calls. Clean only this plan's owned SDD workspace after successful finish; retain worktrees/branches.
 
 ## Execution record
@@ -101,12 +101,13 @@ All three task gates approved without findings. Task3 commit bc6ec42. Controller
 build and doc generation passed; generated cancel-request/leave help and man page
 were inspected. All six AES assembly targets passed. `just fmt` reformatted one
 JSON documentation file before passing integration checks; existing goldens are
-unchanged. No production calls. Whole-branch review and PR publication pending.
+unchanged. No production calls. Whole-branch review approved; PR publication pending.
 
 Final whole-change review at main f34c269 and fork 9cd9cbd approved spec alignment
 and code quality with no findings at any severity. The reviewer explicitly
-distinguished operational errors before rendering from output I/O errors. One
-prose-only clarification is being reviewed; no executable change or fork repin.
+distinguished operational errors before rendering from output I/O errors. The scoped re-review caught a wrong-section README replacement. The controller
+restored the acceptance sentence and clarified the cancellation paragraph, with
+section-aware diff checks. No executable change, fork repin or unresolved finding.
 
 ### Rulings, in chronological order
 
@@ -124,3 +125,9 @@ prose-only clarification is being reviewed; no executable change or fork repin.
    Cost if wrong: deferred production/device defects or inherited dependency debt
    could remain unresolved; shipping defects would escape if CI verification were
    skipped.
+
+3. Resolve the scoped review's residual README section mismatch by restoring the
+   acceptance sentence and applying the approved qualifier to cancellation. The
+   reviewer identified an exact prose-only correction, verified directly by the
+   controller without a second agent fix wave. Cost if wrong: the public output
+   contract could remain misleading or unrelated command documentation could change.

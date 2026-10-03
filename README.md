@@ -297,7 +297,7 @@ though group reads retain PNI invitation entries.
 Each invocation submits at most one change. Success verifies your ACI membership
 from fresh group state, updates the local title cache and notifies members. The
 JSON result distinguishes HTTP acceptance from fresh membership verification;
-cache or notification errors can follow both. Operation failures leave stdout empty and
+cache or notification errors can follow both. Errors leave stdout empty and
 preserve inspection guidance: check the reported group with `groups show`, your
 phone or an administrator before retrying accepted or uncertain failures.
 PNI invitation decline remains deferred. Server and
@@ -326,8 +326,8 @@ comes from the preview; cached titles only resolve references and are not refres
 Known keys and existing title/left records are retained. No member notification or
 linked-device sync is sent.
 
-JSON distinguishes HTTP acceptance from signed verification. Errors leave stdout
-empty; library callers receive partial outcomes. After an accepted or uncertain
+JSON distinguishes HTTP acceptance from signed verification. Operation failures leave
+stdout empty; library callers receive partial outcomes. After an accepted or uncertain
 error, inspect `groups show`, your phone or an administrator before retrying;
 requesters may be unable to use `groups show`. Server and phone behavior remain
 covered by the separately opt-in

@@ -2,7 +2,7 @@
 
 Date: 2026-10-03. Baseline: `e1de4e9` (merged PR #25).
 Status: approved plan implemented; three task reviews and integrated offline checks pass.
-Whole-branch review approved; documentation clarification and PR publication pending.
+Whole-branch review approved; documentation clarification complete; PR publication pending.
 Live acceptance remains open.
 
 ## Intent
