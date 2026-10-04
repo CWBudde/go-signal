@@ -26,6 +26,8 @@ const (
 	ackFlushTimeout = 2 * time.Second
 	// sendDrainTimeout bounds how long Close waits for in-flight sends before it disconnects.
 	sendDrainTimeout = 5 * time.Second
+	// linkQRRefresh replaces an unscanned code before the server drops its provisioning socket.
+	linkQRRefresh = 45 * time.Second
 	// keepalivePath is the Signal server's no-op websocket request.
 	keepalivePath = "/v1/keepalive"
 )
@@ -134,7 +136,7 @@ func (c *meowClient) Link(ctx context.Context, deviceName string, onURI func(str
 		}
 	}()
 
-	for resp := range signalmeow.PerformProvisioning(ctx, links, deviceName, false) {
+	for resp := range signalmeow.PerformProvisioningWithQRRefresh(ctx, links, deviceName, false, linkQRRefresh) {
 		if resp.Err != nil {
 			return Account{}, fmt.Errorf("provisioning: %w", resp.Err)
 		}

@@ -61,6 +61,9 @@ docker run --rm -v go-signal:/data ghcr.io/cwbudde/go-signal receive
 
 ## Quick start
 
+During linking, the QR code refreshes about every 45 seconds until scanned. Scan the newest
+code; press Ctrl-C to cancel. Once scanned, linking finishes and contacts/groups sync.
+
 ```sh
 # 1. Link go-signal to your account: scan the QR code in the Signal app on your phone
 #    (Settings > Linked devices > Link new device). Contacts and groups sync afterwards.

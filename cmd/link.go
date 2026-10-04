@@ -20,7 +20,8 @@ func newLinkCmd(clients *clientOpener) *cobra.Command {
 		Use:   "link",
 		Short: "Link this client as a secondary device of an existing Signal account",
 		Long: `Link prints a sgnl://linkdevice URI and a QR code. Scan it in the Signal app on your
-phone (Settings > Linked devices) to add go-signal as a linked device.
+phone (Settings > Linked devices) to add go-signal as a linked device. Until scanned,
+it refreshes the code every 45 seconds; always scan the newest code.
 
 Once linked, it fetches the contacts and groups from the phone and the storage service (see
 "account sync"), with progress on stderr, for at most --sync-timeout (0 skips it). A sync that
@@ -36,7 +37,15 @@ doesn't finish in time is only a warning: the device is linked, and the rest arr
 			}
 			defer closeClient(client)
 
+			shown := false
+
 			account, err := client.Link(cmd.Context(), deviceName, func(uri string) {
+				if shown {
+					fmt.Fprintln(out, "QR code refreshed; scan the newest code below.")
+				}
+
+				shown = true
+
 				fmt.Fprintln(out, uri)
 				qrterminal.GenerateHalfBlock(uri, qrterminal.L, out)
 				fmt.Fprintln(out, "Scan this code in Signal on your phone: Settings > Linked devices.")

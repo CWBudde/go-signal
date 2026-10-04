@@ -206,7 +206,11 @@ following the docs.
       preserve disabled defaults across restart; real-backend receive/inbox tests and docs on both backends.
 - [ ] Read-receipt setting phone acceptance on disposable accounts and both backends
       ([procedure](docs/dev.md#read-receipt-setting-live-check)); deferred until a phone session is arranged.
-- [ ] QR refresh during `link`: reprovision before the server drops the socket (~60 s).
+- [x] QR refresh during `link`: renew unscanned codes every 45 seconds with fresh sockets,
+      addresses and keys; stop refreshing after a phone submission. Offline transport tests,
+      CLI golden output and docs cover both backends.
+- [ ] QR-refresh phone acceptance on disposable accounts and both backends
+      ([procedure](docs/dev.md#link-qr-refresh-live-check)); deferred until a phone session is arranged.
 - [ ] Show `last_sync` (e.g. in `account show`).
 - [ ] Optional, only if cheap: text styles (bold/italic/…).
   - [ ] Choose the input syntax (markup or explicit `start:length:STYLE` offsets).

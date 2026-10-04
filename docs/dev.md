@@ -265,6 +265,30 @@ integration tags. It sends an original text and one edit per chat, checks self s
 and waits for the peer's delivery receipts for the direct/group originals and edits. Receipts
 verify transport; inspect the peer's phone separately to confirm the corrected text renders.
 
+### Link QR refresh live check
+
+This check remains **unrun** and requires a disposable phone account. Repeat on both
+backends using a fresh data dir and the initial sync disabled:
+
+```sh
+go-signal --data-dir DIR link --name qr-refresh-test --sync-timeout 0
+```
+
+1. Leave the first QR unscanned. Confirm a refresh notice and a different URI/code appear
+   about every 45 seconds, and that waiting through several codes does not end the command.
+2. After more than two minutes, scan the newest code. Confirm one successful link and
+   exactly one new device on the phone. Remove that disposable device afterwards.
+3. Repeat and scan just before a refresh. Confirm it either finishes the submitted link
+   or displays a new code to scan; it must not register two devices.
+4. Start again without scanning and press Ctrl-C. Confirm prompt exit and no new account
+   in the data dir or linked device on the phone.
+
+Offline fork tests exercise the real websocket/protobuf/encrypted-envelope exchange with
+fake time, including refreshes, fresh keys/addresses, cancellation, caller deadlines,
+transport/protocol failures and acknowledgement timeout after a submitted envelope.
+Registration errors are terminal: only the idle scan wait is retried. These tests do not
+establish the production server's expiry timing or phone acceptance.
+
 ### Disappearing-messages live check
 
 This acceptance procedure remains **unrun**. Use only a disposable linked account, two

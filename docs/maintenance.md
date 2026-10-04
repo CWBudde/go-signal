@@ -21,6 +21,9 @@ go-signal depends on three pinned pieces that have to move together:
   handler failures to acknowledgement. Incomplete contact attachment framing is rejected.
   `v0.2609.0-purego.16` additionally handles an absent optional contact-avatar MIME type
   with content detection, preserving avatar bytes and paired timer metadata.
+  `v0.2609.0-purego.17` adds an opt-in provisioning API that renews only an idle scan
+  wait. After an envelope arrives, acknowledgement, decryption and registration failures
+  are terminal. The original API keeps its one-shot two-minute timeout.
 - [`cwbudde/libsignal-go`](https://github.com/cwbudde/libsignal-go) (tags `vX.Y.Z-cw.N`), the
   pure-Go libsignal that the default backend runs on. Its Rust compat harness is pinned to the
   libsignal tag libsignalgo was generated against (its `decisions/0007-cwbudde-fork-policy.md`).
@@ -31,7 +34,7 @@ go-signal depends on three pinned pieces that have to move together:
 Always move to an upstream release tag, never a pseudo-version of `main`. Commit to the forks'
 release branches and push; don't open PRs.
 
-The current disappearing-message release is the immutable
+The disappearing-message baseline is the immutable
 [`v0.2609.0-purego.16`](https://github.com/cwbudde/mautrix-signal/tree/v0.2609.0-purego.16)
 tag at [commit `622eab1`](https://github.com/cwbudde/mautrix-signal/commit/622eab11d06f82755445d371faf33d876c686e34).
 The downloaded module's Origin and production source match that commit. Both pure-Go CI
@@ -51,6 +54,21 @@ Affected fork tests passed on both backends. Contact transaction rollback is exe
 with the real cgo database; the pure-Go counterpart uses a controlled transaction fixture
 because the upstream dbutil SQLite dialect handling prevents that real-store fixture there.
 Phone acceptance remains unrun; offline tests do not verify rendering or expiry.
+
+The current QR-refresh release is the immutable
+[`v0.2609.0-purego.17`](https://github.com/cwbudde/mautrix-signal/tree/v0.2609.0-purego.17)
+tag at [commit `d984cb5`](https://github.com/cwbudde/mautrix-signal/commit/d984cb5c4749c20f5e32d61e1809b6f40e08b8d5).
+The affected `pkg/libsignalgo/...` and `pkg/signalmeow/...` tests passed locally on
+pure Go and cgo with the race detector; pure-Go vet and the backend API parity check
+also passed. The downloaded module's Origin and production source match that commit.
+Both pure-Go CI runs passed
+([37219880276](https://github.com/CWBudde/mautrix-signal/actions/runs/37219880276),
+[37219880145](https://github.com/CWBudde/mautrix-signal/actions/runs/37219880145)).
+The broad Go CI runs failed pre-commit formatting
+([37219880168](https://github.com/CWBudde/mautrix-signal/actions/runs/37219880168),
+[37219880118](https://github.com/CWBudde/mautrix-signal/actions/runs/37219880118))
+on the same six libsignalgo files, all byte-identical to the `.16` baseline.
+QR-refresh phone acceptance remains unrun.
 
 ### 1. Rebase the mautrix fork
 
@@ -90,7 +108,9 @@ or truncated contact framing, downloads, decoding and transactions must fail wit
 lists or acknowledgements. Preserve sent-message/edit handler failure propagation. Group
 ordinary and edit content must use one retrieved revision for context and seconds, including
 zero, and clear the direct timer version. Exercise all these boundaries on both backends;
-retain the real cgo rollback test and record the controlled pure-Go fixture limitation. Keep
+retain the real cgo rollback test and record the controlled pure-Go fixture limitation.
+Preserve scan-only QR renewal: fresh socket/address/key, caller cancellation, no retries
+after a submitted envelope (including acknowledgement failures), and one-shot registration. Keep
 the fork's fixes that upstream doesn't have yet (the cgo clock fix in `message.go`,
 `prekeybundle.go` and `sessionrecord.go`, the combined endorsement result; see `PUREGO.md`).
 

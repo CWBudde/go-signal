@@ -13,7 +13,8 @@ import (
 // existing one, read Events, and Close it.
 type Client interface { //nolint:interfacebloat // the one facade over signalmeow; tests fake it whole
 	// Link provisions a new secondary device. It calls onURI with the sgnl://linkdevice URI to
-	// show to the user, then blocks until the phone has scanned it and the account is stored.
+	// show to the user, refreshing unscanned codes about every 45 seconds. Each call to onURI
+	// replaces the previous code. Link blocks until the account is stored or ctx is cancelled.
 	Link(ctx context.Context, deviceName string, onURI func(uri string)) (Account, error)
 
 	// Account returns the selected linked account without connecting. It fails with
