@@ -184,8 +184,10 @@ following the docs.
 
 ### Phase 12 — Messaging gaps
 
-- [ ] Disappearing messages: track the timer per chat and set `ExpireTimer` on outgoing messages
-      (currently never set, so our messages don't disappear in timed chats).
+- [x] Disappearing-message implementation: persist direct timers, learn before acknowledgement,
+      and stamp outgoing direct/group messages; offline tests and docs on both backends.
+- [ ] Disappearing-message phone acceptance on disposable accounts and both backends
+      ([procedure](docs/dev.md)); deferred with the live checks until a phone session is arranged.
 - [ ] Render received mentions with the mentioned user's name instead of U+FFFC; carry mentions
       in quotes.
 - [ ] Plain `receive` output shows the ms timestamp that `--quote`/`react --target` need.
