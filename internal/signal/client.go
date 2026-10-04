@@ -79,6 +79,9 @@ type Client interface { //nolint:interfacebloat // the one facade over signalmeo
 	// because the group is unknown (ErrUnknownGroup), an attachment wasn't uploaded by this client
 	// (ErrUnknownAttachment), the quote author or a mentioned user has no ACI (ErrUnresolvable),
 	// or the connection is lost for good (such as ErrDeviceUnlinked).
+	// Story content is standalone and requires one canonical group ID and full ACI membership.
+	// It uses a text card or Story.File uploaded by this client. Peer outcomes remain in Results
+	// when the own-device story transcript fails, with that failure reported separately as SyncErr.
 	Send(ctx context.Context, req SendRequest) (SendResult, error)
 
 	// SendReceipt tells sender that we received (ReceiptDelivery), read (ReceiptRead) or viewed

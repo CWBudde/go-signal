@@ -76,7 +76,9 @@ type Fake struct {
 	ConnectErr error
 	UploadErr  error
 	SendErr    error
-	DevicesErr error
+	// StorySyncErr rejects only the own-device story transcript after peer submissions.
+	StorySyncErr error
+	DevicesErr   error
 	// UnlinkErr makes removing the device on the server fail; Unlink with LocalOnly ignores it.
 	UnlinkErr error
 	// ReceiptErr makes SendReceipt fail.
@@ -242,6 +244,8 @@ func (f *Fake) Sent() []signal.SendRequest {
 	out := slices.Clone(f.sent)
 	for i := range out {
 		out[i] = clonePollRequest(out[i])
+
+		out[i] = cloneStoryRequest(out[i])
 		if out[i].Sticker != nil {
 			sticker := *out[i].Sticker
 			sticker.Reference.PackKey = slices.Clone(sticker.Reference.PackKey)
@@ -614,9 +618,13 @@ func (c *client) Send(_ context.Context, req signal.SendRequest) (signal.SendRes
 		req.Sticker = &copySticker
 	}
 
-	c.fake.sent = append(c.fake.sent, clonePollRequest(req))
+	c.fake.sent = append(c.fake.sent, cloneStoryRequest(clonePollRequest(req)))
 
 	res := signal.SendResult{Timestamp: req.Timestamp}
+	if req.Story != nil {
+		res.SyncErr = c.fake.StorySyncErr
+	}
+
 	if res.Timestamp == 0 {
 		c.fake.nextTS++
 		res.Timestamp = c.fake.nextTS
@@ -817,6 +825,10 @@ func (c *client) checkContent(req signal.SendRequest) error {
 	err := req.Check()
 	if err != nil {
 		return fmt.Errorf("%w (fake)", err)
+	}
+
+	if req.Story != nil {
+		return c.checkStory(req)
 	}
 
 	if req.Sticker != nil && !slices.Contains(c.uploads, req.Sticker.Image.ID) {

@@ -60,6 +60,11 @@ func DataMessage(req SendRequest, attachments []*signalpb.AttachmentPointer, pro
 	return dataMessage(req, attachments, profileKey)
 }
 
+// OutgoingStoryMessage exposes standalone story wire conversion.
+func OutgoingStoryMessage(story *OutgoingStory, pointer *signalpb.AttachmentPointer) (*signalpb.StoryMessage, error) {
+	return outgoingStoryMessage(story, pointer)
+}
+
 // PointerMetadata exposes pointerMetadata to the signal_test package.
 func PointerMetadata(pointer *signalpb.AttachmentPointer, att OutgoingAttachment, now time.Time,
 ) *signalpb.AttachmentPointer {

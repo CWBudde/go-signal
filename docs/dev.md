@@ -1044,3 +1044,39 @@ Story sending from go-signal is still planned and is not covered by this procedu
 Record server/phone observations and backend versions. Restore the phone's block list and
 remove the disposable group, stories, linked devices and saved media. This procedure has not
 been run; offline tests do not establish production delivery, rendering or phone expiry.
+
+## Group story sending live check
+
+This procedure is pending; offline transport tests do not establish phone display.
+Use disposable accounts and a disposable V2 group, then run with each backend
+(`just build` and `just build-cgo`) in separate data directories. Arrange a linked phone
+with stories enabled and one other group member before testing.
+
+1. Sync the account, obtain the canonical group ID from `groups list`, then send:
+
+   ```sh
+   go-signal stories send --group '<base64-id>' -m 'Group story check'
+   go-signal stories send --group '<base64-id>' --attach test-photo.png --no-replies -o json
+   go-signal stories send --group '<base64-id>' --attach test-video.mp4
+   ```
+
+2. Check that full group members see each story in the group's story feed, the text card
+   has default-font white text on black, media is intact, and reply permission follows
+   the supplied flag. Compare the returned millisecond timestamp with received story
+   events on a separately linked device. Own-phone stories must appear as sent stories,
+   without ordinary chat messages or an audience wider than the chosen group.
+3. Include a pending invitation and a join request. Neither should receive the story.
+   Select another linked account that is not a full member: it must fail before upload.
+   A changed peer identity must fail until explicitly trusted. Check a group containing
+   only yourself still receives its own-device transcript.
+4. Set a short chat disappearing timer, then send a story. Verify the story follows the
+   phone's story expiry rather than that timer. Restore the timer afterwards. Text
+   mention syntax must remain literal; story sending supports no custom card style,
+   preview, caption or private distribution-list audience yet.
+5. Queue an ordinary message and a story before running `stories send`. Drain them with
+   `receive` afterwards and verify they were not consumed by the send-only command.
+   For a controlled peer or transcript submission failure, inspect member outcomes and
+   the command's nonzero exit status. Do not automatically retry a partly submitted
+   story: resubmission can create duplicates.
+6. Remove the test stories on the phone, restore settings and delete/unlink disposable
+   devices. Record backend, phone version, timestamps, visible audience and cleanup.

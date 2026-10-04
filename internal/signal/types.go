@@ -79,6 +79,8 @@ type SendRequest struct {
 	Attachments []UploadedAttachment
 	// Sticker is standalone sticker content instead of text or ordinary attachments.
 	Sticker *OutgoingSticker
+	// Story is standalone group story content; private distribution lists are not supported.
+	Story *OutgoingStory
 	// PollCreate, PollVote and PollClose are standalone group poll operations.
 	PollCreate *Poll
 	PollVote   *OutgoingPollVote
@@ -144,6 +146,9 @@ type SendResult struct {
 	// Results has one entry per recipient in request order, or per group member (without us)
 	// for a group.
 	Results []RecipientResult
+	// SyncErr reports a failed story transcript after peer submission. Results still hold
+	// the peer outcomes, so callers can report partial success without retrying the story.
+	SyncErr error
 }
 
 // RecipientResult is the outcome of sending to one recipient.

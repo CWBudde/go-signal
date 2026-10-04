@@ -103,7 +103,24 @@ mark-read sender counts describe submissions, not confirmed delivery.
 presentation (colors, gradients and style) and reply permission; plain output shows text and
 media details. Stories are retained as events in the MCP/daemon inbox, without message unread
 counts or automatic read/viewed receipts. Retained stories and downloaded files are not
-removed when the phone's story expires. Story sending and audience management remain planned.
+removed when the phone's story expires.
+
+Send a story to one named group with `stories send`:
+
+```sh
+go-signal stories send --group '<base64-id>' -m 'A good day'
+go-signal stories send --group '<base64-id>' --attach photo.jpg --no-replies
+```
+
+The selected account must be a full member. The audience is the group's full members;
+pending invitations and join requests receive nothing. Text cards use literal text in the
+default font, white on black. Media is one image/video, up to 100 MiB, with its type checked
+from the bytes. Replies are allowed by default. Other devices receive a story transcript
+with the same timestamp. Results report peer submission and transcript failures, preserving
+partial peer outcomes; retrying the command can duplicate a story already submitted.
+Stories do not use the chat's disappearing-message timer. Private stories, My Story,
+distribution-list management and custom card presentation remain planned. Phone acceptance
+of story sending remains pending.
 
 Plain receive output shows the local date and the message's exact millisecond timestamp:
 

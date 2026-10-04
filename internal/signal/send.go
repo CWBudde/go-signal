@@ -13,7 +13,13 @@ import (
 // (ErrInvalidPoll). Pin and unpin operations are standalone (ErrInvalidPin).
 // Text styles must cover complete characters in Body (ErrInvalidStyle).
 // It doesn't check recipients, attachments, the quote or mentions.
+//
+//nolint:cyclop // One validation dispatch per standalone content type.
 func (req SendRequest) Check() error {
+	if req.Story != nil {
+		return req.checkStory()
+	}
+
 	if (req.GroupID == "") == (len(req.Recipients) == 0) {
 		return ErrInvalidSendRequest
 	}

@@ -373,6 +373,44 @@ Each entry of `members`:
 | `unidentified` | boolean | `true` if sent with sealed sender                             |
 | `error`        | string  | Why sending to the member failed; _optional_                  |
 
+## `stories send`
+
+The `storySend` object contains the `send` result's `timestamp` and `results`, plus
+`allowsReplies`. The audience is one explicit group, so `results` contains one group
+entry with peer outcomes in `members`. Pending invitations and requests are excluded.
+Success means all peer submissions and the own-device story transcript succeeded;
+it does not prove phone display. A transcript failure sets the group's `error` and
+`success: false` while retaining already submitted peer outcomes. A group with no
+other members succeeds when its own-device transcript succeeds.
+
+```json
+{
+  "version": 1,
+  "storySend": {
+    "timestamp": 1790000000000,
+    "results": [
+      {
+        "type": "group",
+        "groupId": "Z3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXA=",
+        "timestamp": 1790000000000,
+        "success": true,
+        "members": [
+          {
+            "aci": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "success": true,
+            "unidentified": true
+          }
+        ]
+      }
+    ],
+    "allowsReplies": true
+  }
+}
+```
+
+Text, media keys, profile keys and the group master key are absent from submission output.
+Received story events keep their separate `type: "story"` format below. Schema version remains 1.
+
 ## `receipts send-viewed`
 
 ```json

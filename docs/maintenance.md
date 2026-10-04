@@ -27,6 +27,10 @@ go-signal depends on three pinned pieces that have to move together:
   `v0.2609.0-purego.19` adds opt-in websocket story delivery and typed incoming/
   sent-transcript story events, retaining group/profile key storage and handler-failure
   acknowledgement behavior. Story handling sends no delivery/read/viewed receipts.
+  `v0.2609.0-purego.20` adds explicit-timestamp group story sends with sealed pairwise
+  encryption, same-state group context/audience and an own-device story transcript.
+  Peer failures and transcript failures are separate outcomes; accepted peers are not
+  resubmitted to repair a failed transcript.
 - [`cwbudde/libsignal-go`](https://github.com/cwbudde/libsignal-go) (tags `vX.Y.Z-cw.N`), the
   pure-Go libsignal that the default backend runs on. Its Rust compat harness is pinned to the
   libsignal tag libsignalgo was generated against (its `decisions/0007-cwbudde-fork-policy.md`).
@@ -87,7 +91,27 @@ The broad Go CI runs failed pre-commit formatting
 [37238648965](https://github.com/CWBudde/mautrix-signal/actions/runs/37238648965))
 on six libsignalgo files, all byte-identical to the `.17` baseline. Changed story files pass
 the fork's exact `goimports -local github.com/cwbudde/mautrix-signal` formatting check.
-Story reception phone acceptance remains unrun; sending and audience management remain planned.
+Story reception phone acceptance remains unrun; private audience management remains planned.
+
+The group-story sending release is the immutable
+[`v0.2609.0-purego.20`](https://github.com/cwbudde/mautrix-signal/tree/v0.2609.0-purego.20)
+tag at [commit `4a5d29e`](https://github.com/cwbudde/mautrix-signal/commit/4a5d29e351262958939c6a6518ca6a115ba40d3a).
+The downloaded module's Origin and all four changed fork files match that commit.
+The affected `pkg/libsignalgo/...` and `pkg/signalmeow/...` suites passed locally on
+pure Go and cgo with the race detector on cgo. Pure-Go vet and the backend API parity
+check passed, and all changed files pass the fork's exact `goimports -local` check.
+Both pure-Go CI runs passed
+([37242026136](https://github.com/CWBudde/mautrix-signal/actions/runs/37242026136),
+[37242026216](https://github.com/CWBudde/mautrix-signal/actions/runs/37242026216)).
+The broad Go CI runs failed pre-commit formatting
+([37242026097](https://github.com/CWBudde/mautrix-signal/actions/runs/37242026097),
+[37242026183](https://github.com/CWBudde/mautrix-signal/actions/runs/37242026183))
+on the same six libsignalgo files, all byte-identical to the `.19` baseline.
+Offline tests cover the public API's own-profile-key lookup and member guard, production
+story policy, content ownership, peer/sync failure combinations and self-only groups.
+Full encrypted websocket submission and Android/iOS display still require the pending
+[phone acceptance procedure](dev.md#group-story-sending-live-check). Private stories,
+My Story and distribution-list management remain open.
 
 ### 1. Rebase the mautrix fork
 
@@ -132,7 +156,12 @@ Preserve story reception: go-signal opts into `X-Signal-Receive-Stories` before 
 private blocked stories are omitted, group stories retain typed group keys and revisions,
 private sent transcripts use the own-account stream, and failed handlers/storage retain
 buffered plaintext without acknowledgement. Story timestamps come from client envelopes or
-sent transcripts, with no automatic receipts. Verify these paths on both backends.
+sent transcripts, with no automatic receipts. Preserve group story sending's explicit timestamp,
+same-state full-member audience/context, own profile key and sealed pairwise sessions. Story
+peer requests use `?story=true`, non-urgent delivery and the implicit content hint; own-device
+sync uses an ordinary authenticated sent-story transcript. Keep peer outcomes when sync fails
+and never resubmit accepted peers to repair a transcript. No sender-key or group endorsement
+changes are needed for this path. Verify these paths on both backends.
 Preserve scan-only QR renewal: fresh socket/address/key, caller cancellation, no retries
 after a submitted envelope (including acknowledgement failures), and one-shot registration. Keep
 the fork's fixes that upstream doesn't have yet (the cgo clock fix in `message.go`,

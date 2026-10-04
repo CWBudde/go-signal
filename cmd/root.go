@@ -199,6 +199,7 @@ and offer a local HTTP API for scripts and bots.`,
 		newReceiptsCmd(clients, printers, rootOpts.appOpts),
 		newReceiveCmd(clients, printers),
 		newSendCmd(clients, printers, rootOpts.appOpts),
+		newStoriesCmd(clients, printers, rootOpts.appOpts),
 		newVersionCmd(),
 	)
 

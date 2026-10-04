@@ -61,6 +61,7 @@ go-signal link [--name <device-name>] [--sync-timeout 60s]
 go-signal send <recipient>... -m <text> | --stdin [--attach <file>]... [--group <id>] [--quote <author>:<ts>]
 go-signal send <recipient>... --edit <timestamp> -m <replacement>
 go-signal send <recipient>... --sticker-pack <link> --sticker-id <n>
+go-signal stories send --group <id> (-m <text> | --stdin | --attach <image-or-video>) [--no-replies]
 go-signal receive [--timeout 5s] [--max N] [--follow] [--download-attachments <dir>] [--send-read-receipts]
 go-signal receipts send-viewed <sender> --timestamp <ms> [--timestamp <ms>]...
 go-signal react <recipient>... --target <author>:<ts> --emoji 👍 [--remove]
@@ -259,8 +260,15 @@ following the docs.
       text/media stories, with typed events, group/profile key storage and failed-handler
       acknowledgement protection. Plain/JSON output, verified media downloads, durable inbox
       retention and MCP list/wait tests cover both backends. No automatic story receipts.
-- [ ] Story sending: define the CLI and audience model, then implement fork transport and
-      facade/command/output tests and docs; signalmeow still has no story-send API.
+- [x] Group story sending implementation: `stories send --group <id>` posts a literal text
+      card or one image/video to the group's full ACI members, with reply control and a
+      same-timestamp own-device transcript. Fork transport uses sealed pairwise sessions;
+      facade/app preflight, account selection, media validation, plain/JSON partial peer
+      and transcript outcomes, tests and docs cover both backends.
+- [ ] Private story sending: define the CLI and distribution-list audience model, including
+      My Story, then implement storage/fork transport and facade/command/output tests and docs.
+- [ ] Group story sending phone acceptance on disposable accounts and both backends
+      ([procedure](docs/dev.md#group-story-sending-live-check)); deferred until a phone session is arranged.
 - [ ] Story reception phone acceptance on disposable accounts and both backends
       ([procedure](docs/dev.md#story-reception-live-check)); deferred until a phone session is arranged.
 - [ ] Sticker pack installation/caching, expired-image fallback, MCP sticker tools.

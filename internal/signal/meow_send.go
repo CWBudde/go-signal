@@ -119,6 +119,10 @@ func (c *meowClient) Send(ctx context.Context, req SendRequest) (SendResult, err
 		req.Timestamp = uint64(time.Now().UnixMilli()) //nolint:gosec // the clock is after 1970
 	}
 
+	if req.Story != nil {
+		return c.sendStory(ctx, req)
+	}
+
 	msg, err := c.message(ctx, req)
 	if err != nil {
 		return SendResult{}, err
