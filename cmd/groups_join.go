@@ -34,6 +34,7 @@ func newGroupsJoinCmd(clients *clientOpener, printers *printerFactory) *cobra.Co
 		Long: `Join uses a https://signal.group/ or sgnl://signal.group/ invite link for the
 selected account. An open link joins directly; an approval link requests membership.
 Fresh evidence of existing membership or a pending request returns a successful no-op.
+A known ACI or PNI invitation requires groups accept instead.
 
 One invocation submits at most one membership change, without automatic retries.
 Accepted or uncertain failures require inspection before retrying. Ask an administrator

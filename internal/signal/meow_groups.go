@@ -261,7 +261,7 @@ func (c *meowClient) fetchGroup(ctx context.Context, cli *signalmeow.Client, gid
 		return Group{}, groupFetchError(gid, err)
 	}
 
-	group := convertGroup(raw, c.ownACI)
+	group := c.convertGroup(raw)
 	c.cacheGroup(ctx, group)
 
 	return group, nil
@@ -316,8 +316,13 @@ func (c *meowClient) unavailableGroup(ctx context.Context, id string, err error)
 	return group
 }
 
-// convertGroup converts a signalmeow group; ownACI decides Membership and Role.
-func convertGroup(raw *signalmeow.Group, ownACI string) Group {
+// convertGroup uses the selected account's registered identities for self-membership.
+func (c *meowClient) convertGroup(raw *signalmeow.Group) Group {
+	return convertGroup(raw, Recipient{ACI: c.ownACI, PNI: c.connDevice.PNI.String()})
+}
+
+// convertGroup converts full state and derives membership from typed self identities.
+func convertGroup(raw *signalmeow.Group, self Recipient) Group {
 	group := Group{
 		ID:                string(raw.GroupIdentifier),
 		MasterKey:         string(raw.GroupMasterKey),
@@ -372,7 +377,7 @@ func convertGroup(raw *signalmeow.Group, ownACI string) Group {
 
 	group.Banned = convertBannedMembers(raw.BannedMembers)
 
-	group.Membership, group.Role = group.MembershipOf(ownACI)
+	group.Membership, group.Role = group.SelfMembership(self)
 	group.MembersCanEditAttributes, group.MembersCanAddMembers = convertGroupAccess(raw.AccessControl)
 
 	return group

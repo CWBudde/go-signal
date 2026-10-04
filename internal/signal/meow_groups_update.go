@@ -12,7 +12,7 @@ import (
 )
 
 func settingsChange(raw *signalmeow.Group, self string, update GroupUpdate) (*signalmeow.GroupChange, error) {
-	group := convertGroup(raw, self)
+	group := convertGroup(raw, Recipient{ACI: self})
 
 	next, err := group.WithUpdate(self, update)
 	if err != nil {
@@ -154,7 +154,7 @@ func (c *meowClient) UpdateGroup(ctx context.Context, ref string, update GroupUp
 		return partial, c.lostOr(fmt.Errorf("update group %s: %w", gid, err))
 	}
 
-	group := convertGroup(accepted, c.ownACI)
+	group := c.convertGroup(accepted)
 	c.cacheGroup(ctx, group)
 
 	return group, nil

@@ -47,7 +47,7 @@ func (c *meowClient) CreateGroup(ctx context.Context, opts CreateGroupOptions) (
 			raw.GroupIdentifier, err))
 	}
 
-	group := convertGroup(created, c.ownACI)
+	group := c.convertGroup(created)
 	c.cacheGroup(ctx, group)
 
 	return group, nil

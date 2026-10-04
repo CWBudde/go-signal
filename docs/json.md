@@ -626,8 +626,13 @@ the server no longer shows us (we left or were removed) or doesn't know is still
 | `error`                    | string  | Why the group couldn't be fetched (e.g. we are not a member); _optional_. The other fields then only hold what go-signal knows    |
 
 The recipient fields (`aci`, `pni`, `number`, `username`) are those of a
-[recipient](#common-objects). Users invited by phone number are missing from `pending` (signalmeow
-can't decrypt them yet).
+[recipient](#common-objects). PNI invitations retain their typed `pni` in `pending`.
+
+Self-membership uses the selected account's registered ACI and PNI. An own ACI or PNI
+invitation reports `membership: "pending"` with the offered `role`; pending recipients
+retain their typed `aci` or `pni` field. Full ACI membership takes precedence over
+invitations, and an ACI invitation determines the role when both identities are invited.
+Join requests and mutation permissions remain ACI-only. The schema stays at version `1`.
 
 ## `groups show`
 
@@ -770,6 +775,9 @@ password, master key or credentials. Errors leave stdout empty, including accept
 follow-up and uncertain errors; their text distinguishes these outcomes and advises
 inspection before retrying. Requesting accounts may not be able to fetch full group
 state. This additive document retains schema version 1.
+
+When fresh full state shows your own ACI or PNI invitation, `groups join` fails with
+acceptance guidance and prints no document. Use `groups accept` for that invitation.
 
 ## `groups accept`
 

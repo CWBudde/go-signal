@@ -42,7 +42,7 @@ func (c *meowClient) RemoveGroupMembers(ctx context.Context, ref string, members
 		return Group{}, c.lostOr(groupFetchError(gid, err))
 	}
 
-	group := convertGroup(raw, c.ownACI)
+	group := c.convertGroup(raw)
 
 	change, next, err := removeMembersChange(group, c.ownACI, members)
 	if err != nil {

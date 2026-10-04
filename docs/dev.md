@@ -943,8 +943,40 @@ with the cgo binary. Synchronize or receive the group key on the invitee account
    an ACI invitation and ordinary member/admin leaving on disposable groups.
 5. Clean up the groups. Record backend, commands, revisions and phone observations.
 
-List/show/join self-membership still uses only ACI; a PNI invitation can appear in
-pending entries while own membership is reported as `none`. Leave recognizes PNI
-locally and reports `pending` in its successful result. Success confirms the group
+List/show/join and leave recognize the selected account’s typed ACI/PNI invitations.
+A PNI invitation reports `pending`; full ACI membership takes precedence. Success confirms the group
 patch; signalmeow logs member notification failures separately. Keep phone acceptance
 open in PLAN.md until both backends and an actual PNI fixture have been verified.
+
+## PNI self-membership live check
+
+Offline tests cover typed identity matching, offered roles, full-member precedence,
+selected accounts, list/show plain and JSON output, and the invitation guard in join
+on both backends. The following server/phone check remains unrun until a phone session.
+
+Use two disposable Signal accounts, an administrator and an invited account, with the
+latter linked to go-signal. Run the procedure with `just build` and `just build-cgo`,
+using separate temporary data directories. The accounts must have their group keys
+through sync or receive; a cached title alone does not make full state readable.
+
+1. From the administrator, create a disposable group and invite the linked account by
+   phone number. Inspect the administrator's `groups show <id> -o json` and verify that
+   the invitation actually has the invited account's typed `pni` rather than `aci`.
+   An ACI invitation does not exercise this case.
+2. With the invited account selected using `--account`, run `groups list` and
+   `groups show <id>` in plain and JSON output. Expect `invited` in plain output,
+   `membership: "pending"` and the offered `role` in JSON, with the invitation's
+   original `pni` retained. Compare the invitation and offered role on the phone.
+3. Obtain an enabled group link from the administrator and run `groups join <link>`
+   for the same known group. Expect acceptance guidance, empty stdout, and no revision
+   or membership change. Run `groups accept <id>` and verify both the CLI and phone
+   show full membership; list/show now report the full ACI member's role.
+4. When two accounts are linked locally, select the other account and verify it does
+   not inherit the invited account's PNI membership or role. If the server refuses
+   full-state reads for that account, verify that refusal is preserved.
+5. If the server permits simultaneous ACI and PNI invitations, verify that reporting
+   prefers the ACI invitation's offered role. Once full ACI membership exists, confirm
+   a stale PNI invitation cannot override it. Otherwise record these cases as offline-only.
+6. Remove the disposable group and account data after checking the phone. Record the
+   backend, actual typed invitation, outputs and server/phone result separately from
+   offline checks; leave the PLAN.md phone-acceptance item open until both runs succeed.

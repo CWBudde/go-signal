@@ -24,7 +24,7 @@ func (c *meowClient) GroupLink(ctx context.Context, ref string) (GroupLink, erro
 		return GroupLink{}, err
 	}
 
-	c.cacheGroup(ctx, convertGroup(raw, c.ownACI))
+	c.cacheGroup(ctx, c.convertGroup(raw))
 
 	return link, nil
 }
@@ -54,7 +54,7 @@ func (c *meowClient) UpdateGroupLink(ctx context.Context, ref string, update Gro
 			return GroupLink{}, convertErr
 		}
 
-		c.cacheGroup(ctx, convertGroup(raw, c.ownACI))
+		c.cacheGroup(ctx, c.convertGroup(raw))
 
 		return link, nil
 	}
@@ -76,7 +76,7 @@ func (c *meowClient) UpdateGroupLink(ctx context.Context, ref string, update Gro
 		return link, err
 	}
 
-	c.cacheGroup(ctx, convertGroup(accepted, c.ownACI))
+	c.cacheGroup(ctx, c.convertGroup(accepted))
 
 	return link, nil
 }
@@ -120,7 +120,7 @@ func (c *meowClient) groupLinkRaw(ctx context.Context, ref, operation string,
 }
 
 func groupLinkChange(raw *signalmeow.Group, self string, update GroupLinkUpdate) (*signalmeow.GroupChange, error) {
-	group := convertGroup(raw, self)
+	group := convertGroup(raw, Recipient{ACI: self})
 	state, password := rawGroupLink(raw)
 
 	next, nextPassword, err := group.WithLinkUpdate(self, state, password, update)
@@ -150,7 +150,7 @@ func groupLinkChange(raw *signalmeow.Group, self string, update GroupLinkUpdate)
 
 func convertGroupLink(raw *signalmeow.Group, self string) (GroupLink, error) {
 	state, password := rawGroupLink(raw)
-	return convertGroup(raw, self).Link(self, state, password)
+	return convertGroup(raw, Recipient{ACI: self}).Link(self, state, password)
 }
 
 func rawGroupLink(raw *signalmeow.Group) (GroupLinkState, string) {

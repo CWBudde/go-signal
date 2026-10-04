@@ -142,7 +142,7 @@ func acceptGroupWithOperations(ctx context.Context, ops groupAcceptOperations, s
 		return result, err
 	}
 
-	group := convertGroup(raw, self.ACI)
+	group := convertGroup(raw, self)
 
 	result.Revision = group.Revision
 
@@ -244,7 +244,7 @@ func completeGroupAcceptance(ctx context.Context, ops groupAcceptOperations, sel
 		return result, errInvalidGroupChangeResponse
 	}
 
-	group := convertGroup(raw, self.ACI)
+	group := convertGroup(raw, self)
 
 	_, noop, err := group.CheckAcceptInvitation(self)
 	if err != nil || !noop {

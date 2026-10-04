@@ -266,8 +266,7 @@ currently be a member, invited or requesting to join. All recipients are checked
 change is submitted, and a concurrent group change fails with a retry hint. The output shows
 the updated group. Removal does not ban someone from rejoining; use `groups leave` to leave
 yourself. Success confirms the server update; member notification failures are logged.
-Invitations known only by phone-number identity (PNI), which the current backend cannot
-decrypt, cannot be removed with this command.
+This command resolves targets to ACIs and cannot revoke PNI-only invitations.
 
 Administrators can ban users from a group or lift existing bans:
 
@@ -364,8 +363,15 @@ This accepts your own ACI or phone-number identity (PNI) invitation. Use a known
 group ID, known master key or unique cached title; first synchronize or receive
 the group's key if the account does not know it. A fresh full membership is a
 successful no-op. Acceptance prefers an ACI invitation and falls back to your PNI.
-List/show/join self-membership reporting remains ACI-only, even though group
-reads retain PNI invitation entries. `groups leave <group> --yes` declines your
+`groups list` and `groups show` report your own ACI or PNI invitation as invited
+(JSON membership `pending`) and show the offered role. Full ACI membership takes
+precedence; if both identities are invited, the ACI invitation determines the role.
+`groups join` directs you to `groups accept` when fresh, readable full state shows
+your invitation, including a PNI invitation. These checks use only the selected
+account’s registered identities. See the
+[PNI reporting live check](docs/dev.md#pni-self-membership-live-check).
+
+`groups leave <group> --yes` declines your
 own ACI and PNI invitations, including both when present; full membership takes
 precedence over stale invitations. Invitees cannot use `--promote`.
 

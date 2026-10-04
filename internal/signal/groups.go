@@ -124,7 +124,7 @@ type Group struct {
 	MembersCanAddMembers bool
 	Members              []GroupMember
 	// Pending retains ACI and PNI invitations. MembershipOf recognizes only ACI;
-	// invitation acceptance and leave match both typed self identities.
+	// SelfMembership recognizes both typed self identities.
 	Pending []PendingMember
 	// Requesting are the users who asked to join through a group link.
 	Requesting []RequestingMember
@@ -249,6 +249,35 @@ func (g Group) MembershipOf(aci string) (Membership, GroupRole) {
 	return MembershipNone, GroupRoleUnknown
 }
 
+// SelfMembership reports the selected account's full ACI membership, typed ACI/PNI
+// invitation, or ACI join request, in that order. ACI invitations win when both exist.
+// MembershipOf remains ACI-only for checking other users and mutation permissions.
+func (g Group) SelfMembership(self Recipient) (Membership, GroupRole) {
+	ownACI := acceptIdentity(self.ACI)
+	if ownACI == uuid.Nil {
+		return MembershipNone, GroupRoleUnknown
+	}
+
+	// Full ACI membership wins over stale invitations. Requesters remain ACI-only.
+	withoutInvitations := g
+	withoutInvitations.Pending = nil
+
+	membership, role := withoutInvitations.MembershipOf(ownACI.String())
+	if membership == MembershipMember {
+		return membership, role
+	}
+	// Prefer the ACI invitation's role when both identities are invited.
+	for _, identity := range []Recipient{{ACI: self.ACI}, {PNI: self.PNI}} {
+		for _, pending := range g.Pending {
+			if acceptSelfMatches(pending.Recipient, identity) {
+				return MembershipPending, pending.Role
+			}
+		}
+	}
+
+	return membership, role
+}
+
 // Admins returns the number of members who are admins.
 func (g Group) Admins() int {
 	admins := 0
@@ -279,7 +308,7 @@ func (g Group) PrepareLeave(self Recipient, promote []Recipient) (Group, error) 
 		return Group{}, ErrUnresolvable
 	}
 
-	g.Membership, g.Role = g.leaveMembership(self)
+	g.Membership, g.Role = g.SelfMembership(self)
 
 	return g, g.checkLeave(self.ACI, promote, g.Membership, g.Role)
 }
@@ -344,25 +373,4 @@ func SortGroups(groups []Group) {
 			strings.Compare(a.ID, b.ID),
 		)
 	})
-}
-
-func (g Group) leaveMembership(self Recipient) (Membership, GroupRole) {
-	// Full ACI membership wins over stale invitations. Requesters remain ACI-only.
-	withoutInvitations := g
-	withoutInvitations.Pending = nil
-
-	membership, role := withoutInvitations.MembershipOf(self.ACI)
-	if membership == MembershipMember {
-		return membership, role
-	}
-	// Prefer the ACI invitation's role when both identities are invited.
-	for _, identity := range []Recipient{{ACI: self.ACI}, {PNI: self.PNI}} {
-		for _, pending := range g.Pending {
-			if acceptSelfMatches(pending.Recipient, identity) {
-				return MembershipPending, pending.Role
-			}
-		}
-	}
-
-	return membership, role
 }

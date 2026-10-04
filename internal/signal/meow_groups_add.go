@@ -39,7 +39,7 @@ func (c *meowClient) AddGroupMembers(ctx context.Context, ref string, members []
 		return Group{}, c.lostOr(groupFetchError(gid, err))
 	}
 
-	group := convertGroup(raw, c.ownACI)
+	group := c.convertGroup(raw)
 
 	change, err := addMembersChange(raw, c.ownACI, members)
 	if err != nil {
@@ -63,14 +63,14 @@ func (c *meowClient) AddGroupMembers(ctx context.Context, ref string, members []
 		return partial, c.lostOr(fmt.Errorf("add group members %s: %w", gid, err))
 	}
 
-	group = convertGroup(accepted, c.ownACI)
+	group = c.convertGroup(accepted)
 	c.cacheGroup(ctx, group)
 
 	return group, nil
 }
 
 func addMembersChange(raw *signalmeow.Group, self string, members []Recipient) (*signalmeow.GroupChange, error) {
-	group := convertGroup(raw, self)
+	group := convertGroup(raw, Recipient{ACI: self})
 
 	targets, err := group.CheckAddMembers(self, members)
 	if err != nil {

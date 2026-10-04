@@ -34,7 +34,8 @@ Layering, top to bottom:
   (`!cgo && !libsignal_go`) returns `ErrCGORequired`. signalmeow's zerolog output is bridged to slog (`logbridge.go`).
   Invitation acceptance uses the fork's strict uncached full-state reader, bypassing
   cached group state and endorsement processing while retaining authorization credential
-  caching. Own PNI matching is local to acceptance and leave; list/show/join self-membership remains ACI-only.
+  caching. Self-membership matches the selected account’s typed ACI/PNI invitations in list/show/join,
+  acceptance and leave. Full members, join requests and mutation permissions remain ACI-only.
 - `internal/signal/signaltest/`: in-memory fake `Client` (no cgo) that mimics account selection,
   the per-account lock and remote-unlink behaviour of the real client. Command tests use it.
 - `internal/store/`: data-dir layout (`accounts.json` registry, `<aci>/account.db` SQLite with

@@ -13,7 +13,17 @@ import (
 
 // ConvertGroup exposes convertGroup to the signal_test package.
 func ConvertGroup(raw *signalmeow.Group, ownACI string) Group {
-	return convertGroup(raw, ownACI)
+	return convertGroup(raw, Recipient{ACI: ownACI})
+}
+
+// ConvertGroupForSelf exposes selected-account conversion.
+func ConvertGroupForSelf(raw *signalmeow.Group, self Recipient) Group {
+	return convertGroup(raw, self)
+}
+
+// JoinGroupAs runs the real orchestration for the selected account's typed identities.
+func JoinGroupAs(ctx context.Context, ops GroupJoinOperations, self Recipient, link string) (GroupJoinResult, error) {
+	return joinGroupWithOperations(ctx, ops, self, link)
 }
 
 // GroupIDFromMasterKey exposes groupIDFromMasterKey to the signal_test package.
@@ -192,7 +202,7 @@ type GroupJoinOperations = groupJoinOperations
 
 // JoinGroupWithOperations runs the real orchestration with controlled storage/transport.
 func JoinGroupWithOperations(ctx context.Context, ops GroupJoinOperations, self, link string) (GroupJoinResult, error) {
-	return joinGroupWithOperations(ctx, ops, self, link)
+	return joinGroupWithOperations(ctx, ops, Recipient{ACI: self}, link)
 }
 
 // LeaveChangeAs exposes typed leave change construction to signal_test.

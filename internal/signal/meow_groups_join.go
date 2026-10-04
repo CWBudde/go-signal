@@ -64,7 +64,7 @@ func (c *meowClient) JoinGroup(ctx context.Context, link string) (GroupJoinResul
 		Notify:  cli.SendGroupUpdate,
 	}
 
-	result, err := joinGroupWithOperations(ctx, ops, c.ownACI, link)
+	result, err := joinGroupWithOperations(ctx, ops, Recipient{ACI: c.ownACI, PNI: c.connDevice.PNI.String()}, link)
 	if err != nil {
 		return result, GroupJoinOperationError(c.lostOr(err), result)
 	}
@@ -89,7 +89,7 @@ type groupJoinOperations struct {
 // logging policy. It never writes preview state to the full-state title cache.
 //
 //nolint:nonamedreturns // Deferred error redaction must observe the final partial result.
-func joinGroupWithOperations(ctx context.Context, ops groupJoinOperations, self, link string) (
+func joinGroupWithOperations(ctx context.Context, ops groupJoinOperations, self Recipient, link string) (
 	result GroupJoinResult, err error,
 ) {
 	defer func() {
@@ -136,7 +136,7 @@ func joinGroupWithOperations(ctx context.Context, ops groupJoinOperations, self,
 // knownGroupJoin authorizes a no-op only from fresh full state.
 //
 //nolint:cyclop // Sequential lifecycle guards preserve distinct failure outcomes.
-func knownGroupJoin(ctx context.Context, ops groupJoinOperations, self string,
+func knownGroupJoin(ctx context.Context, ops groupJoinOperations, self Recipient,
 	gid types.GroupIdentifier,
 ) (GroupJoinResult, error) {
 	known, err := ops.Known(ctx, gid)
@@ -180,7 +180,7 @@ func knownGroupJoin(ctx context.Context, ops groupJoinOperations, self string,
 }
 
 //nolint:cyclop // Sequential lifecycle guards preserve distinct failure outcomes.
-func submitGroupJoin(ctx context.Context, ops groupJoinOperations, self string, gid types.GroupIdentifier,
+func submitGroupJoin(ctx context.Context, ops groupJoinOperations, self Recipient, gid types.GroupIdentifier,
 	key types.SerializedGroupMasterKey, password []byte, result GroupJoinResult,
 ) (GroupJoinResult, error) {
 	err := joinContextError(ctx)
@@ -238,7 +238,7 @@ func submitGroupJoin(ctx context.Context, ops groupJoinOperations, self string, 
 	return completeGroupJoin(ctx, ops, self, gid, preview, outcome, result)
 }
 
-func completeGroupJoin(ctx context.Context, ops groupJoinOperations, self string, gid types.GroupIdentifier,
+func completeGroupJoin(ctx context.Context, ops groupJoinOperations, self Recipient, gid types.GroupIdentifier,
 	preview signalmeow.GroupJoinPreview, outcome signalmeow.GroupJoinOutcome, result GroupJoinResult,
 ) (GroupJoinResult, error) {
 	if !outcome.Accepted || !outcome.Verified || outcome.GroupContext == nil || outcome.Change == nil {
@@ -263,7 +263,7 @@ func completeGroupJoin(ctx context.Context, ops groupJoinOperations, self string
 }
 
 //nolint:cyclop // Sequential lifecycle guards preserve distinct failure outcomes.
-func verifyDirectGroupJoin(ctx context.Context, ops groupJoinOperations, self string, gid types.GroupIdentifier,
+func verifyDirectGroupJoin(ctx context.Context, ops groupJoinOperations, self Recipient, gid types.GroupIdentifier,
 	outcome signalmeow.GroupJoinOutcome, result GroupJoinResult,
 ) (GroupJoinResult, error) {
 	err := joinContextError(ctx)

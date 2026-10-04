@@ -260,8 +260,8 @@ func (c *client) fetch(groupID string) (signal.Group, error) {
 			return signal.Group{}, err
 		}
 
-		group.Membership, group.Role = group.MembershipOf(c.connected)
-		if group.Membership != signal.MembershipMember {
+		group.Membership, group.Role = group.SelfMembership(c.selfRecipient())
+		if group.Membership != signal.MembershipMember && group.Membership != signal.MembershipPending {
 			return signal.Group{}, signal.ErrNotAMember
 		}
 
@@ -286,7 +286,7 @@ func (c *client) fetch(groupID string) (signal.Group, error) {
 	}
 
 	group.ID = groupID
-	group.Membership, group.Role = group.MembershipOf(c.connected)
+	group.Membership, group.Role = group.SelfMembership(c.selfRecipient())
 	group.Members = slices.Clone(group.Members)
 	group.Pending = slices.Clone(group.Pending)
 	group.Requesting = slices.Clone(group.Requesting)
@@ -352,4 +352,16 @@ func (c *client) knownGroupIDs() []string {
 	}
 
 	return groupIDs
+}
+
+// selfRecipient uses only the connected account's registered ACI and PNI.
+// The caller holds c.fake.mu.
+func (c *client) selfRecipient() signal.Recipient {
+	for _, account := range c.fake.Linked {
+		if account.ACI == c.connected {
+			return signal.Recipient{ACI: account.ACI, PNI: account.PNI}
+		}
+	}
+
+	return signal.Recipient{ACI: c.connected}
 }

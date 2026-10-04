@@ -73,7 +73,7 @@ func (c *client) JoinGroup(ctx context.Context, link string) (result signal.Grou
 func (c *client) submitGroupJoin(key string, group signal.Group,
 	result signal.GroupJoinResult,
 ) (signal.GroupJoinResult, error) {
-	membership, _ := group.MembershipOf(c.connected)
+	membership, _ := group.SelfMembership(c.selfRecipient())
 	if membership == signal.MembershipRequesting {
 		return signal.GroupJoinResult{
 			ID: group.ID, Title: group.Title, Revision: group.Revision, Status: signal.GroupJoinRequesting, Verified: true,
@@ -161,7 +161,7 @@ func (c *client) knownJoinGroup(key string, group signal.Group) (signal.GroupJoi
 		return signal.GroupJoinResult{}, fetchErr
 	}
 
-	membership, _ := group.MembershipOf(c.connected)
+	membership, _ := group.SelfMembership(c.selfRecipient())
 	if membership == signal.MembershipPending {
 		return signal.GroupJoinResult{}, signal.ErrGroupInvitationRequiresAcceptance
 	}
@@ -189,7 +189,7 @@ func (c *client) checkJoinPreview(group signal.Group, password []byte) error {
 		return signal.ErrGroupLinkInactive
 	}
 
-	membership, _ := group.MembershipOf(c.connected)
+	membership, _ := group.SelfMembership(c.selfRecipient())
 	if membership == signal.MembershipRequesting {
 		return nil
 	}

@@ -50,7 +50,7 @@ func (c *meowClient) SetGroupMemberRole(ctx context.Context, ref string,
 	}
 
 	if change == nil {
-		group := convertGroup(raw, c.ownACI)
+		group := c.convertGroup(raw)
 		c.cacheGroup(ctx, group)
 
 		return group, nil
@@ -66,7 +66,7 @@ func (c *meowClient) SetGroupMemberRole(ctx context.Context, ref string,
 		return partial, c.lostOr(fmt.Errorf("set group member role %s: %w", gid, err))
 	}
 
-	group := convertGroup(accepted, c.ownACI)
+	group := c.convertGroup(accepted)
 	c.cacheGroup(ctx, group)
 
 	return group, nil
@@ -75,7 +75,7 @@ func (c *meowClient) SetGroupMemberRole(ctx context.Context, ref string,
 func memberRoleChange(raw *signalmeow.Group, self string, members []Recipient,
 	role GroupRole,
 ) (*signalmeow.GroupChange, error) {
-	group := convertGroup(raw, self)
+	group := convertGroup(raw, Recipient{ACI: self})
 
 	next, err := group.WithMemberRole(self, members, role)
 	if err != nil {

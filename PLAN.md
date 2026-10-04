@@ -234,11 +234,16 @@ following the docs.
       cover both backends. Existing promotion and last-admin guards are preserved.
 - [ ] PNI invitation decline phone acceptance on disposable accounts and both backends
       ([procedure](docs/dev.md#pni-invitation-decline-live-check)); deferred until a phone session is arranged.
-- [ ] Global PNI self-membership reporting in list/show/join (currently ACI-only; acceptance
-      and successful leave results already match the own PNI locally).
+- [x] Global PNI self-membership reporting implementation in list/show/join: match the
+      selected account's typed ACI/PNI invitations, retain offered roles and prefer full
+      ACI membership. Known invitations require acceptance instead of link joining.
+      Offline policy/backend tests, account-selection and permission tests, plain/JSON
+      goldens and docs cover both backends.
+- [ ] PNI self-membership phone acceptance on disposable accounts and both backends
+      ([procedure](docs/dev.md#pni-self-membership-live-check)); deferred until a phone session is arranged.
 - [ ] Revoke PNI-only invitations in `remove-members` (currently accepts only ACI targets;
       the pinned backend already supports typed pending-member deletion).
-- [ ] Command/output tests, docs and live verification for these operations.
+- [ ] Command/output tests, docs and live verification for the remaining operations.
 
 **Done when:** a PNI invitation can be seen, declined and accepted from the CLI.
 
