@@ -259,14 +259,18 @@ Administrators can remove members, revoke invitations or reject join requests:
 
 ```sh
 go-signal groups remove-members "Family" +491234567890 @alice.42
+go-signal groups remove-members "Family" PNI:44444444-4444-4444-8444-444444444444
 ```
 
-Recipients can be numbers, ACIs or usernames; duplicates are ignored. Every recipient must
+Recipients can be numbers, ACIs, usernames or `PNI:<uuid>`; duplicates are ignored. Every recipient must
 currently be a member, invited or requesting to join. All recipients are checked before the
 change is submitted, and a concurrent group change fails with a retry hint. The output shows
 the updated group. Removal does not ban someone from rejoining; use `groups leave` to leave
 yourself. Success confirms the server update; member notification failures are logged.
-This command resolves targets to ACIs and cannot revoke PNI-only invitations.
+Explicit PNI targets revoke only matching PNI invitations. A number that resolves to both
+ACI and PNI removes matching ACI membership or requests and both typed invitations in one
+change. An ACI or username alone cannot identify a PNI invitation; copy its `PNI:<uuid>` from
+`groups show` when number lookup is unavailable. ACI and PNI UUIDs are matched separately.
 
 Administrators can ban users from a group or lift existing bans:
 

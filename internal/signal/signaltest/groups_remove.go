@@ -30,7 +30,7 @@ func (c *client) RemoveGroupMembers(_ context.Context, ref string, members []sig
 		return signal.Group{}, err
 	}
 
-	group, err = group.WithRemovedMembers(c.connected, members)
+	group, err = group.WithRemovedMembersAs(c.selfRecipient(), members)
 	if err != nil {
 		return signal.Group{}, err //nolint:wrapcheck // signal facade error
 	}

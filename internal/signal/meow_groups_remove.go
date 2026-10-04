@@ -8,10 +8,8 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/cwbudde/mautrix-signal/pkg/libsignalgo"
 	"github.com/cwbudde/mautrix-signal/pkg/signalmeow"
 	"github.com/cwbudde/mautrix-signal/pkg/signalmeow/protobuf/signalpb"
-	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"google.golang.org/protobuf/proto"
 )
@@ -44,7 +42,7 @@ func (c *meowClient) RemoveGroupMembers(ctx context.Context, ref string, members
 
 	group := c.convertGroup(raw)
 
-	change, next, err := removeMembersChange(group, c.ownACI, members)
+	change, next, err := removeMembersChangeAs(group, Recipient{ACI: c.ownACI, PNI: c.connDevice.PNI.String()}, members)
 	if err != nil {
 		return Group{}, fmt.Errorf("remove group members %s: %w", group.ID, err)
 	}
@@ -64,33 +62,36 @@ func (c *meowClient) RemoveGroupMembers(ctx context.Context, ref string, members
 	return next, nil
 }
 
-func removeMembersChange(group Group, self string, members []Recipient) (*signalmeow.GroupChange, Group, error) {
-	next, err := group.WithRemovedMembers(self, members)
+func removeMembersChangeAs(group Group, self Recipient, members []Recipient) (*signalmeow.GroupChange, Group, error) {
+	targets, err := group.removalTargets(self, members)
 	if err != nil {
 		return nil, Group{}, err
 	}
 
-	// WithRemovedMembers has already validated these identifiers.
-	members, _ = NormalizeGroupRemovalMembers(members)
 	change := &signalmeow.GroupChange{}
 
-	for _, member := range members {
-		aci := uuid.MustParse(member.ACI)
-		membership, _ := group.MembershipOf(member.ACI)
-
-		switch membership {
-		case MembershipMember:
+	for _, member := range group.Members {
+		if removalMatches(Recipient{ACI: member.Recipient.ACI}, targets) {
+			aci := acceptIdentity(member.Recipient.ACI)
 			change.DeleteMembers = append(change.DeleteMembers, &aci)
-		case MembershipPending:
-			serviceID := libsignalgo.NewACIServiceID(aci)
-			change.DeletePendingMembers = append(change.DeletePendingMembers, &serviceID)
-		case MembershipRequesting:
-			change.DeleteRequestingMembers = append(change.DeleteRequestingMembers, &aci)
-		case MembershipNone:
 		}
 	}
 
-	return change, next, nil
+	for _, pending := range group.Pending {
+		if removalMatches(pending.Recipient, targets) {
+			serviceID := acceptServiceID(pending.Recipient)
+			change.DeletePendingMembers = append(change.DeletePendingMembers, &serviceID)
+		}
+	}
+
+	for _, request := range group.Requesting {
+		if removalMatches(Recipient{ACI: request.Recipient.ACI}, targets) {
+			aci := acceptIdentity(request.Recipient.ACI)
+			change.DeleteRequestingMembers = append(change.DeleteRequestingMembers, &aci)
+		}
+	}
+
+	return change, group.withRemovedTargets(targets), nil
 }
 
 type groupRemovalSender interface {

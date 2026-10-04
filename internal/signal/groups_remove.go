@@ -13,9 +13,42 @@ import (
 var ErrInvalidGroupMember = errors.New("invalid group member")
 
 // NormalizeGroupRemovalMembers validates nonempty resolved removal targets, canonicalizes
-// their ACIs and removes duplicates in input order without changing the input.
+// their typed identities and removes duplicates in input order without changing the input.
 func NormalizeGroupRemovalMembers(members []Recipient) ([]Recipient, error) {
-	return normalizeGroupMembers(members)
+	if len(members) == 0 {
+		return nil, fmt.Errorf("%w: provide at least one member", ErrInvalidGroupMember)
+	}
+
+	out := make([]Recipient, 0, len(members))
+
+	seen := make(map[string]bool, len(members))
+	for _, member := range members {
+		if member.ACI == "" && member.PNI == "" {
+			return nil, fmt.Errorf("%w: group member needs a nonzero ACI or PNI", ErrUnresolvable)
+		}
+
+		for _, value := range []*string{&member.ACI, &member.PNI} {
+			if *value == "" {
+				continue
+			}
+
+			id := acceptIdentity(*value)
+			if id == uuid.Nil {
+				return nil, fmt.Errorf("%w: invalid group member identity", ErrUnresolvable)
+			}
+
+			*value = id.String()
+		}
+
+		key := member.ACI + "|" + member.PNI
+		if !seen[key] {
+			seen[key] = true
+
+			out = append(out, member)
+		}
+	}
+
+	return out, nil
 }
 
 func normalizeGroupMembers(members []Recipient) ([]Recipient, error) {
@@ -46,40 +79,92 @@ func normalizeGroupMembers(members []Recipient) ([]Recipient, error) {
 // targets removed, preserving the revision. It changes no server or cached state. Full,
 // invited and requesting members can be removed; none are banned.
 func (g Group) WithRemovedMembers(self string, members []Recipient) (Group, error) {
-	members, err := NormalizeGroupRemovalMembers(members)
+	return g.WithRemovedMembersAs(Recipient{ACI: self}, members)
+}
+
+// WithRemovedMembersAs also guards against removal of the selected account's PNI invitation.
+func (g Group) WithRemovedMembersAs(self Recipient, members []Recipient) (Group, error) {
+	targets, err := g.removalTargets(self, members)
 	if err != nil {
 		return Group{}, err
 	}
 
-	membership, role := g.MembershipOf(self)
+	return g.withRemovedTargets(targets), nil
+}
+
+func (g Group) removalTargets(self Recipient, members []Recipient) ([]Recipient, error) {
+	members, err := NormalizeGroupRemovalMembers(members)
+	if err != nil {
+		return nil, err
+	}
+
+	membership, role := g.MembershipOf(self.ACI)
 	if membership != MembershipMember {
-		return Group{}, ErrNotAMember
+		return nil, ErrNotAMember
 	}
 
 	if role != GroupRoleAdmin {
-		return Group{}, fmt.Errorf("%w: only administrators can remove members", ErrGroupPermission)
+		return nil, fmt.Errorf("%w: only administrators can remove members", ErrGroupPermission)
 	}
 
-	removed := make(map[string]bool, len(members))
+	var targets []Recipient
 
 	for _, member := range members {
-		if member.ACI == self {
-			return Group{}, fmt.Errorf("%w: use groups leave to remove yourself", ErrInvalidGroupMember)
+		if acceptSelfMatches(Recipient{ACI: member.ACI}, self) || acceptSelfMatches(Recipient{PNI: member.PNI}, self) {
+			return nil, fmt.Errorf("%w: use groups leave to remove yourself", ErrInvalidGroupMember)
 		}
 
-		membership, _ := g.MembershipOf(member.ACI)
-		if membership == MembershipNone {
-			return Group{}, fmt.Errorf("%w: %s is not a member, invited or requesting", ErrInvalidGroupMember, member)
+		matched := g.removalMembershipTargets(member)
+		if len(matched) == 0 {
+			return nil, fmt.Errorf("%w: %s is not a member, invited or requesting", ErrInvalidGroupMember, member)
 		}
 
-		removed[member.ACI] = true
+		targets = append(targets, matched...)
 	}
 
-	g.Members = slices.DeleteFunc(slices.Clone(g.Members), func(m GroupMember) bool { return removed[m.Recipient.ACI] })
-	g.Pending = slices.DeleteFunc(slices.Clone(g.Pending), func(m PendingMember) bool { return removed[m.Recipient.ACI] })
+	return NormalizeGroupRemovalMembers(targets)
+}
+
+func (g Group) removalMembershipTargets(member Recipient) []Recipient {
+	var targets []Recipient
+
+	withoutPending := g
+	withoutPending.Pending = nil
+
+	membership, _ := withoutPending.MembershipOf(member.ACI)
+	if membership != MembershipNone {
+		targets = append(targets, Recipient{ACI: member.ACI})
+	}
+
+	for _, pending := range g.Pending {
+		if acceptSelfMatches(pending.Recipient, member) {
+			targets = append(targets, pending.Recipient)
+		}
+	}
+
+	return targets
+}
+
+func removalMatches(recipient Recipient, targets []Recipient) bool {
+	for _, target := range targets {
+		if acceptSelfMatches(recipient, target) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (g Group) withRemovedTargets(targets []Recipient) Group {
+	g.Members = slices.DeleteFunc(slices.Clone(g.Members), func(m GroupMember) bool {
+		return removalMatches(Recipient{ACI: m.Recipient.ACI}, targets)
+	})
+	g.Pending = slices.DeleteFunc(slices.Clone(g.Pending), func(m PendingMember) bool {
+		return removalMatches(m.Recipient, targets)
+	})
 	g.Requesting = slices.DeleteFunc(slices.Clone(g.Requesting), func(m RequestingMember) bool {
-		return removed[m.Recipient.ACI]
+		return removalMatches(Recipient{ACI: m.Recipient.ACI}, targets)
 	})
 
-	return g, nil
+	return g
 }

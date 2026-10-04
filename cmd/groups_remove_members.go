@@ -13,10 +13,11 @@ func newGroupsRemoveMembersCmd(clients *clientOpener, printers *printerFactory) 
 		Use:   "remove-members <group> <member>...",
 		Short: "Remove members, revoke invitations or reject join requests",
 		Long: `Remove members in one group change and notify the group. You must be a group
-administrator. Members can be numbers, ACIs or @usernames; duplicates are ignored.
+administrator. Members can be numbers, ACIs, @usernames or PNI:<uuid>; duplicates
+are ignored. Explicit PNI targets revoke invitations only. Numbers may resolve
+to both ACI and PNI, removing matching membership and invitations in one change.
 Invited members have their invitations revoked, and join requests are rejected.
 Every recipient must belong to the group. To remove yourself, use groups leave.
-Invitations known only by phone-number identity (PNI) are not supported.
 
 If the command fails, inspect the group before retrying: a network error may leave
 the outcome uncertain. Notification failures after a confirmed change are logged.

@@ -241,9 +241,15 @@ following the docs.
       goldens and docs cover both backends.
 - [ ] PNI self-membership phone acceptance on disposable accounts and both backends
       ([procedure](docs/dev.md#pni-self-membership-live-check)); deferred until a phone session is arranged.
-- [ ] Revoke PNI-only invitations in `remove-members` (currently accepts only ACI targets;
-      the pinned backend already supports typed pending-member deletion).
-- [ ] Command/output tests, docs and live verification for the remaining operations.
+- [x] Revoke PNI-only invitations in `remove-members`: explicit `PNI:<uuid>` targets
+      and phone-number resolution remove typed invitations in one change. Full members
+      and requests remain ACI-only; selected-account self guards, permissions and atomic
+      validation are preserved. Offline policy/backend tests cover both backends.
+- [ ] PNI invitation revocation phone acceptance on disposable accounts and both backends
+      ([procedure](docs/dev.md#pni-invitation-revocation-live-check)); deferred until a phone session is arranged.
+- [x] Command/output tests and docs for PNI decline, self-membership reporting and
+      invitation revocation, including account selection and plain/JSON goldens.
+      Live verification is tracked separately above.
 
 **Done when:** a PNI invitation can be seen, declined and accepted from the CLI.
 

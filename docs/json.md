@@ -686,6 +686,10 @@ the change but fetching the resulting group failed.
 Returns the same document as [`groups show`](#groups-show), with the new revision and the
 removed recipients absent from `members`, `pending` or `requesting`. Duplicate recipients
 count once. Validation, permission and conflict errors fail without a success document.
+Explicit `PNI:<uuid>` targets remove only matching `pending` entries with a `pni` identity.
+A phone number can resolve to both ACI and PNI, removing their matching entries together.
+Unrelated typed identities are preserved, including an ACI with the same UUID as a PNI.
+The document and schema version remain unchanged.
 
 ## `groups promote` / `groups demote`
 

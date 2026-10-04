@@ -980,3 +980,35 @@ through sync or receive; a cached title alone does not make full state readable.
 6. Remove the disposable group and account data after checking the phone. Record the
    backend, actual typed invitation, outputs and server/phone result separately from
    offline checks; leave the PLAN.md phone-acceptance item open until both runs succeed.
+
+## PNI invitation revocation live check
+
+Use disposable administrator and invitee accounts on both the pure-Go and cgo builds,
+with separate data directories. Record backend versions, account selection and fresh
+`groups show <id> -o json` before each change. These phone checks have not been run.
+
+1. Have the administrator invite the other account by phone number. Confirm its invitation
+   appears in `pending` with `pni`, rather than `aci`; an ACI-only fixture does not exercise
+   PNI revocation. Record the invitation's PNI from plain or JSON `groups show` output.
+2. As that full administrator, run `groups remove-members <id> PNI:<uuid> PNI:<uuid>`.
+   Confirm one revision increment, only the matching PNI invitation removed, and unrelated
+   invitations, full members, requests and settings preserved. Confirm on both phones
+   that the invitation was revoked and the invitee cannot accept it.
+3. Re-invite the disposable peer by PNI. Run `groups remove-members <id> <peer-number>`.
+   Confirm number resolution supplies its PNI and removes the invitation in one revision.
+   If number discovery is unavailable, use the explicit PNI from step 1 and record the
+   limitation; do not count that as passing the number-resolution check.
+4. When the server permits ACI and PNI invitations for the same peer, revoke using its
+   number and confirm both disappear in one change. A bare ACI must leave the separate
+   PNI invitation untouched. If the peer is already a full ACI member with a stale PNI
+   invitation, explicit PNI revocation must preserve that full membership; number removal
+   removes all matching membership and invitations.
+5. Select an ordinary member and an invitee with an offered admin role. Each attempt must
+   fail without changing revision or group state. A batch with a valid peer plus an absent
+   PNI must fail atomically. A batch naming the selected account's own ACI or PNI must
+   direct it to `groups leave`, including when another local account is also registered.
+6. Check plain and JSON output against the refreshed server state. On a conflict or uncertain
+   network failure, inspect fresh state before retrying; do not assume a failed command
+   proves no server change occurred. Confirm removal notifications on the phones.
+7. Restore invitations and memberships as needed, then remove the test peers and leave the
+   disposable groups. Keep phone acceptance open until both backends pass these observations.

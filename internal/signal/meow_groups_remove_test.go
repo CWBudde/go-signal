@@ -55,6 +55,73 @@ func TestRemoveMembersChange(t *testing.T) {
 	}
 }
 
+func TestRemoveMembersChangePNI(t *testing.T) {
+	t.Parallel()
+
+	group := signal.ConvertGroup(rawGroup(time.Time{}), seededACI)
+	change, next, err := signal.RemoveMembersChange(group, seededACI, []signal.Recipient{{PNI: invitedPNI}})
+	want := libsignalgo.NewPNIServiceID(uuid.MustParse(invitedPNI))
+
+	if err != nil || change == nil || len(change.DeletePendingMembers) != 1 {
+		t.Fatalf("PNI removal = %+v, %v", change, err)
+	}
+
+	if *change.DeletePendingMembers[0] != want || len(change.DeleteMembers) != 0 ||
+		len(change.DeleteRequestingMembers) != 0 || len(next.Pending) != 1 || len(next.Members) != 2 {
+		t.Fatalf("wrong typed deletion: %+v, next %+v", change, next)
+	}
+
+	assertEncryptedPNIDeletion(t, *change.DeletePendingMembers[0], want)
+}
+
+func TestRemoveMembersChangeOwnPNI(t *testing.T) {
+	t.Parallel()
+
+	group := signal.ConvertGroup(rawGroup(time.Time{}), seededACI)
+
+	change, _, err := signal.RemoveMembersChangeAs(group, signal.Recipient{ACI: seededACI, PNI: invitedPNI},
+		[]signal.Recipient{{PNI: invitedPNI}})
+	if !errors.Is(err, signal.ErrInvalidGroupMember) || change != nil {
+		t.Fatalf("own PNI removal allowed: %+v, %v", change, err)
+	}
+}
+
+func TestRemoveMembersChangeCombinedIdentities(t *testing.T) {
+	t.Parallel()
+
+	group := signal.Group{
+		Members: []signal.GroupMember{
+			{Recipient: signal.Recipient{ACI: seededACI}, Role: signal.GroupRoleAdmin},
+			{Recipient: signal.Recipient{ACI: memberACI}, Role: signal.GroupRoleMember},
+		},
+		Pending: []signal.PendingMember{
+			{Recipient: signal.Recipient{ACI: memberACI}},
+			{Recipient: signal.Recipient{PNI: invitedPNI}},
+			{Recipient: signal.Recipient{ACI: invitedPNI}},
+		},
+		Requesting: []signal.RequestingMember{{Recipient: signal.Recipient{ACI: joinerACI}}},
+	}
+	change, next, err := signal.RemoveMembersChange(group, seededACI,
+		[]signal.Recipient{{ACI: memberACI, PNI: invitedPNI}, {ACI: joinerACI}})
+	memberID, requesterID := uuid.MustParse(memberACI), uuid.MustParse(joinerACI)
+	aciInvitation := libsignalgo.NewACIServiceID(memberID)
+	pniInvitation := libsignalgo.NewPNIServiceID(uuid.MustParse(invitedPNI))
+
+	want := &signalmeow.GroupChange{
+		DeleteMembers:           []*uuid.UUID{&memberID},
+		DeletePendingMembers:    []*libsignalgo.ServiceID{&aciInvitation, &pniInvitation},
+		DeleteRequestingMembers: []*uuid.UUID{&requesterID},
+	}
+	if err != nil || !reflect.DeepEqual(change, want) {
+		t.Fatalf("combined change = %+v, %v; want %+v", change, err, want)
+	}
+
+	if len(next.Members) != 1 || len(next.Pending) != 1 || next.Pending[0].Recipient.ACI != invitedPNI ||
+		len(next.Requesting) != 0 || len(group.Members) != 2 || len(group.Pending) != 3 {
+		t.Fatalf("combined result = %+v", next)
+	}
+}
+
 type removalSender struct {
 	invalidated             bool
 	notifiedBeforeEviction  bool

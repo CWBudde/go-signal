@@ -78,7 +78,12 @@ func NewGroup(opts CreateGroupOptions, self uuid.UUID) *signalmeow.Group {
 
 // RemoveMembersChange exposes the removal change builder.
 func RemoveMembersChange(group Group, self string, members []Recipient) (*signalmeow.GroupChange, Group, error) {
-	return removeMembersChange(group, self, members)
+	return removeMembersChangeAs(group, Recipient{ACI: self}, members)
+}
+
+// RemoveMembersChangeAs includes the selected account's PNI in removal ownership guards.
+func RemoveMembersChangeAs(group Group, self Recipient, members []Recipient) (*signalmeow.GroupChange, Group, error) {
+	return removeMembersChangeAs(group, self, members)
 }
 
 // GroupRemovalSender is the transport used by RemoveGroupMembersOnce.
