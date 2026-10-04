@@ -68,14 +68,14 @@ go-signal link --name laptop
 go-signal account show
 
 # 2. Send a message: to a number, @username, group or yourself.
-go-signal send +4915112345678 -m "Hello from go-signal"
+go-signal send +491234567890 -m "Hello from go-signal"
 go-signal send self -m "Note to self" --attach notes.pdf
 
 # Send a sticker using a pack's share link and the sticker's numeric ID (0 is valid).
 go-signal send self --sticker-pack 'https://signal.art/addstickers/#pack_id=...&pack_key=...' --sticker-id 0
 
 # Edit your own message, using the timestamp printed by its original send.
-go-signal send +4915112345678 --edit 1790000000000 -m "Corrected text"
+go-signal send +491234567890 --edit 1790000000000 -m "Corrected text"
 
 # 3. Receive what is waiting on the server, or keep streaming with --follow.
 go-signal receive
@@ -126,7 +126,7 @@ with completeness always unknown. See [pinned messages](docs/pins.md) for permis
 Create a group with yourself as administrator and one or more members:
 
 ```sh
-go-signal groups create "Weekend" --member +4915112345678 --member @alice.42
+go-signal groups create "Weekend" --member +491234567890 --member @alice.42
 go-signal groups create "Private notes"   # a group containing only you
 ```
 
@@ -187,7 +187,7 @@ require the separate [live check](docs/dev.md#group-avatar-live-check).
 To add members or invite users to an existing group:
 
 ```sh
-go-signal groups add-members "Family" +4915112345678 @alice.42
+go-signal groups add-members "Family" +491234567890 @alice.42
 ```
 
 You must be a full member with permission to add members. Recipients without available
@@ -202,7 +202,7 @@ after a confirmed change are logged separately.
 Administrators can remove members, revoke invitations or reject join requests:
 
 ```sh
-go-signal groups remove-members "Family" +4915112345678 @alice.42
+go-signal groups remove-members "Family" +491234567890 @alice.42
 ```
 
 Recipients can be numbers, ACIs or usernames; duplicates are ignored. Every recipient must
@@ -216,7 +216,7 @@ decrypt, cannot be removed with this command.
 Administrators can ban users from a group or lift existing bans:
 
 ```sh
-go-signal groups ban "Family" +4915112345678 @alice.42
+go-signal groups ban "Family" +491234567890 @alice.42
 go-signal groups unban "Family" @alice.42
 go-signal groups show "Family"   # includes the banned users and ban times
 ```
@@ -237,7 +237,7 @@ Phone behavior and blocked link joining require the separate [live check](docs/d
 Administrators can promote or demote full members:
 
 ```sh
-go-signal groups promote "Family" +4915112345678 @alice.42
+go-signal groups promote "Family" +491234567890 @alice.42
 go-signal groups demote "Family" @alice.42
 go-signal groups demote "Family" self   # another administrator must remain
 ```
@@ -277,7 +277,7 @@ Join a group through an invite link for the selected account:
 
 ```sh
 go-signal groups join 'https://signal.group/#…'
-go-signal --account +4915112345678 groups join 'sgnl://signal.group/#…' -o json
+go-signal --account +491234567890 groups join 'sgnl://signal.group/#…' -o json
 ```
 
 An open link joins as an ordinary member. A link requiring administrator approval
@@ -301,7 +301,7 @@ Accept an invitation already known to the selected account:
 
 ```sh
 go-signal groups accept 'Family'
-go-signal --account +4915112345678 groups accept 'group:<id>' -o json
+go-signal --account +491234567890 groups accept 'group:<id>' -o json
 ```
 
 This accepts your own ACI or phone-number identity (PNI) invitation. Use a known
@@ -325,7 +325,7 @@ Cancel the selected account's pending ACI join request:
 
 ```sh
 go-signal groups cancel-request 'Family' --yes
-go-signal --account +4915112345678 groups cancel-request 'group:<id>' --yes -o json
+go-signal --account +491234567890 groups cancel-request 'group:<id>' --yes -o json
 ```
 
 Use a known group ID, master key or unique cached title; invite links and unknown
@@ -356,7 +356,7 @@ Read or update the selected account's own profile:
 go-signal profile show
 go-signal profile update --given-name "Alice Mary" --family-name "Smith"
 go-signal profile update --about=""   # clear about; preserve omitted fields
-go-signal --account +4915112345678 profile show -o json
+go-signal --account +491234567890 profile show -o json
 ```
 
 Supply at least one update flag. `--about-emoji` sets the profile emoji. Omitted flags preserve
@@ -407,7 +407,7 @@ claude mcp add signal -- go-signal mcp serve --read-only
 
 # The agent may message one person and one group, and attach files only from ~/signal-out.
 claude mcp add signal -- go-signal mcp serve \
-  --allow-recipient +4915112345678 --allow-recipient group:<group-id> \
+  --allow-recipient +491234567890 --allow-recipient group:<group-id> \
   --attach-dir ~/signal-out
 ```
 
