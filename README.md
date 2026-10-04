@@ -86,6 +86,20 @@ go-signal receive --download-attachments ./downloads   # includes embedded stick
 `go-signal <command> --help` and the man pages (`man go-signal-send`) describe every command.
 [docs/json.md](docs/json.md) documents the JSON output.
 
+Plain receive output shows the local date and the message's exact millisecond timestamp:
+
+```text
+[2026-09-20 12:30:00 UTC; timestamp=1789907400000] Alice → me: hi
+```
+
+Copy the number after `timestamp=` into a reply or reaction. Use the author's number or ACI
+from `contacts list` when the output shows a name:
+
+```sh
+go-signal send +4915112345678 --quote +4915112345678:1789907400000 -m "Hello Alice"
+go-signal react +4915112345678 --target +4915112345678:1789907400000 --emoji 👍
+```
+
 Plain receive output expands mentions in message bodies, edits and quotes to `@Name`, using
 known contact names or an identifier when no name is known. JSON keeps the original text
 and includes `mentions` with UTF-16 offsets and recipient identities. Mentions also work in

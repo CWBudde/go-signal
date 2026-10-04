@@ -982,8 +982,17 @@ any release, so scripts should skip types they don't know.
 | `queueEmpty`        | The server has delivered all messages that were queued for us    |
 | `connection`        | The connection state changed                                     |
 
-Plain output prints the same events, one line each (`[time] <sender> → <dest>: <text>`, where
+Plain output prints the same events, one line each (`[time; timestamp=ms] <sender> → <dest>: <text>`, where
 `me` is this account and other users show by name, else by number or ACI), except `queueEmpty` and `connection`, which only go to the log (`-v`).
+
+`time` is the local date and `timestamp` is the exact sender timestamp in milliseconds since
+the Unix epoch, for example `[2026-09-20 12:30:00 UTC; timestamp=1789907400000]`. Copy the
+numeric value into `--quote <author>:<timestamp>` or `react --target <author>:<timestamp>`;
+look up the author's number or ACI with `contacts list` when a name is displayed. References
+in quotes, edits, deletes, reactions, receipts and read-sync events include their original
+message timestamps too. Unknown timestamps have no prefix and unknown references show `-`;
+values beyond the signed date conversion range show only `timestamp=<value>`. Plain inbox
+output uses the same format. JSON fields and schema version remain unchanged.
 
 ### Common objects
 

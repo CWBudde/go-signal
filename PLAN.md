@@ -123,6 +123,7 @@ sticker, poll and pin checks are in `docs/dev.md`.
 - [ ] Ctrl-C during `receive --follow` exits within ~1 s without losing acks; a dropped network
       connection recovers.
 - [ ] Attachments, quotes and mentions render on the phone; received images land byte-identical.
+      Replies and reactions using timestamps copied from plain `receive` target the right messages.
 - [ ] Edit rendering on the peer's phone, including media and quote edits.
 - [ ] Reactions and remote deletes show up on the phone for 1:1 and group targets.
 - [ ] Initial sync after linking puts the phone's contacts and groups into the store.
@@ -193,7 +194,9 @@ following the docs.
       Offline unit/golden tests and docs cover both backends.
 - [ ] Mention and quote phone acceptance on disposable accounts and both backends
       ([procedure](docs/dev.md#mention-and-quote-live-check)); deferred until a phone session is arranged.
-- [ ] Plain `receive` output shows the ms timestamp that `--quote`/`react --target` need.
+- [x] Plain `receive` timestamp implementation: local date plus exact milliseconds in event
+      prefixes and message references, including saved media and inbox output; offline tests,
+      goldens and docs on both backends. Copy-to-quote/reaction phone acceptance remains in §11.1.
 - [ ] Send viewed receipts (`ReceiptViewed` exists in the facade but nothing sends it).
 - [ ] Respect the phone's read-receipt setting before sending read receipts.
 - [ ] QR refresh during `link`: reprovision before the server drops the socket (~60 s).

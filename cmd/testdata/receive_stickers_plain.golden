@@ -1,4 +1,4 @@
-[2026-09-20 12:30:01 UTC] aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa → me: [sticker 😀 → $DIR/1789907401000-sticker-0.webp]
-[2026-09-20 12:30:02 UTC] aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa → me: [sticker (download failed: CDN unreachable)]
-[2026-09-20 12:30:03 UTC] aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa → me: [sticker]
-[2026-09-20 12:30:04 UTC] aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa → me: still receiving
+[2026-09-20 12:30:01 UTC; timestamp=1789907401000] aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa → me: [sticker 😀 → $DIR/1789907401000-sticker-0.webp]
+[2026-09-20 12:30:02 UTC; timestamp=1789907402000] aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa → me: [sticker (download failed: CDN unreachable)]
+[2026-09-20 12:30:03 UTC; timestamp=1789907403000] aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa → me: [sticker]
+[2026-09-20 12:30:04 UTC; timestamp=1789907404000] aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa → me: still receiving

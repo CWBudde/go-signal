@@ -38,7 +38,8 @@ func TestEventNames(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	want := `[2026-09-20 12:30:00 UTC] Alice\u001b[31m\nEvil → me: [quote me 2026-09-20 12:30:00 UTC] hi` + "\n"
+	want := `[2026-09-20 12:30:00 UTC; timestamp=1789907400000] Alice\u001b[31m\nEvil → me: ` +
+		`[quote me 2026-09-20 12:30:00 UTC; timestamp=1789907400000] hi` + "\n"
 	if out.String() != want {
 		t.Errorf("got  %q\nwant %q", out.String(), want)
 	}
