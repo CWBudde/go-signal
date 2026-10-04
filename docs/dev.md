@@ -869,8 +869,9 @@ recording master keys, invitation URLs or credentials.
 
 Keep live invitation acceptance unchecked until the ACI and actual PNI scenarios,
 both backend runs and peer-phone observations are documented. Ordinary tests use
-offline cryptographic and transport fixtures. Request cancellation, PNI decline
-and global PNI self-membership reporting remain separate work.
+offline cryptographic and transport fixtures. Request cancellation and invitation
+decline have separate live procedures; global PNI self-membership reporting remains
+separate work.
 
 ## Viewed receipt live check
 
@@ -920,3 +921,30 @@ The setting is learned from storage-service account records during `account sync
 storage refresh. The pinned backend does not apply configuration-sync messages directly. Until
 an account record is learned, its existing default permits peer READ receipts. Delivery receipts
 and explicit `receipts send-viewed` requests are independent of this READ-only setting policy.
+
+## PNI invitation decline live check
+
+Run with disposable groups and two accounts, first with the pure-Go binary and then
+with the cgo binary. Synchronize or receive the group key on the invitee account.
+
+1. Have an administrator invite the other account by its phone-number identity (PNI).
+   Inspect `groups show <id> -o json` on the administrator account and confirm that
+   the pending entry has the invitee's exact PNI. A full member or ACI-only entry
+   does not satisfy this scenario. Record the revision and other pending entries.
+2. As the selected invitee, run `groups leave <id> --yes`. Confirm the plain result
+   says the invitation was declined. On a fresh invitation repeat with `-o json`
+   and verify `left.membership` is `pending` and the returned revision advances.
+   If multiple linked accounts exist, select the invitee with `--account`.
+3. On the administrator account, fetch fresh group state and verify the exact PNI
+   entry is removed and unrelated invitations remain. Check the administrator and
+   invitee phones. A repeat decline should fail without changing the group.
+4. If the server permits both own ACI and PNI invitations, repeat and verify both
+   are removed by one decline. Verify an invitee cannot use `--promote`. Also check
+   an ACI invitation and ordinary member/admin leaving on disposable groups.
+5. Clean up the groups. Record backend, commands, revisions and phone observations.
+
+List/show/join self-membership still uses only ACI; a PNI invitation can appear in
+pending entries while own membership is reported as `none`. Leave recognizes PNI
+locally and reports `pending` in its successful result. Success confirms the group
+patch; signalmeow logs member notification failures separately. Keep phone acceptance
+open in PLAN.md until both backends and an actual PNI fixture have been verified.

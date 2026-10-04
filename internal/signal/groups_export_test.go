@@ -35,7 +35,7 @@ func UpdateGroupError(err error) error {
 
 // LeaveChange exposes leaveChange to the signal_test package.
 func LeaveChange(group Group, self string, promote []Recipient) (*signalmeow.GroupChange, []Recipient, error) {
-	return leaveChange(group, self, promote)
+	return leaveChange(group, Recipient{ACI: self}, promote)
 }
 
 // ResolveGroupRef resolves ref against the group store of the selected account of client, which
@@ -193,4 +193,9 @@ type GroupJoinOperations = groupJoinOperations
 // JoinGroupWithOperations runs the real orchestration with controlled storage/transport.
 func JoinGroupWithOperations(ctx context.Context, ops GroupJoinOperations, self, link string) (GroupJoinResult, error) {
 	return joinGroupWithOperations(ctx, ops, self, link)
+}
+
+// LeaveChangeAs exposes typed leave change construction to signal_test.
+func LeaveChangeAs(group Group, self Recipient, promote []Recipient) (*signalmeow.GroupChange, []Recipient, error) {
+	return leaveChange(group, self, promote)
 }

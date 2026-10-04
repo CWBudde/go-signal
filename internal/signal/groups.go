@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/google/uuid"
 )
 
 var (
@@ -121,8 +123,8 @@ type Group struct {
 	// Approving join requests always requires an administrator.
 	MembersCanAddMembers bool
 	Members              []GroupMember
-	// Pending retains ACI and PNI invitations. MembershipOf and ordinary leave policy
-	// recognize only ACI; invitation acceptance matches both typed self identities.
+	// Pending retains ACI and PNI invitations. MembershipOf recognizes only ACI;
+	// invitation acceptance and leave match both typed self identities.
 	Pending []PendingMember
 	// Requesting are the users who asked to join through a group link.
 	Requesting []RequestingMember
@@ -267,6 +269,22 @@ func (g Group) Admins() int {
 // someone (ErrLastAdmin), as the official clients and signal-cli require.
 func (g Group) CheckLeave(self string, promote []Recipient) error {
 	membership, role := g.MembershipOf(self)
+	return g.checkLeave(self, promote, membership, role)
+}
+
+// PrepareLeave checks a leave using the selected account's typed identities and sets
+// the membership and role that LeaveResult reports. Ordinary MembershipOf is ACI-only.
+func (g Group) PrepareLeave(self Recipient, promote []Recipient) (Group, error) {
+	if acceptIdentity(self.ACI) == uuid.Nil {
+		return Group{}, ErrUnresolvable
+	}
+
+	g.Membership, g.Role = g.leaveMembership(self)
+
+	return g, g.checkLeave(self.ACI, promote, g.Membership, g.Role)
+}
+
+func (g Group) checkLeave(self string, promote []Recipient, membership Membership, role GroupRole) error {
 	admin := membership == MembershipMember && role == GroupRoleAdmin
 
 	switch {
@@ -326,4 +344,25 @@ func SortGroups(groups []Group) {
 			strings.Compare(a.ID, b.ID),
 		)
 	})
+}
+
+func (g Group) leaveMembership(self Recipient) (Membership, GroupRole) {
+	// Full ACI membership wins over stale invitations. Requesters remain ACI-only.
+	withoutInvitations := g
+	withoutInvitations.Pending = nil
+
+	membership, role := withoutInvitations.MembershipOf(self.ACI)
+	if membership == MembershipMember {
+		return membership, role
+	}
+	// Prefer the ACI invitation's role when both identities are invited.
+	for _, identity := range []Recipient{{ACI: self.ACI}, {PNI: self.PNI}} {
+		for _, pending := range g.Pending {
+			if acceptSelfMatches(pending.Recipient, identity) {
+				return MembershipPending, pending.Role
+			}
+		}
+	}
+
+	return membership, role
 }

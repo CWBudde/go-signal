@@ -101,7 +101,14 @@ func (c *meowClient) LeaveGroup(ctx context.Context, ref string, opts LeaveOptio
 		return LeaveResult{}, c.lostOr(err)
 	}
 
-	change, promoted, err := leaveChange(group, c.ownACI, opts.Promote)
+	self := Recipient{ACI: c.ownACI, PNI: c.connDevice.PNI.String()}
+
+	group, err = group.PrepareLeave(self, opts.Promote)
+	if err != nil {
+		return LeaveResult{}, fmt.Errorf("leave group %s: %w", gid, err)
+	}
+
+	change, promoted, err := leaveChange(group, self, opts.Promote)
 	if err != nil {
 		return LeaveResult{}, fmt.Errorf("leave group %s: %w", group.ID, err)
 	}
@@ -401,27 +408,25 @@ func msTime(ms uint64) time.Time {
 }
 
 // leaveChange builds the group change with which self leaves group, promoting the members
-// promote to admin first (see Group.CheckLeave): a member deletes itself, an invited user
-// deletes its invitation, a requesting user its request. It also returns the members that get
+// promote to admin first (see Group.PrepareLeave): a member deletes itself, an invited user
+// deletes its own ACI/PNI invitations, a requesting user its request. It also returns the members that get
 // promoted, without those that already are admins.
-func leaveChange(group Group, self string, promote []Recipient) (*signalmeow.GroupChange, []Recipient, error) {
-	err := group.CheckLeave(self, promote)
+func leaveChange(group Group, self Recipient, promote []Recipient) (*signalmeow.GroupChange, []Recipient, error) {
+	group, err := group.PrepareLeave(self, promote)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	selfACI, err := uuid.Parse(self)
+	selfACI, err := uuid.Parse(self.ACI)
 	if err != nil {
-		return nil, nil, fmt.Errorf("%w: invalid own ACI %q: %w", ErrUnresolvable, self, err)
+		return nil, nil, fmt.Errorf("%w: invalid own ACI %q: %w", ErrUnresolvable, self.ACI, err)
 	}
 
-	membership, _ := group.MembershipOf(self)
+	membership := group.Membership
 
 	switch membership {
 	case MembershipPending:
-		serviceID := libsignalgo.NewACIServiceID(selfACI)
-
-		return &signalmeow.GroupChange{DeletePendingMembers: []*libsignalgo.ServiceID{&serviceID}}, nil, nil
+		return declineInvitationsChange(group, self), nil, nil
 	case MembershipRequesting:
 		return &signalmeow.GroupChange{DeleteRequestingMembers: []*uuid.UUID{&selfACI}}, nil, nil
 	case MembershipMember, MembershipNone:
@@ -447,6 +452,19 @@ func leaveChange(group Group, self string, promote []Recipient) (*signalmeow.Gro
 	}
 
 	return change, promoted, nil
+}
+
+func declineInvitationsChange(group Group, self Recipient) *signalmeow.GroupChange {
+	change := &signalmeow.GroupChange{}
+
+	for _, pending := range group.Pending {
+		if acceptSelfMatches(pending.Recipient, self) {
+			serviceID := acceptServiceID(pending.Recipient)
+			change.DeletePendingMembers = append(change.DeletePendingMembers, &serviceID)
+		}
+	}
+
+	return change
 }
 
 func containsACI(recipients []Recipient, aci string) bool {

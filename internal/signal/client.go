@@ -210,9 +210,9 @@ type Client interface { //nolint:interfacebloat // the one facade over signalmeo
 	// group before retrying, since the server may already have created it.
 	CreateGroup(ctx context.Context, opts CreateGroupOptions) (Group, error)
 
-	// LeaveGroup leaves the group ref (as for Group): it removes us as a member, declines an
-	// ACI invitation, and tells the other members. Requesters should use CancelGroupJoinRequest:
-	// leave requires readable full group state. See Group.CheckLeave
+	// LeaveGroup leaves the group ref (as for Group): it removes us as a member, declines
+	// our own ACI/PNI invitations, and tells the other members. Requesters should use CancelGroupJoinRequest:
+	// leave requires readable full group state. See Group.PrepareLeave
 	// for when that is refused (ErrNotAMember, ErrLastAdmin, ErrInvalidPromotion); opts.Promote
 	// makes members admins in the same change. The group's master key stays in the store, and
 	// the title cache remembers that we left (Group.LeftAt). A change that conflicts with one made

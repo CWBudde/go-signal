@@ -62,7 +62,7 @@ type LeaveRequest struct {
 }
 
 // GroupsLeave leaves the group req.Group (signal.Client.LeaveGroup): as a member, it removes us
-// and tells the other members; an ACI invitation is declined. Requesters should use
+// and tells the other members; own ACI and PNI invitations are declined. Requesters should use
 // GroupsCancelRequest because leave requires readable full state. It connects like GroupsList.
 // It fails with signal.ErrLastAdmin when we are the only admin and req.Promote names nobody,
 // and with signal.ErrNotAMember when we are not in the group.

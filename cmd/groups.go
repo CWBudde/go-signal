@@ -119,9 +119,9 @@ func newGroupsLeaveCmd(clients *clientOpener, printers *printerFactory) *cobra.C
 
 	cmd := &cobra.Command{
 		Use:   "leave <group>",
-		Short: "Leave a group or decline an ACI invitation",
+		Short: "Leave a group or decline an invitation",
 		Long: `Leave removes you from the group and tells its members, as leaving on the phone does. For a
-group you are invited to under your ACI, it declines the invitation. To cancel a pending join
+group you are invited to under your ACI or PNI, it declines your invitations. To cancel a pending join
 request, use groups cancel-request <group> --yes; leave requires readable full group state.
 The only admin of a group with other members has to make someone else admin first:
 --promote <member> does that in the same change.

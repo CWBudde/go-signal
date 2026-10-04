@@ -178,7 +178,12 @@ func (c *client) leavable(ref string, opts signal.LeaveOptions) (signal.Group, e
 		return signal.Group{}, err
 	}
 
-	err = group.CheckLeave(c.connected, opts.Promote)
+	account, err := c.fake.account(c.opts)
+	if err != nil {
+		return signal.Group{}, err
+	}
+
+	group, err = group.PrepareLeave(signal.Recipient{ACI: account.ACI, PNI: account.PNI}, opts.Promote)
 	if err != nil {
 		return signal.Group{}, fmt.Errorf("leave group %s: %w (fake)", groupID, err)
 	}

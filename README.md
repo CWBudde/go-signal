@@ -364,8 +364,10 @@ This accepts your own ACI or phone-number identity (PNI) invitation. Use a known
 group ID, known master key or unique cached title; first synchronize or receive
 the group's key if the account does not know it. A fresh full membership is a
 successful no-op. Acceptance prefers an ACI invitation and falls back to your PNI.
-Ordinary list/show/join/leave self-membership reporting remains ACI-only, even
-though group reads retain PNI invitation entries.
+List/show/join self-membership reporting remains ACI-only, even though group
+reads retain PNI invitation entries. `groups leave <group> --yes` declines your
+own ACI and PNI invitations, including both when present; full membership takes
+precedence over stale invitations. Invitees cannot use `--promote`.
 
 Each invocation submits at most one change. Success verifies your ACI membership
 from fresh group state, updates the local title cache and notifies members. The
@@ -373,8 +375,7 @@ JSON result distinguishes HTTP acceptance from fresh membership verification;
 cache or notification errors can follow both. Errors leave stdout empty and
 preserve inspection guidance: check the reported group with `groups show`, your
 phone or an administrator before retrying accepted or uncertain failures.
-PNI invitation decline remains deferred. Server and
-phone behavior are covered by the separately opt-in
+Server and phone acceptance behavior are covered by the separately opt-in
 [live check](docs/dev.md#group-invitation-live-check).
 
 Cancel the selected account's pending ACI join request:
@@ -387,8 +388,9 @@ go-signal --account +491234567890 groups cancel-request 'group:<id>' --yes -o js
 Use a known group ID, master key or unique cached title; invite links and unknown
 keys are refused. This command only removes your pending request. Full membership
 and invitations remain unchanged; use `groups leave` to leave full membership or
-decline an ACI invitation. Leave requires readable full group state, which a
-requester may not have. PNI invitation decline remains deferred.
+decline your ACI/PNI invitations. Leave requires readable full group state, which
+a requester may not have. Verify invitation decline with the
+[PNI decline live check](docs/dev.md#pni-invitation-decline-live-check).
 
 A fresh authenticated preview showing no pending request returns `No pending join
 request`; HTTP 403/404 remains an error, including on repeat calls. Cancellation

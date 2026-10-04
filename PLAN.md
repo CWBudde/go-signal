@@ -228,10 +228,16 @@ following the docs.
 
 ### Phase 13 — Groups: PNI and remaining operations
 
-- [ ] PNI invitation decline (today `groups leave` only declines ACI invitations).
-- [ ] Global PNI self-membership reporting in list/show/join/leave (currently ACI-only; only
-      `groups accept` matches the own PNI).
-- [ ] Revoke PNI-only invitations in `remove-members` (unsupported by the backend today).
+- [x] PNI invitation decline implementation: `groups leave` matches selected-account typed
+      ACI/PNI invitations and removes both when present; full ACI membership takes precedence.
+      Offline policy/backend tests, account-selection tests, plain/JSON goldens and docs
+      cover both backends. Existing promotion and last-admin guards are preserved.
+- [ ] PNI invitation decline phone acceptance on disposable accounts and both backends
+      ([procedure](docs/dev.md#pni-invitation-decline-live-check)); deferred until a phone session is arranged.
+- [ ] Global PNI self-membership reporting in list/show/join (currently ACI-only; acceptance
+      and successful leave results already match the own PNI locally).
+- [ ] Revoke PNI-only invitations in `remove-members` (currently accepts only ACI targets;
+      the pinned backend already supports typed pending-member deletion).
 - [ ] Command/output tests, docs and live verification for these operations.
 
 **Done when:** a PNI invitation can be seen, declined and accepted from the CLI.
