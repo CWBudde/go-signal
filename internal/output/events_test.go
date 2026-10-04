@@ -45,8 +45,8 @@ func TestEventPlainUsesLocation(t *testing.T) {
 	evt := &signal.Edit{Envelope: incoming("").Envelope, TargetTimestamp: sentAt - 60_000, Body: "fixed"}
 
 	got := renderEvent(t, output.Plain, evt)
-	want := "[2026-09-20 14:30:00 CEST] " + aliceACI +
-		" → me: [edit of message sent 2026-09-20 14:29:00 CEST] fixed\n"
+	want := "[2026-09-20 14:30:00 CEST; timestamp=1789907400000] " + aliceACI +
+		" → me: [edit of message sent 2026-09-20 14:29:00 CEST; timestamp=1789907340000] fixed\n"
 
 	if got != want {
 		t.Errorf("got  %q\nwant %q", got, want)

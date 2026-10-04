@@ -1,2 +1,2 @@
-[2026-09-20 12:30:01 UTC] Alice Smith → group "Family": [quote +15550102 2026-09-20 12:30:00 UTC: Hi @Alice Smith] 😀 @+15550102 @me
-[2026-09-20 12:30:02 UTC] me → +15550102: [edit of message sent 2026-09-20 12:30:01 UTC] @Alice Smith!
+[2026-09-20 12:30:01 UTC; timestamp=1789907401000] Alice Smith → group "Family": [quote +15550102 2026-09-20 12:30:00 UTC; timestamp=1789907400000: Hi @Alice Smith] 😀 @+15550102 @me
+[2026-09-20 12:30:02 UTC; timestamp=1789907402000] me → +15550102: [edit of message sent 2026-09-20 12:30:01 UTC; timestamp=1789907401000] @Alice Smith!

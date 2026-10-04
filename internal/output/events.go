@@ -13,7 +13,7 @@ import (
 )
 
 // Event prints one received event (`receive`). Plain output is one line per event,
-// `[time] <sender> → <dest>: <text>`; connection changes and the end of the queue are left to the
+// `[time; timestamp=ms] <sender> → <dest>: <text>`; connection changes and the end of the queue are left to the
 // log. JSON output is one document per line (NDJSON) for every event, as docs/json.md describes.
 func (p *Printer) Event(evt signal.Event) error {
 	if p.format == JSON {
@@ -503,8 +503,8 @@ func (p *Printer) eventLine(evt signal.Event) string {
 	}
 }
 
-// envelopeLine is `[time] <sender> → <dest>: text`. Sync transcripts are sent by us ("me") to
-// the chat; other 1:1 messages are sent to us. A sync event without a chat is `[time] me: text`.
+// envelopeLine is `[time; timestamp=ms] <sender> → <dest>: text`. Sync transcripts are sent by us
+// ("me") to the chat; other 1:1 messages are sent to us. A sync event without a chat has no route.
 func (p *Printer) envelopeLine(env signal.Envelope, text string) string {
 	route := p.who(env.Sender) + " → " + self
 
@@ -668,19 +668,30 @@ func (p *Printer) identityChangedLine(evt *signal.IdentityChanged) string {
 		"go-signal identities trust " + evt.Recipient.String() + "]"
 }
 
-// timePrefix is "[time] " for a Signal timestamp, or "" when it is unknown.
+// timePrefix shows the local date and exact Signal timestamp, or "" when it is unknown.
 func (p *Printer) timePrefix(ms uint64) string {
-	t := msTime(ms)
-	if t.IsZero() {
+	if ms == 0 {
 		return ""
 	}
 
-	return "[" + p.dateTime(t) + "] "
+	return "[" + p.msDateTime(ms) + "] "
 }
 
-// msDateTime formats a Signal timestamp for plain output.
-func (p *Printer) msDateTime(ms uint64) string {
-	return p.dateTime(msTime(ms))
+// msDateTime keeps the exact Signal timestamp alongside its local date. Zero means unknown;
+// timestamps beyond the signed date conversion range retain just their numeric value.
+func (p *Printer) msDateTime(timestamp uint64) string {
+	if timestamp == 0 {
+		return "-"
+	}
+
+	stamp := "timestamp=" + strconv.FormatUint(timestamp, 10)
+
+	t := msTime(timestamp)
+	if t.IsZero() {
+		return stamp
+	}
+
+	return p.dateTime(t) + "; " + stamp
 }
 
 // who names a user in plain output: "me" for the account, else the label from the names (see

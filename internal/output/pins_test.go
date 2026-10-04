@@ -206,7 +206,8 @@ func TestPinUnpinEvents(t *testing.T) {
 			requirePinField(t, fields, "chat", chat)
 			checkPinDuration(t, fields, test.operation, test.duration, test.forever)
 			plain := renderEvent(t, output.Plain, event)
-			requirePollFields(t, plain, "[2026-09-20 14:30:00 CEST]", "["+test.operation, "18446744073709551615")
+			requirePollFields(t, plain, "[2026-09-20 14:30:00 CEST; timestamp=1789907400000]",
+				"["+test.operation, "18446744073709551615")
 
 			if test.operation == pinOperation {
 				want := "4294967295 seconds"

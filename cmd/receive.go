@@ -37,11 +37,16 @@ changes or queueEmpty. Events after the last one counted stay on the server.
 receive exits with 0 when it ends normally (timeout, --max, interrupt) and with 3 when this device
 was unlinked from the account.
 
-Plain output prints one line per event: "[time] <sender> → <dest>: <text>", with placeholders
+Plain output prints one line per event: "[time; timestamp=ms] <sender> → <dest>: <text>", with placeholders
 such as [attachment image/jpeg 12.3 KB photo.jpg] or [unsupported call] for content that can't
 be shown as text. "me" is this account; other users show by name (nickname, phone contact or
 profile name, as "contacts list" shows them), else by number or ACI. With -o json, every event
 (including connection changes) is one JSON document per line (NDJSON, see docs/json.md).
+
+The time uses your local timezone; timestamp is the sender's exact time in milliseconds since
+the Unix epoch. Copy that number into --quote <author>:<timestamp> or react --target
+<author>:<timestamp>, using the author's number or ACI from "contacts list" if a name is shown.
+Quoted messages, edits, reactions and receipts also show the original message's timestamp.
 
 --download-attachments <dir> saves the attachments of received messages (view-once ones too)
 to dir, which is created if missing, as "<timestamp>-<n>-<name>", where name is the sender's file
