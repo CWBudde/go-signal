@@ -100,6 +100,19 @@ go-signal send +4915112345678 --quote +4915112345678:1789907400000 -m "Hello Ali
 go-signal react +4915112345678 --target +4915112345678:1789907400000 --emoji 👍
 ```
 
+After viewing received media, explicitly submit a viewed receipt to its original sender:
+
+```sh
+go-signal receipts send-viewed +4915112345678 --timestamp 1789907400000
+go-signal receipts send-viewed @alice.42 --timestamp 1789907400000 --timestamp 1789907400001
+```
+
+Use the sender's number, ACI or username, including for media in a group. Repeat `--timestamp`
+for several messages from that sender; duplicates are removed. Receiving or downloading media
+does not send viewed receipts automatically. Success confirms submission to the backend;
+unaccepted message requests may be skipped. The current backend does not sync viewed state to
+your other devices. Phone rendering remains a separate [live check](docs/dev.md#viewed-receipt-live-check).
+
 Plain receive output expands mentions in message bodies, edits and quotes to `@Name`, using
 known contact names or an identifier when no name is known. JSON keeps the original text
 and includes `mentions` with UTF-16 offsets and recipient identities. Mentions also work in

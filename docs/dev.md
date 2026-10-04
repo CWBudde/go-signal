@@ -821,3 +821,27 @@ Keep live invitation acceptance unchecked until the ACI and actual PNI scenarios
 both backend runs and peer-phone observations are documented. Ordinary tests use
 offline cryptographic and transport fixtures. Request cancellation, PNI decline
 and global PNI self-membership reporting remain separate work.
+
+## Viewed receipt live check
+
+This production acceptance check requires two disposable accounts with linked CLI devices and
+phones. Run it with both `just build-cgo` and `just build` (pure Go). Offline tests verify
+command wiring, sender resolution, timestamp batching and the `VIEWED` wire type; phone
+rendering remains unchecked until this procedure is run.
+
+1. Accept the peer's message request on the recipient phone. From the peer phone, send media
+   that exposes a viewed/played indicator (for example a voice message). Receive it on the CLI
+   and record the sender's ACI and original sent timestamp. Merely receiving, printing or
+   downloading it must not trigger a viewed indicator on the peer phone.
+2. After viewing/playing the media, run
+   `go-signal receipts send-viewed <sender-ACI> --timestamp <original-ms>`. Verify the peer's
+   indicator changes for that original message. Command success alone is not acceptance
+   evidence. Check that unrelated messages stay unchanged.
+3. Send two fresh eligible messages from the same peer. Submit both timestamps with repeated
+   `--timestamp`, including a duplicate, and verify both indicators. Repeat with a group
+   message: address its individual sender, rather than the group ID.
+4. Check receipt failures and an unaccepted message request where practical. The backend may
+   skip the latter while reporting success. The pinned backend does not send a viewed-state
+   sync to the recipient's other devices; do not expect this command to mark their inbox read.
+5. Repeat with fresh messages on the other backend, recording only backend, message timestamps
+   and phone observations. Remove disposable peers/groups afterwards.

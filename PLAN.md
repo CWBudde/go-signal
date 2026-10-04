@@ -62,6 +62,7 @@ go-signal send <recipient>... -m <text> | --stdin [--attach <file>]... [--group 
 go-signal send <recipient>... --edit <timestamp> -m <replacement>
 go-signal send <recipient>... --sticker-pack <link> --sticker-id <n>
 go-signal receive [--timeout 5s] [--max N] [--follow] [--download-attachments <dir>] [--send-read-receipts]
+go-signal receipts send-viewed <sender> --timestamp <ms> [--timestamp <ms>]...
 go-signal react <recipient>... --target <author>:<ts> --emoji 👍 [--remove]
 go-signal delete <recipient>... --target <ts>
 go-signal contacts list [--blocked] [--query <q>] | show <r> | block <r>... | unblock <r>...
@@ -197,7 +198,10 @@ following the docs.
 - [x] Plain `receive` timestamp implementation: local date plus exact milliseconds in event
       prefixes and message references, including saved media and inbox output; offline tests,
       goldens and docs on both backends. Copy-to-quote/reaction phone acceptance remains in §11.1.
-- [ ] Send viewed receipts (`ReceiptViewed` exists in the facade but nothing sends it).
+- [x] Send viewed receipts: explicit `receipts send-viewed` with sender resolution, validated
+      and deduplicated message timestamps, plain/JSON output, offline tests and docs on both backends.
+- [ ] Viewed-receipt phone acceptance on disposable accounts and both backends
+      ([procedure](docs/dev.md#viewed-receipt-live-check)); deferred until a phone session is arranged.
 - [ ] Respect the phone's read-receipt setting before sending read receipts.
 - [ ] QR refresh during `link`: reprovision before the server drops the socket (~60 s).
 - [ ] Show `last_sync` (e.g. in `account show`).

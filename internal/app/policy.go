@@ -103,8 +103,9 @@ func (a *App) Allowlist() *Allowlist {
 	return a.allow
 }
 
-// WithAllowlist restricts Send, React and Delete to the chats that list allows; they fail with
-// ErrRecipientNotAllowed before anything is uploaded or sent. Without it, they aren't restricted.
+// WithAllowlist restricts outgoing messages and explicit viewed receipts to the chats that list
+// allows. They fail with ErrRecipientNotAllowed before anything is uploaded or sent.
+// Without it, they aren't restricted.
 func WithAllowlist(list *Allowlist) Option {
 	return func(a *App) {
 		a.allow = list

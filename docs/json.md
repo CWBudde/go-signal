@@ -366,6 +366,36 @@ Each entry of `members`:
 | `unidentified` | boolean | `true` if sent with sealed sender                             |
 | `error`        | string  | Why sending to the member failed; _optional_                  |
 
+## `receipts send-viewed`
+
+```json
+{
+  "version": 1,
+  "receipt": {
+    "type": "viewed",
+    "sender": {
+      "aci": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "number": "+15550101",
+      "name": "Alice"
+    },
+    "timestamps": [1789907400000, 1789907400001]
+  }
+}
+```
+
+`receipt` describes a successful submission to the backend. It does not confirm delivery or
+phone rendering; the backend may skip unaccepted message requests. On submission failure, no
+receipt document is printed and the command exits nonzero. Viewed state is not synced to other devices by the current backend.
+
+| Field        | Type          | Description                                                         |
+| ------------ | ------------- | ------------------------------------------------------------------- |
+| `type`       | string        | Always `"viewed"`                                                   |
+| `sender`     | recipient     | Resolved original sender; same recipient shape as `receive`         |
+| `timestamps` | array<number> | Original sent timestamps in milliseconds; unique, in supplied order |
+
+The timestamps are exact unsigned 64-bit integers. Scripts should preserve integer precision
+when parsing them. This adds a new document without changing schema version `1`.
+
 ## `react`
 
 ```json
