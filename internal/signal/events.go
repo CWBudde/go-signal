@@ -28,7 +28,9 @@ type Envelope struct {
 type Message struct {
 	Envelope
 
-	Body        string
+	Body string
+	// Mentions refer to UTF-16 offsets in the raw Body.
+	Mentions    []Mention
 	Attachments []Attachment
 	Sticker     *Sticker
 	// Poll is creation content with an ordered list of answer options.
@@ -58,6 +60,7 @@ type Edit struct {
 
 	TargetTimestamp uint64
 	Body            string
+	Mentions        []Mention
 }
 
 // Delete is a remote delete of an earlier message.

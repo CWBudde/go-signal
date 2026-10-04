@@ -392,10 +392,15 @@ func (a *App) buildContent(ctx context.Context, req SendRequest, files []signal.
 // resolveContent resolves the quote author and the mentioned users of req to ACIs.
 func (a *App) resolveContent(ctx context.Context, req SendRequest) (content, error) {
 	body, found := parseMentions(req.Body)
+	quoteText, quoteMentions := parseMentions(req.QuoteText)
 	out := content{body: body, editTarget: req.EditTarget}
 
-	targets := make([]Target, 0, len(found)+1)
+	targets := make([]Target, 0, len(found)+len(quoteMentions)+1)
 	for _, m := range found {
+		targets = append(targets, m.target)
+	}
+
+	for _, m := range quoteMentions {
 		targets = append(targets, m.target)
 	}
 
@@ -420,15 +425,29 @@ func (a *App) resolveContent(ctx context.Context, req SendRequest) (content, err
 		return content{}, fmt.Errorf("resolve mentions and quote: %w", err)
 	}
 
+	out.mentions = resolvedMentions(found, targets)
+
+	if req.Quote != "" {
+		out.quote = &signal.Quote{
+			Author: targets[len(targets)-1].Recipient, Timestamp: quoted, Text: quoteText,
+			Mentions: resolvedMentions(quoteMentions, targets[len(found):]),
+		}
+	}
+
+	return out, nil
+}
+
+func resolvedMentions(found []mention, targets []Target) []signal.Mention {
+	if len(found) == 0 {
+		return nil
+	}
+
+	mentions := make([]signal.Mention, 0, len(found))
 	for i, m := range found {
-		out.mentions = append(out.mentions, signal.Mention{
+		mentions = append(mentions, signal.Mention{
 			Start: m.start, Length: mentionLength, Recipient: targets[i].Recipient,
 		})
 	}
 
-	if req.Quote != "" {
-		out.quote = &signal.Quote{Author: targets[len(targets)-1].Recipient, Timestamp: quoted, Text: req.QuoteText}
-	}
-
-	return out, nil
+	return mentions
 }

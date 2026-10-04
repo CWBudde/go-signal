@@ -306,6 +306,29 @@ require these observations.
 The receiving clients manage expiry. This procedure does not expect local inbox deletion,
 attachment cleanup or a synchronous remote timer refresh before every send.
 
+### Mention and quote live check
+
+Offline mention conversion, rendering, quote encoding and inbox persistence are covered by
+unit and command golden tests. This phone acceptance procedure remains unrun. Repeat it with
+disposable accounts on both the cgo and `libsignal_go` binaries.
+
+1. In a disposable group, send a phone message mentioning a known contact and yourself, with
+   an emoji before the mentions. Receive it in plain output: verify the names and `@me` appear
+   at the correct positions. Capture another message with `receive -o json` and verify its
+   raw placeholders and UTF-16 `mentions` offsets.
+2. Reply on the phone to a message containing mentions. Verify the received quote's plain
+   names and JSON `quote.mentions`. Repeat with an edit containing mentions and with messages
+   sent from your own phone, which arrive as sync transcripts.
+3. Send a reply using `--quote <author>:<timestamp>` and
+   `--quote-text '😀 @{@username.discriminator}'`. Confirm the mention target and quoted text
+   on the peer's phone, including the fallback quote when the original message is unavailable.
+4. Receive into the daemon or MCP inbox, restart it, then list the stored message and edit.
+   Confirm their raw text, mention metadata and known names survive. Check an unknown contact
+   falls back to an identifier in plain output.
+
+Record the backend, commands, timestamps and peer-phone observations. Leave the Phase 12 phone
+acceptance item open until both backends pass; this procedure alone is not evidence of a run.
+
 ### Group-settings live check
 
 This manual check is separately opt-in and requires a disposable linked account, an online

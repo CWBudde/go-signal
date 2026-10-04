@@ -57,6 +57,8 @@ type Quote struct {
 	Author    Recipient
 	Timestamp uint64
 	Text      string
+	// Mentions refer to UTF-16 offsets in Text, like mentions in a message body.
+	Mentions []Mention
 }
 
 // SendRequest is one outgoing message, either to Recipients or to a group.

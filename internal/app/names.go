@@ -213,7 +213,7 @@ func (b *NameBook) reload(ctx context.Context) (bool, error) {
 }
 
 // EventRecipients returns the users evt names: sender, chat partner, quote or reaction author,
-// the senders of read messages.
+// mentioned users and the senders of read messages.
 //
 //nolint:cyclop // one case per event type
 func EventRecipients(evt signal.Event) []signal.Recipient {
@@ -223,11 +223,17 @@ func EventRecipients(evt signal.Event) []signal.Recipient {
 
 	switch evt := evt.(type) {
 	case *signal.Message:
+		out := envelope(evt.Envelope)
 		if evt.Quote != nil {
-			return envelope(evt.Envelope, evt.Quote.Author)
+			out = append(out, evt.Quote.Author)
 		}
 
-		return envelope(evt.Envelope)
+		out = appendMentionRecipients(out, evt.Mentions)
+		if evt.Quote != nil {
+			out = appendMentionRecipients(out, evt.Quote.Mentions)
+		}
+
+		return out
 	case *signal.PollVote:
 		return envelope(evt.Envelope, evt.TargetAuthor)
 	case *signal.PollClose:
@@ -237,7 +243,7 @@ func EventRecipients(evt signal.Event) []signal.Recipient {
 	case *signal.Unpin:
 		return envelope(evt.Envelope, evt.TargetAuthor)
 	case *signal.Edit:
-		return envelope(evt.Envelope)
+		return appendMentionRecipients(envelope(evt.Envelope), evt.Mentions)
 	case *signal.Delete:
 		return envelope(evt.Envelope)
 	case *signal.Reaction:
@@ -260,4 +266,12 @@ func EventRecipients(evt signal.Event) []signal.Recipient {
 	default:
 		return nil
 	}
+}
+
+func appendMentionRecipients(out []signal.Recipient, mentions []signal.Mention) []signal.Recipient {
+	for _, mention := range mentions {
+		out = append(out, mention.Recipient)
+	}
+
+	return out
 }

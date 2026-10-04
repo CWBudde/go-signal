@@ -829,8 +829,9 @@ func (c *client) checkContent(req signal.SendRequest) error {
 		}
 	}
 
-	if req.Quote != nil && req.Quote.Author.ACI == "" {
-		return fmt.Errorf("quote: %w", signal.ErrUnresolvable)
+	err = checkQuote(req.Quote)
+	if err != nil {
+		return err
 	}
 
 	for _, mention := range req.Mentions {
@@ -924,4 +925,22 @@ func (c *client) lookup(rcpt signal.Recipient) (signal.Recipient, error) {
 	known.Number, known.Username = rcpt.Number, rcpt.Username
 
 	return known, nil
+}
+
+func checkQuote(quote *signal.Quote) error {
+	if quote == nil {
+		return nil
+	}
+
+	if quote.Author.ACI == "" {
+		return fmt.Errorf("quote: %w", signal.ErrUnresolvable)
+	}
+
+	for _, mention := range quote.Mentions {
+		if mention.Recipient.ACI == "" {
+			return fmt.Errorf("quote mention: %w", signal.ErrUnresolvable)
+		}
+	}
+
+	return nil
 }

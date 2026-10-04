@@ -40,6 +40,7 @@ type SendRequest struct {
 	// Quote makes the message a reply to the message <author>:<timestamp> (see ParseQuote).
 	Quote string
 	// QuoteText is the quoted text that clients show when they don't have the quoted message.
+	// It accepts the same @{<recipient>} mention syntax as Body.
 	QuoteText string
 	// EditTarget edits our own message at this timestamp (ms); zero sends a new message.
 	// The caller supplies the replacement content; no previous message is loaded.

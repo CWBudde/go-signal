@@ -103,6 +103,7 @@ func convertChatEvent(evt *events.ChatEvent, ownACI string) Event {
 			Envelope:        env,
 			TargetTimestamp: content.GetTargetSentTimestamp(),
 			Body:            content.GetDataMessage().GetBody(),
+			Mentions:        convertMentions(content.GetDataMessage().GetBodyRanges()),
 		}
 	case *signalpb.TypingMessage:
 		env.Timestamp = content.GetTimestamp()
@@ -146,6 +147,7 @@ func convertDataMessage(env Envelope, msg *signalpb.DataMessage) Event {
 	out := &Message{
 		Envelope:    env,
 		Body:        msg.GetBody(),
+		Mentions:    convertMentions(msg.GetBodyRanges()),
 		ViewOnce:    msg.GetIsViewOnce(),
 		Unsupported: unsupported,
 	}
@@ -166,13 +168,7 @@ func convertDataMessage(env Envelope, msg *signalpb.DataMessage) Event {
 		}
 	}
 
-	if quote := msg.GetQuote(); quote != nil {
-		out.Quote = &Quote{
-			Author:    Recipient{ACI: quote.GetAuthorAci()},
-			Timestamp: quote.GetId(),
-			Text:      quote.GetText(),
-		}
-	}
+	out.Quote = convertQuote(msg.GetQuote())
 
 	return out
 }

@@ -86,6 +86,12 @@ go-signal receive --download-attachments ./downloads   # includes embedded stick
 `go-signal <command> --help` and the man pages (`man go-signal-send`) describe every command.
 [docs/json.md](docs/json.md) documents the JSON output.
 
+Plain receive output expands mentions in message bodies, edits and quotes to `@Name`, using
+known contact names or an identifier when no name is known. JSON keeps the original text
+and includes `mentions` with UTF-16 offsets and recipient identities. Mentions also work in
+`send --quote-text`, with the same `@{<recipient>}` syntax as message text, for example
+`--quote-text 'Hi @{@bob.42}'`.
+
 Sticker sends contain only the sticker: text, stdin, attachments, replies and edits cannot be
 combined with `--sticker-pack` and `--sticker-id`. The pack link supplies its ID and key; only
 the selected image is fetched and uploaded, once for all recipients. Use a sticker ID from
