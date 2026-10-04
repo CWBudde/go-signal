@@ -242,7 +242,9 @@ func checkAnnotations(t *testing.T, tool *sdk.Tool) {
 func TestAccountShow(t *testing.T) {
 	t.Parallel()
 
-	session := connect(t, &signaltest.Fake{Linked: []signal.Account{testAccount()}})
+	acc := testAccount()
+	acc.LastSync = time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC)
+	session := connect(t, &signaltest.Fake{Linked: []signal.Account{acc}})
 
 	res, err := session.CallTool(t.Context(), &sdk.CallToolParams{Name: accountShowTool})
 	if err != nil {
@@ -265,8 +267,12 @@ func TestAccountShow(t *testing.T) {
 		t.Fatalf("structured content %s: %v", raw, err)
 	}
 
-	if want := output.NewAccountJSON(testAccount()); got != want {
+	if want := output.NewAccountJSON(acc); got != want {
 		t.Errorf("got %+v, want %+v", got, want)
+	}
+
+	if !strings.Contains(string(raw), `"lastSync":"2026-10-04T12:00:00Z"`) {
+		t.Errorf("missing lastSync in structured content: %s", raw)
 	}
 
 	if len(res.Content) == 0 {

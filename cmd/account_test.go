@@ -15,11 +15,12 @@ import (
 
 const yes = "--yes"
 
-// namedAccount is testAccount with the details that only accounts.json records.
+// namedAccount is testAccount with device details and a known sync time.
 func namedAccount() signal.Account {
 	acc := *testAccount()
 	acc.DeviceName = "laptop"
 	acc.LinkedAt = time.Date(2026, 9, 20, 12, 30, 0, 0, time.UTC)
+	acc.LastSync = time.Date(2026, 9, 25, 10, 15, 0, 0, time.FixedZone("test", 2*60*60))
 
 	return acc
 }

@@ -37,8 +37,9 @@ func newAccountShowCmd(clients *clientOpener, printers *printerFactory) *cobra.C
 	return &cobra.Command{
 		Use:   "show",
 		Short: "Show number, ACI, PNI and device of the account",
-		Long:  "Show reads the account from the data dir; it doesn't contact the server.",
-		Args:  cobra.NoArgs,
+		Long: `Show reads the account from the data dir, including when the last complete contacts/groups
+sync finished; it doesn't contact the server. An unknown last sync is shown as -.`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			printer, err := printers.printer(cmd.OutOrStdout())
 			if err != nil {

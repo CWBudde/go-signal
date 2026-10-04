@@ -89,6 +89,10 @@ go-signal receive --download-attachments ./downloads   # includes embedded stick
 `go-signal <command> --help` and the man pages (`man go-signal-send`) describe every command.
 [docs/json.md](docs/json.md) documents the JSON output.
 
+`account show` includes the time of the last complete contacts/groups sync, recorded after
+linking or `account sync`. An incomplete sync keeps the previous time; `-` means no complete
+sync has been recorded. The command reads local data and does not contact the server.
+
 `receive --send-read-receipts` and MCP/daemon mark-read respect the phone's stored read-receipt
 setting. Run `account sync` after changing it. Until the setting is learned, the backend permits
 peer receipts; when disabled, it still attempts read sync to your other devices. Success and

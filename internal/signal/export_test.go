@@ -115,6 +115,16 @@ func SyncCounts(ctx context.Context, client Client) (int, int, error) {
 	return meow.syncCounts(ctx, device)
 }
 
+// FinishSync exposes the final sync accounting on an offline-connected client.
+func FinishSync(ctx context.Context, client Client, res SyncResult) (SyncResult, error) {
+	meow, ok := client.(*meowClient)
+	if !ok {
+		panic("FinishSync: not a signalmeow-backed client")
+	}
+
+	return meow.finishSync(ctx, res, nil, SyncOptions{})
+}
+
 // VerifyStorageStored runs Sync's check that the selected account's store of client (see
 // meowOf) holds what signalmeow's storage sync stores from update.
 func VerifyStorageStored(ctx context.Context, client Client, update *signalmeow.StorageUpdate) error {

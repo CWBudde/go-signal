@@ -30,20 +30,27 @@ fields they don't know.
     "pni": "22222222-2222-2222-2222-222222222222",
     "deviceId": 2,
     "deviceName": "laptop",
-    "linkedAt": "2026-09-20T12:30:00Z"
+    "linkedAt": "2026-09-20T12:30:00Z",
+    "lastSync": "2026-09-25T08:15:00Z"
   }
 }
 ```
 
-| Field        | Type   | Description                                                               |
-| ------------ | ------ | ------------------------------------------------------------------------- |
-| `number`     | string | Phone number of the account                                               |
-| `aci`        | string | Account identity (ACI)                                                    |
-| `pni`        | string | Phone number identity (PNI); _optional_                                   |
-| `deviceId`   | number | ID of this device within the account (the phone is 1)                     |
-| `deviceName` | string | Name this device was linked with; _optional_                              |
-| `linkedAt`   | string | When this device was linked; _optional_ (unknown for old data)            |
-| `unlinkedAt` | string | When go-signal found this device unlinked (e.g. on the phone); _optional_ |
+| Field        | Type   | Description                                                                |
+| ------------ | ------ | -------------------------------------------------------------------------- |
+| `number`     | string | Phone number of the account                                                |
+| `aci`        | string | Account identity (ACI)                                                     |
+| `pni`        | string | Phone number identity (PNI); _optional_                                    |
+| `deviceId`   | number | ID of this device within the account (the phone is 1)                      |
+| `deviceName` | string | Name this device was linked with; _optional_                               |
+| `linkedAt`   | string | When this device was linked; _optional_ (unknown for old data)             |
+| `lastSync`   | string | When the last complete contacts/groups sync finished; _optional_ (unknown) |
+| `unlinkedAt` | string | When go-signal found this device unlinked (e.g. on the phone); _optional_  |
+
+`lastSync` is recorded after a complete sync during `link` or `account sync`. Incomplete or
+failed syncs preserve the previous value. It is omitted until a complete sync has been recorded,
+including for older account data without a stored timestamp. MCP's `account_show` tool returns
+the same optional field. JSON schema version 1 is unchanged.
 
 ## `devices list`
 

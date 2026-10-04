@@ -211,7 +211,10 @@ following the docs.
       CLI golden output and docs cover both backends.
 - [ ] QR-refresh phone acceptance on disposable accounts and both backends
       ([procedure](docs/dev.md#link-qr-refresh-live-check)); deferred until a phone session is arranged.
-- [ ] Show `last_sync` (e.g. in `account show`).
+- [x] Show the last complete contacts/groups sync in `account show`, with local-time plain
+      output and optional UTC `lastSync` in JSON/MCP. Missing timestamps remain unknown;
+      incomplete syncs preserve the previous time. Offline backend tests, goldens and docs
+      cover both backends.
 - [ ] Optional, only if cheap: text styles (bold/italic/…).
   - [ ] Choose the input syntax (markup or explicit `start:length:STYLE` offsets).
   - [ ] Convert styles to body ranges alongside mentions, preserving UTF-16 offsets.

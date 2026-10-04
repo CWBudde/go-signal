@@ -164,17 +164,30 @@ func (c *meowClient) Account(ctx context.Context) (Account, error) {
 	}
 
 	device, err := c.device(ctx)
-	if errors.Is(err, ErrNotLinked) && entry.Unlinked() {
-		// signalmeow may have cleared the credentials of a logged-out device.
-		return entry, nil
-	}
-
-	if err != nil {
+	if err != nil && (!errors.Is(err, ErrNotLinked) || !entry.Unlinked()) {
 		return Account{}, err
 	}
 
-	acc := accountFromDevice(&device.DeviceData)
-	acc.DeviceName, acc.LinkedAt, acc.UnlinkedAt = entry.DeviceName, entry.LinkedAt, entry.UnlinkedAt
+	// signalmeow may have cleared the credentials of a logged-out device.
+	acc := entry
+	if device != nil {
+		acc = accountFromDevice(&device.DeviceData)
+		acc.DeviceName, acc.LinkedAt, acc.UnlinkedAt = entry.DeviceName, entry.LinkedAt, entry.UnlinkedAt
+	}
+
+	stamp, known, err := c.data.Meta(ctx, lastSyncKey)
+	if err != nil {
+		return Account{}, fmt.Errorf("load last sync: %w", err)
+	}
+
+	if known {
+		acc.LastSync, err = time.Parse(time.RFC3339, stamp)
+		if err != nil {
+			return Account{}, fmt.Errorf("parse last sync: %w", err)
+		}
+
+		acc.LastSync = acc.LastSync.UTC()
+	}
 
 	return acc, nil
 }

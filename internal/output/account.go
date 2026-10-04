@@ -20,6 +20,7 @@ type AccountJSON struct {
 	DeviceID   int       `json:"deviceId"`
 	DeviceName string    `json:"deviceName,omitempty"`
 	LinkedAt   time.Time `json:"linkedAt,omitzero"`
+	LastSync   time.Time `json:"lastSync,omitzero"`
 	UnlinkedAt time.Time `json:"unlinkedAt,omitzero"`
 }
 
@@ -63,6 +64,7 @@ func NewAccountJSON(acc signal.Account) AccountJSON {
 		DeviceID:   acc.DeviceID,
 		DeviceName: acc.DeviceName,
 		LinkedAt:   utc(acc.LinkedAt),
+		LastSync:   utc(acc.LastSync),
 		UnlinkedAt: utc(acc.UnlinkedAt),
 	}
 }
@@ -80,6 +82,7 @@ func (p *Printer) Account(acc signal.Account) error {
 	fmt.Fprintf(table, "Device ID:\t%d\n", acc.DeviceID)
 	fmt.Fprintf(table, "Device name:\t%s\n", orDash(acc.DeviceName))
 	fmt.Fprintf(table, "Linked at:\t%s\n", p.dateTime(acc.LinkedAt))
+	fmt.Fprintf(table, "Last sync:\t%s\n", p.dateTime(acc.LastSync))
 	fmt.Fprintf(table, "Status:\t%s\n", p.status(acc))
 
 	return flush(table)

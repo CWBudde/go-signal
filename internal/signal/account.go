@@ -77,6 +77,8 @@ type Account struct {
 	DeviceName string
 	// LinkedAt is when this device was linked; zero if unknown.
 	LinkedAt time.Time
+	// LastSync is when the last complete contacts/groups sync finished; zero if unknown.
+	LastSync time.Time
 	// UnlinkedAt is when go-signal found out that the device was unlinked; zero while linked.
 	UnlinkedAt time.Time
 }
