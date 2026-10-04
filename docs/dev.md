@@ -71,7 +71,9 @@ How it fits together:
   the CGO endorsement wrapper to use the combined result supplied by Rust. It also
   exposes narrowly scoped invite preview, single-attempt joining and pending-request
   cancellation in signalmeow, with opt-in request/response log redaction for
-  credential-bearing operations.
+  credential-bearing operations. It preserves contact-sync timer field presence and
+  acknowledgement failures, and stamps group timer seconds from the same retrieved state
+  used for the group context (see [maintenance](maintenance.md)).
 - `cwbudde/libsignal-go` is a fork of `GoCodeAlone/libsignal-go` whose Rust compat harness is
   pinned to the libsignal tag libsignalgo expects (its `decisions/0007-cwbudde-fork-policy.md`).
   Fork releases are tagged `vX.Y.Z-cw.N`.
@@ -262,6 +264,47 @@ peer and optional group settings. Run it with `-run '^TestIntegrationEdit$'` and
 integration tags. It sends an original text and one edit per chat, checks self sync sending,
 and waits for the peer's delivery receipts for the direct/group originals and edits. Receipts
 verify transport; inspect the peer's phone separately to confirm the corrected text renders.
+
+### Disappearing-messages live check
+
+This acceptance procedure remains **unrun**. Use only a disposable linked account, two
+consenting peer phones and disposable groups. Run every step separately with `just build`
+(pure Go) and `just build-cgo`, recording the binary's `version` output. Use explicit
+`--data-dir` and `--account` values on every command and separate test fixtures for each
+backend. Offline tests establish persistence and protobuf fields; phone display and expiry
+require these observations.
+
+1. On the phones, set direct chat A to 30 seconds and chat B to 5 minutes (or two different
+   supported durations). Run `sync` and `receive`; have both peers send a text so their
+   settings are observed. Send to both recipients in one invocation:
+   `send <peer-A> <peer-B> -m "Timer acceptance"`. Record each printed timestamp and verify
+   each phone shows its own duration. Follow each phone's expiry behavior and record when
+   it removes the message; do not infer an expiry-start rule from transport success.
+2. Disable A's timer on its phone, then run `receive` or `sync` to learn the update. Send
+   another message and verify it stays untimed while B still expires. To check stale updates,
+   keep a disposable linked device offline before the disable, queue a message with the
+   older timer there, then reconnect it after go-signal learns the disable. Receive that
+   delayed message, send again, and confirm the newer disabled setting remains effective.
+   If the clients will not send the old queued metadata, record this live case as unverified;
+   deterministic offline tests cover version ordering.
+3. Exit go-signal completely and send again using the same data directory. Verify both chat
+   settings survive the restart. Change Note to Self's timer on the linked phone, receive its
+   sync transcript, then `send self -m "Self timer acceptance"`. Check the phone's duration
+   and expiry, and repeat after disabling that timer and refreshing it.
+4. Edit a timed direct message using `send <peer-B> --edit <timestamp> -m "Edited timer"`.
+   Repeat with Note to Self. Verify the replacement renders and carries the chat's current
+   timer; observe the phone's expiry separately. If changing a timer between the original
+   and edit, refresh through `receive` or `sync` before sending the edit.
+5. In a disposable group with a peer, change the timer on the phone, receive its group update
+   and fetch `groups show <id>`. Send a group message and edit it, checking phone duration
+   and expiry against that group state. Repeat after changing the duration and after disabling
+   it. A group setting must not overwrite either direct-chat timer.
+6. Restore changed settings, remove peers from disposable groups and leave the groups. Record
+   observations, backend, durations, refresh steps and any unverified cases. Keep roadmap
+   phone acceptance open until both backend runs and all required phone checks are complete.
+
+The receiving clients manage expiry. This procedure does not expect local inbox deletion,
+attachment cleanup or a synchronous remote timer refresh before every send.
 
 ### Group-settings live check
 

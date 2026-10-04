@@ -6,6 +6,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/cwbudde/mautrix-signal/pkg/libsignalgo"
+	"github.com/cwbudde/mautrix-signal/pkg/signalmeow"
 	"github.com/cwbudde/mautrix-signal/pkg/signalmeow/events"
 	"github.com/cwbudde/mautrix-signal/pkg/signalmeow/protobuf/signalpb"
 )
@@ -105,4 +107,19 @@ func SyncErrors(errs ...error) error {
 // BuildMessage exercises upload ownership and fresh message construction on an offline client.
 func BuildMessage(ctx context.Context, client Client, req SendRequest) (func() *signalpb.DataMessage, error) {
 	return client.(*meowClient).message(ctx, req) //nolint:forcetypeassert // test helper
+}
+
+// TimerPersistenceContext installs a timer-only context hook and returns Close's done channel.
+func TimerPersistenceContext(client Client, hook func(context.Context) context.Context) <-chan struct{} {
+	meow := client.(*meowClient) //nolint:forcetypeassert // test helper
+	meow.timerPersistenceContext = hook
+
+	return meow.done
+}
+
+// SendDirectRecipients runs the same direct wire-building path as Send without transport.
+func SendDirectRecipients(ctx context.Context, client Client, req SendRequest, fresh func() *signalpb.DataMessage,
+	send func(context.Context, libsignalgo.ServiceID, *signalpb.Content) signalmeow.SendMessageResult,
+) SendResult {
+	return client.(*meowClient).sendDirectRecipients(ctx, req, fresh, send) //nolint:forcetypeassert // test helper
 }

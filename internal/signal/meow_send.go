@@ -144,6 +144,14 @@ func (c *meowClient) Send(ctx context.Context, req SendRequest) (SendResult, err
 		return SendResult{Timestamp: req.Timestamp, Results: results}, nil
 	}
 
+	return c.sendDirectRecipients(ctx, req, msg, cli.SendMessage), nil
+}
+
+// sendDirectRecipients sends independent content to each resolved direct recipient.
+func (c *meowClient) sendDirectRecipients(
+	ctx context.Context, req SendRequest, fresh func() *signalpb.DataMessage,
+	send func(context.Context, libsignalgo.ServiceID, *signalpb.Content) signalmeow.SendMessageResult,
+) SendResult {
 	res := SendResult{Timestamp: req.Timestamp, Results: make([]RecipientResult, 0, len(req.Recipients))}
 
 	for _, rcpt := range req.Recipients {
@@ -154,14 +162,21 @@ func (c *meowClient) Send(ctx context.Context, req SendRequest) (SendResult, err
 			continue
 		}
 
+		msg, err := c.directMessage(ctx, rcpt, fresh)
+		if err != nil {
+			res.Results = append(res.Results, RecipientResult{Recipient: rcpt, Err: err})
+
+			continue
+		}
+
 		// SendMessage adds to the content (PNI signature), so every recipient gets its own. For
 		// our own ACI it only sends the sync transcript (note-to-self); otherwise it sends the
 		// sync transcript after the message.
-		sent := cli.SendMessage(ctx, serviceID, wrapOutgoing(msg(), req.EditTarget))
+		sent := send(ctx, serviceID, wrapOutgoing(msg, req.EditTarget))
 		res.Results = append(res.Results, recipientResult(rcpt, rcpt.ACI == c.ownACI, sent))
 	}
 
-	return res, nil
+	return res
 }
 
 // wrapOutgoing selects the protocol envelope without losing the replacement's rich content.
