@@ -67,7 +67,7 @@ func (l *LinkStore) DeviceByACI(ctx context.Context, aci uuid.UUID) (*store.Devi
 		return nil, errNoDevice
 	}
 
-	device, err := l.store.Devices.DeviceByACI(ctx, aci)
+	device, err := l.store.DeviceByACI(ctx, aci)
 	if err != nil {
 		return nil, fmt.Errorf("load device: %w", err)
 	}

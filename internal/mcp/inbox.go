@@ -133,8 +133,9 @@ func addMarkRead(server *sdk.Server, handlers *tools) {
 		Name:  "mark_read",
 		Title: "Mark messages read",
 		Description: "Send read receipts for the unread messages in the inbox (all, or those of one chat up to " +
-			"a cursor) and mark them as read; the senders see that they were read, and your other devices " +
-			"mark them as read, too. Read receipts are only sent through this tool.",
+			"a cursor) and mark them as read. Peer receipts respect the stored phone setting; your other " +
+			"devices still get read sync attempts when peer receipts are disabled. Run account sync to " +
+			"refresh the setting. Read receipts are only submitted through this tool.",
 		Annotations: &sdk.ToolAnnotations{DestructiveHint: new(false), IdempotentHint: true, OpenWorldHint: new(true)},
 	}, handlers.markRead)
 }
@@ -311,7 +312,8 @@ func (t *tools) markRead(
 		return nil, markReadOutput{}, err //nolint:wrapcheck // app wraps it
 	}
 
-	text := fmt.Sprintf("Marked %d messages as read; read receipts went to %d users.", marked.Messages, marked.Senders)
+	text := fmt.Sprintf("Marked %d messages as read; submitted read receipts for %d users.",
+		marked.Messages, marked.Senders)
 
 	return &sdk.CallToolResult{Content: []sdk.Content{&sdk.TextContent{Text: text}}},
 		markReadOutput{Messages: marked.Messages, Senders: marked.Senders}, nil

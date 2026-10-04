@@ -39,7 +39,9 @@ func (c *meowClient) SendReceipt(ctx context.Context, sender Recipient, typ Rece
 	c.cliMu.Unlock()
 
 	// For a read receipt, signalmeow also sends the read sync to our other devices. It skips
-	// receipts to senders we haven't accepted a message request from and reports success.
+	// peer READ receipts when the stored phone setting is disabled, retaining the read sync.
+	// An unknown setting permits them. It also skips receipts to senders we haven't accepted
+	// a message request from and reports success. Read-sync failures are only logged upstream.
 	sent := cli.SendMessage(c.zlog.WithContext(ctx), serviceID, content)
 
 	res := recipientResult(sender, false, sent)

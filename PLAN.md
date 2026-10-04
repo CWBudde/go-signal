@@ -202,7 +202,10 @@ following the docs.
       and deduplicated message timestamps, plain/JSON output, offline tests and docs on both backends.
 - [ ] Viewed-receipt phone acceptance on disposable accounts and both backends
       ([procedure](docs/dev.md#viewed-receipt-live-check)); deferred until a phone session is arranged.
-- [ ] Respect the phone's read-receipt setting before sending read receipts.
+- [x] Respect the phone's stored read-receipt setting before sending peer READ receipts:
+      preserve disabled defaults across restart; real-backend receive/inbox tests and docs on both backends.
+- [ ] Read-receipt setting phone acceptance on disposable accounts and both backends
+      ([procedure](docs/dev.md#read-receipt-setting-live-check)); deferred until a phone session is arranged.
 - [ ] QR refresh during `link`: reprovision before the server drops the socket (~60 s).
 - [ ] Show `last_sync` (e.g. in `account show`).
 - [ ] Optional, only if cheap: text styles (bold/italic/…).

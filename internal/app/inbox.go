@@ -246,12 +246,14 @@ type MarkReadRequest struct {
 type MarkReadResult struct {
 	// Messages is how many messages were marked as read.
 	Messages int
-	// Senders is how many users got a read receipt.
+	// Senders counts successful receipt submissions. The backend may suppress peer delivery
+	// because of the phone setting or an unaccepted message request.
 	Senders int
 }
 
 // MarkRead sends read receipts for the unread incoming messages that req selects, one receipt
 // per sender, and marks them as read in the inbox; our other devices mark them as read, too.
+// The stored phone setting can suppress peer receipts while retaining read sync attempts.
 // This is the only way go-signal sends read receipts from the inbox. A failed receipt leaves its
 // sender's messages unread and doesn't stop the others; the errors are joined.
 func (i *Inbox) MarkRead(ctx context.Context, req MarkReadRequest) (MarkReadResult, error) {

@@ -67,7 +67,7 @@ token=$(cat "$token_file")
 | `GET /v1/health`     | `{version, account, connection}`: software version, account ACI and latest observed Signal connection status. |
 | `GET /v1/messages`   | `{messages, cursor, more}`: persistent inbox entries and the cursor for the next page.                        |
 | `POST /v1/messages`  | `{ok, send, error?}`: timestamp and outcomes for every recipient.                                             |
-| `POST /v1/mark-read` | `{ok, messages, senders, error?}`: stored messages marked read and senders who received receipts.             |
+| `POST /v1/mark-read` | `{ok, messages, senders, error?}`: stored messages marked read and successful receipt submissions per sender. |
 
 ```sh
 curl --fail-with-body -H "Authorization: Bearer $token" "$base/v1/health"
@@ -106,7 +106,11 @@ curl --fail-with-body -H "Authorization: Bearer $token" \
 The cursor limits mark-read to entries up to that ID; cursor `"0"` selects none.
 Omitted chat selects all
 chats; omitted cursor selects all stored unread messages. `{}` selects both.
-The sender sees a read receipt, and your other devices are notified too.
+Peer receipts respect the phone's stored read-receipt setting. When disabled, only read sync
+to your other devices is attempted; local messages are still marked read. `senders` counts
+successful submissions, including suppressed peer receipts, rather than confirmed delivery.
+Run `account sync` after changing the phone's setting. Until it is learned, the backend permits
+peer receipts. Read-sync failures are logged and do not fail local mark-read.
 
 Requests must contain one JSON object, with only documented fields, and be no
 larger than 1 MiB. Authentication errors return 401, malformed input 400, denied

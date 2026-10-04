@@ -524,7 +524,7 @@ func (c *meowClient) device(ctx context.Context) (*mstore.Device, error) {
 		return nil, fmt.Errorf("accounts.json: invalid ACI %q: %w", acc.ACI, err)
 	}
 
-	device, err := c.data.Devices.DeviceByACI(ctx, aci)
+	device, err := c.data.DeviceByACI(ctx, aci)
 	if err != nil {
 		return nil, fmt.Errorf("load device: %w", err)
 	}

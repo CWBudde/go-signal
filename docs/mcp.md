@@ -218,8 +218,11 @@ this device is still linked only with `checkServer: true`.
   - Signal keeps attachments for about 30 days.
 - **`mark_read`**
   - Sends read receipts for the unread messages: all of them, or those of one `chat` up to a
-    `cursor` (or entry id). The senders see that you read them, and your other devices mark the
-    messages as read too.
+    `cursor` (or entry id). Peer receipts respect the phone's stored read-receipt setting;
+    when disabled, only read sync to your other devices is attempted. `senders` counts
+    successful submissions, including suppressed peer receipts, rather than confirmed delivery.
+    Run `account sync` after changing the phone's setting. Until it is learned, the backend
+    permits peer receipts. Read-sync failures are logged and do not fail local mark-read.
   - It is left out with `--read-only`.
 
 ### Write

@@ -204,7 +204,7 @@ func (c *meowClient) masterKey(ctx context.Context, cli *signalmeow.Client, opts
 // signalmeow writes the key into the shared device struct from its receive loop, so it is read
 // from the database instead.
 func (c *meowClient) storedMasterKey(ctx context.Context) ([]byte, error) {
-	device, err := c.data.Devices.DeviceByACI(ctx, c.connDevice.ACI)
+	device, err := c.data.DeviceByACI(ctx, c.connDevice.ACI)
 	if err != nil {
 		return nil, fmt.Errorf("load storage key: %w", err)
 	}

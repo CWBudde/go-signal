@@ -82,7 +82,10 @@ type Client interface { //nolint:interfacebloat // the one facade over signalmeo
 
 	// SendReceipt tells sender that we received (ReceiptDelivery), read (ReceiptRead) or viewed
 	// (ReceiptViewed) their messages with the given sent timestamps. sender needs their ACI. A
-	// read receipt also reaches our other devices (as a read sync). It needs Connect
+	// read receipt also reaches our other devices (as a read sync). The stored phone setting
+	// suppresses peer READ receipts when disabled, retaining the read sync; an unknown setting
+	// permits them. Success is submission, not proof of peer delivery or successful read sync.
+	// It needs Connect
 	// (ErrNotConnected) and fails with ErrClosed after Close, and with ErrInvalidReceipt for an
 	// unknown type or no timestamps.
 	SendReceipt(ctx context.Context, sender Recipient, typ ReceiptType, timestamps []uint64) error

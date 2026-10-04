@@ -845,3 +845,28 @@ rendering remains unchecked until this procedure is run.
    sync to the recipient's other devices; do not expect this command to mark their inbox read.
 5. Repeat with fresh messages on the other backend, recording only backend, message timestamps
    and phone observations. Remove disposable peers/groups afterwards.
+
+## Read-receipt setting live check
+
+Use two disposable accounts with an accepted message request and linked CLI devices. Run the
+procedure on both `just build-cgo` and `just build` (pure Go). Offline regression tests cover
+stored enabled/disabled/unknown settings, empty account records across restart, receive batching
+and inbox mark-read. They stop before encryption/network access and do not prove phone behavior.
+
+1. Enable read receipts on the recipient phone, run `go-signal account sync`, and restart the
+   CLI. Send a fresh message from the peer, run `receive --send-read-receipts`, and verify the
+   peer sees it read and the recipient's linked devices reflect that state.
+2. Disable read receipts on the phone, sync and restart again. Use a fresh message: the peer
+   must receive no read receipt, while the recipient's other devices should receive read sync.
+   Repeat with a group message, checking the original sender's receipt state.
+3. With the setting disabled, receive fresh messages through MCP or the daemon, then invoke
+   `mark_read` or `POST /v1/mark-read`. Local unread entries must clear without peer receipts;
+   `senders` counts submissions even when peer delivery is suppressed. Read-sync failures are
+   only logged by the pinned backend, so a successful response alone cannot prove sync.
+4. Enable, sync and restart once more to verify the setting changes in both directions. Record
+   backend and observations; remove disposable peers/groups afterwards.
+
+The setting is learned from storage-service account records during `account sync` and background
+storage refresh. The pinned backend does not apply configuration-sync messages directly. Until
+an account record is learned, its existing default permits peer READ receipts. Delivery receipts
+and explicit `receipts send-viewed` requests are independent of this READ-only setting policy.

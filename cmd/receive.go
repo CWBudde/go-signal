@@ -55,9 +55,11 @@ shows each file's path; a failed download is reported there and does not stop re
 Embedded sticker images are also saved, as "<timestamp>-sticker-<id><extension>"; sticker
 downloads use the message's image pointer without a permanent-pack fallback.
 
-With --send-read-receipts, the sender of each incoming message (not your own messages from other
-devices) gets a read receipt once the message was printed, collected for about a second into one
-receipt per sender. Your other devices then mark the messages as read, too.`
+With --send-read-receipts, incoming messages from other users are marked read after printing,
+collected for about a second into one batch per sender. Peer read receipts respect the phone's
+setting learned through account sync; until a setting is known, the backend permits them.
+Your other devices still get a read sync when peer receipts are disabled. Run account sync
+after changing the phone's setting to refresh the stored value.`
 
 func newReceiveCmd(clients *clientOpener, printers *printerFactory) *cobra.Command {
 	var (

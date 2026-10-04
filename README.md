@@ -86,6 +86,11 @@ go-signal receive --download-attachments ./downloads   # includes embedded stick
 `go-signal <command> --help` and the man pages (`man go-signal-send`) describe every command.
 [docs/json.md](docs/json.md) documents the JSON output.
 
+`receive --send-read-receipts` and MCP/daemon mark-read respect the phone's stored read-receipt
+setting. Run `account sync` after changing it. Until the setting is learned, the backend permits
+peer receipts; when disabled, it still attempts read sync to your other devices. Success and
+mark-read sender counts describe submissions, not confirmed delivery.
+
 Plain receive output shows the local date and the message's exact millisecond timestamp:
 
 ```text
