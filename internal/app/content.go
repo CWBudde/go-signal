@@ -363,6 +363,7 @@ type content struct {
 	body        string
 	quote       *signal.Quote
 	mentions    []signal.Mention
+	styles      []signal.TextStyle
 	attachments []signal.UploadedAttachment
 	// reaction or deleteTarget replace the content above for React and Delete.
 	reaction     *signal.OutgoingReaction
@@ -371,12 +372,16 @@ type content struct {
 }
 
 // buildContent resolves the quote author and the mentioned users of req to ACIs and uploads files.
-func (a *App) buildContent(ctx context.Context, req SendRequest, files []signal.OutgoingAttachment) (content, error) {
+func (a *App) buildContent(ctx context.Context, req SendRequest, files []signal.OutgoingAttachment,
+	styles []signal.TextStyle,
+) (content, error) {
 	if req.Sticker != nil {
 		return a.buildSticker(ctx, *req.Sticker)
 	}
 
 	out, err := a.resolveContent(ctx, req)
+
+	out.styles = styles
 	if err != nil || len(files) == 0 {
 		return out, err
 	}

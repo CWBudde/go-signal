@@ -30,6 +30,8 @@ type SendRequest struct {
 	// Body is the message text. @{<recipient>} placeholders for users (see ParseRecipient)
 	// become mentions. It may be empty when there are attachments.
 	Body string
+	// Styles are start:length:STYLE ranges in UTF-16 units after mention substitution.
+	Styles []string
 	// Attachments are paths of files to attach, each at most MaxAttachmentSize.
 	Attachments []string
 	// Sticker sends one item from an existing pack, without other message content.
@@ -119,13 +121,18 @@ func (a *App) Send(ctx context.Context, req SendRequest) (SendResult, error) {
 		return SendResult{}, fmt.Errorf("send: %w", err)
 	}
 
+	styles, err := parseStyles(req.Body, req.Styles)
+	if err != nil {
+		return SendResult{}, fmt.Errorf("send: %w", err)
+	}
+
 	req, files, err := prepare(req)
 	if err != nil {
 		return SendResult{}, fmt.Errorf("send: %w", err)
 	}
 
 	return a.sendContent(ctx, "send", req.Recipients, func(ctx context.Context) (content, error) {
-		return a.buildContent(ctx, req, files)
+		return a.buildContent(ctx, req, files, styles)
 	})
 }
 
@@ -278,6 +285,7 @@ func (msg content) request(timestamp uint64) signal.SendRequest {
 		Attachments:  msg.attachments,
 		Quote:        msg.quote,
 		Mentions:     msg.mentions,
+		Styles:       msg.styles,
 		Reaction:     msg.reaction,
 		DeleteTarget: msg.deleteTarget,
 		EditTarget:   msg.editTarget,

@@ -11,10 +11,16 @@ import (
 // An edit needs replacement text and a timestamp newer than its target (ErrInvalidContent).
 // Poll operations are standalone, require one canonical group ID and validate their typed payload
 // (ErrInvalidPoll). Pin and unpin operations are standalone (ErrInvalidPin).
+// Text styles must cover complete characters in Body (ErrInvalidStyle).
 // It doesn't check recipients, attachments, the quote or mentions.
 func (req SendRequest) Check() error {
 	if (req.GroupID == "") == (len(req.Recipients) == 0) {
 		return ErrInvalidSendRequest
+	}
+
+	err := CheckTextStyles(req.Body, req.Styles)
+	if err != nil {
+		return err
 	}
 
 	if req.hasPin() {
@@ -72,9 +78,9 @@ func (req SendRequest) checkReaction() error {
 	return nil
 }
 
-// hasContent reports whether req has a body, attachments, a quote or mentions.
+// hasContent reports whether req has text, attachments, a quote, mentions or styles.
 func (req SendRequest) hasContent() bool {
-	return req.Body != "" || len(req.Attachments) > 0 || req.Quote != nil || len(req.Mentions) > 0
+	return req.Body != "" || len(req.Attachments) > 0 || req.Quote != nil || len(req.Mentions) > 0 || len(req.Styles) > 0
 }
 
 func (req SendRequest) checkSticker() error {

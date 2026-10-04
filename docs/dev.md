@@ -353,6 +353,32 @@ disposable accounts on both the cgo and `libsignal_go` binaries.
 Record the backend, commands, timestamps and peer-phone observations. Leave the Phase 12 phone
 acceptance item open until both backends pass; this procedure alone is not evidence of a run.
 
+### Text-style live check
+
+Offline tests cover all five style encodings, overlapping mention/style ranges, UTF-16
+offsets with non-ASCII text, edits, direct/group requests, invalid ranges before connecting,
+and plain/JSON command output. Phone rendering has not been verified. Repeat this procedure
+with disposable accounts and both `just build` (pure Go) and `just build-cgo` binaries.
+
+1. Send `-m '😀 hello' --style 3:5:bold --style 3:2:italic` to the peer and to `self`.
+   Confirm that the whole word is bold and its first two letters are also italic, with
+   the emoji unchanged. Check the sync transcript on your own phone.
+2. Send `-m '😀 @{self} café' --style 3:1:bold --style 5:4:monospace` in a disposable
+   group. Confirm the correct mention and styles. Each mention is one unit in the rewritten
+   body; offsets are not measured in the original CLI placeholder text or the displayed name.
+3. Send `-m 'secret crossed code'` with `--style 0:6:spoiler`,
+   `--style 7:7:strikethrough` and `--style 15:4:monospace`. Confirm spoiler conceal/reveal,
+   strikethrough and monospace.
+   Repeat using `--stdin` and with an attachment.
+4. Edit one of your messages with new text and new style ranges. Confirm replacement styles
+   on the peer phone. Previous styles are not automatically retained.
+5. Try `-m '😀' --style 1:1:bold`, an out-of-bounds range and an unsupported style.
+   Confirm that each fails without sending a message.
+
+Record commands, message timestamps, backend and phone observations. Keep phone acceptance
+open until both backends pass. Receive/inbox output currently preserves text and mentions,
+but does not expose styles or apply terminal formatting.
+
 ### Group-settings live check
 
 This manual check is separately opt-in and requires a disposable linked account, an online

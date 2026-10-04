@@ -270,6 +270,11 @@ func dataMessage(req SendRequest, attachments []*signalpb.AttachmentPointer, pro
 		return nil, err
 	}
 
+	err = addTextStyles(msg, req.Styles)
+	if err != nil {
+		return nil, err
+	}
+
 	err = addReactionOrDelete(msg, req)
 	if err != nil {
 		return nil, err

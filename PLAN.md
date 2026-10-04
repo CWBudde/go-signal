@@ -215,10 +215,14 @@ following the docs.
       output and optional UTC `lastSync` in JSON/MCP. Missing timestamps remain unknown;
       incomplete syncs preserve the previous time. Offline backend tests, goldens and docs
       cover both backends.
-- [ ] Optional, only if cheap: text styles (bold/italic/…).
-  - [ ] Choose the input syntax (markup or explicit `start:length:STYLE` offsets).
-  - [ ] Convert styles to body ranges alongside mentions, preserving UTF-16 offsets.
-  - [ ] Test overlapping ranges and non-ASCII text, document the syntax, verify phone rendering.
+- [x] Optional text-style implementation: bold, italic, spoiler, strikethrough and monospace.
+  - [x] Choose explicit repeatable `--style start:length:STYLE` offsets, case-insensitive.
+  - [x] Convert styles to body ranges alongside mentions, preserving UTF-16 offsets after
+        mention substitution; validate ranges before connecting and support edits.
+  - [x] Test overlapping ranges, non-ASCII text, direct/group/self sends, attachments,
+        edit envelopes and invalid inputs; command goldens and docs cover both backends.
+- [ ] Text-style phone acceptance on disposable accounts and both backends
+      ([procedure](docs/dev.md#text-style-live-check)); deferred until a phone session is arranged.
 
 **Done when:** each item has unit/golden tests and docs, and is checked on the phone.
 

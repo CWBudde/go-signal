@@ -27,6 +27,12 @@ for your own messages) and the timestamp is the message's time in ms, as receive
 shows it. --quote-text is the quoted text shown when the recipient no longer has the message.
 It accepts the same @{<recipient>} mention syntax as message text.
 
+--style <start>:<length>:<STYLE> formats message text (repeatable). Styles are bold,
+italic, spoiler, strikethrough and monospace (case-insensitive). Offsets count UTF-16
+code units in the text after mention substitution: each mention occupies one unit,
+and an emoji outside the BMP occupies two. Ranges may overlap but cannot split a character.
+Styles also apply to replacement text with --edit.
+
 --sticker-pack <link> --sticker-id <number> sends one sticker from a Signal pack link
 (https://signal.art/addstickers/#pack_id=...&pack_key=...). Sticker ID 0 is valid.
 The selected image is fetched and uploaded once for all recipients. A sticker is sent alone:
@@ -74,8 +80,7 @@ func newSendCmd(clients *clientOpener, printers *printerFactory, appOpts []app.O
 				return fmt.Errorf("%w: --edit must be a nonzero message timestamp in ms", app.ErrInvalidEdit)
 			}
 
-			req.Recipients = recipientArgs(args, groups)
-			req.Body = message
+			req.Recipients, req.Body = recipientArgs(args, groups), message
 
 			if stdin {
 				var err error
@@ -99,6 +104,7 @@ func newSendCmd(clients *clientOpener, printers *printerFactory, appOpts []app.O
 	flags.StringArrayVar(&req.Attachments, "attach", nil, "attach this file (repeatable)")
 	flags.StringVar(&req.Quote, "quote", "", "reply to the message `<author>:<timestamp>`")
 	flags.StringVar(&req.QuoteText, "quote-text", "", "the quoted text, shown if the recipient lacks the message")
+	flags.StringArrayVar(&req.Styles, "style", nil, "format `start:length:STYLE` (UTF-16 after mentions; repeatable)")
 	flags.Uint64Var(&req.EditTarget, "edit", 0, "edit your message with this sent timestamp in ms")
 	addStickerFlags(cmd, &stickerPack, &stickerID)
 	cmd.MarkFlagsMutuallyExclusive("message", "stdin")
@@ -119,7 +125,7 @@ func sendStickerFlags(cmd *cobra.Command, req *app.SendRequest, pack string, sti
 		return nil
 	}
 
-	for _, flag := range []string{"message", "stdin", "attach", "quote", "quote-text", "edit"} {
+	for _, flag := range []string{"message", "stdin", "attach", "quote", "quote-text", "edit", "style"} {
 		if cmd.Flags().Changed(flag) {
 			return fmt.Errorf("%w: stickers cannot be combined with --%s", signal.ErrInvalidSticker, flag)
 		}

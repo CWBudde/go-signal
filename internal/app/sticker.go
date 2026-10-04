@@ -44,7 +44,8 @@ func checkStickerRequest(req SendRequest) error {
 		return nil
 	}
 
-	if req.Body != "" || len(req.Attachments) != 0 || req.Quote != "" || req.QuoteText != "" || req.EditTarget != 0 {
+	if req.Body != "" || len(req.Attachments) != 0 || req.Quote != "" || req.QuoteText != "" ||
+		req.EditTarget != 0 || len(req.Styles) != 0 {
 		return signal.ErrInvalidSticker
 	}
 

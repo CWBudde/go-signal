@@ -61,6 +61,7 @@ func TestSendStickerPreflight(t *testing.T) {
 		"quote":             func(r *app.SendRequest) { r.Quote = "self:1" },
 		"quote text":        func(r *app.SendRequest) { r.QuoteText = "quote" },
 		"edit":              func(r *app.SendRequest) { r.EditTarget = 1 },
+		"styles":            func(r *app.SendRequest) { r.Styles = []string{firstRuneBold} },
 		"invalid reference": func(r *app.SendRequest) { r.Sticker.PackID = "not-hex" },
 	} {
 		t.Run(name, func(t *testing.T) {

@@ -106,6 +106,7 @@ func TestSendStickerPreflight(t *testing.T) {
 		{"--quote="},
 		{"--quote-text="},
 		{"--edit", "0"},
+		{"--style", "0:1:bold"},
 	} {
 		t.Run(extra[0], func(t *testing.T) {
 			t.Parallel()

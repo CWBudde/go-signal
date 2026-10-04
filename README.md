@@ -131,6 +131,23 @@ and includes `mentions` with UTF-16 offsets and recipient identities. Mentions a
 `send --quote-text`, with the same `@{<recipient>}` syntax as message text, for example
 `--quote-text 'Hi @{@bob.42}'`.
 
+Format sent text with repeatable `--style start:length:STYLE` flags. Supported styles are
+`bold`, `italic`, `spoiler`, `strikethrough` and `monospace`, case-insensitive. Offsets start
+at zero and count UTF-16 code units **after mention substitution**: each valid
+`@{<recipient>}` becomes a single placeholder unit, accented BMP letters count as one,
+and characters such as 😀 count as two. Ranges may overlap but must have positive lengths,
+stay within the text and cover complete characters. Invalid styles fail before connecting.
+
+```sh
+go-signal send self -m '😀 hello' --style 3:5:bold --style 3:2:italic
+go-signal send --group '<base64-id>' -m '😀 @{self} café' --style 3:1:bold --style 5:4:monospace
+```
+
+Styles work with `-m`, `--stdin`, attachments and replacement text in `--edit`. They format
+the message body; `--quote-text` has no style flag. Blank or missing text cannot be styled.
+Received styles currently remain plain text and have no style metadata in receive/inbox JSON.
+Phone rendering remains a separate [live check](docs/dev.md#text-style-live-check).
+
 Sticker sends contain only the sticker: text, stdin, attachments, replies and edits cannot be
 combined with `--sticker-pack` and `--sticker-id`. The pack link supplies its ID and key; only
 the selected image is fetched and uploaded, once for all recipients. Use a sticker ID from
@@ -141,7 +158,7 @@ Downloads use the image embedded in the message, without fallback if it has expi
 
 `send --edit <timestamp>` works for users, groups (`--group <id>`) and `self`, including messages
 sent from your other devices when you know their timestamp. Supply the replacement content;
-go-signal does not reload the original text, mentions, quote or attachments. The live integration
+go-signal does not reload the original text, mentions, styles, quote or attachments. The live integration
 test covers text edits. Signal normally permits 10 edits within 24 hours; Note to Self has no
 time limit. Recipients enforce eligibility, and a successful send only confirms transport.
 See [Signal's editing rules](https://support.signal.org/hc/en-us/articles/6255134251546-Edit-Message).
