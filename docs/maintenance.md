@@ -15,6 +15,12 @@ go-signal depends on three pinned pieces that have to move together:
   `v0.2609.0-purego.14` adds authenticated password-free join-request previews and
   exact signed own-ACI request cancellation in one PATCH, without generic mutation
   retries, full-state reads, profile credentials, member notification or device sync.
+  `v0.2609.0-purego.15` preserves owned contact-sync timer metadata with field presence,
+  stamps group timer seconds from the same retrieved state as the GroupV2 context, clears
+  direct timer versions on group messages and propagates sent-transcript/contact-sync
+  handler failures to acknowledgement. Incomplete contact attachment framing is rejected.
+  `v0.2609.0-purego.16` additionally handles an absent optional contact-avatar MIME type
+  with content detection, preserving avatar bytes and paired timer metadata.
 - [`cwbudde/libsignal-go`](https://github.com/cwbudde/libsignal-go) (tags `vX.Y.Z-cw.N`), the
   pure-Go libsignal that the default backend runs on. Its Rust compat harness is pinned to the
   libsignal tag libsignalgo was generated against (its `decisions/0007-cwbudde-fork-policy.md`).
@@ -25,14 +31,26 @@ go-signal depends on three pinned pieces that have to move together:
 Always move to an upstream release tag, never a pseudo-version of `main`. Commit to the forks'
 release branches and push; don't open PRs.
 
-The cancellation release is the immutable
-[`v0.2609.0-purego.14`](https://github.com/cwbudde/mautrix-signal/tree/v0.2609.0-purego.14)
-tag at [commit `9cd9cbd`](https://github.com/cwbudde/mautrix-signal/commit/9cd9cbd51b0b37b575a0d8d737b35b969967bd66). Its two pure-Go CI runs passed, including the tested old
-and latest Go toolchains. Fork lint still fails on six inherited formatting paths
-that are byte-identical to `.13`; the broad Matrix bridge pure-Go SQLite failure
-also reproduces at `.13`. These are inherited dependency limitations, not passing
-whole-fork checks. Offline membership tests passed on both backends; live server
-and phone behavior remains separately opt-in and unverified by those tests.
+The current disappearing-message release is the immutable
+[`v0.2609.0-purego.16`](https://github.com/cwbudde/mautrix-signal/tree/v0.2609.0-purego.16)
+tag at [commit `622eab1`](https://github.com/cwbudde/mautrix-signal/commit/622eab11d06f82755445d371faf33d876c686e34).
+The downloaded module's Origin and production source match that commit. Both pure-Go CI
+runs passed ([37183497231](https://github.com/cwbudde/mautrix-signal/actions/runs/37183497231),
+[37183497248](https://github.com/cwbudde/mautrix-signal/actions/runs/37183497248)).
+The broad Go CI runs
+([37183497235](https://github.com/cwbudde/mautrix-signal/actions/runs/37183497235),
+[37183497226](https://github.com/cwbudde/mautrix-signal/actions/runs/37183497226))
+failed pre-commit formatting on six libsignalgo files, all byte-identical to the `.14`
+baseline `9cd9cbd`. Local whole-fork lint likewise retains 40 default-backend and 42
+pure-Go inherited findings; the broad Matrix bridge pure-Go build still fails on
+`sqlite3.Error`/`sqlite3.ErrCorrupt`. Its cgo build also needs the external `olm/olm.h`
+header, unavailable in the local validation environment. These are dependency
+limitations, not passing whole-fork checks.
+
+Affected fork tests passed on both backends. Contact transaction rollback is exercised
+with the real cgo database; the pure-Go counterpart uses a controlled transaction fixture
+because the upstream dbutil SQLite dialect handling prevents that real-store fixture there.
+Phone acceptance remains unrun; offline tests do not verify rendering or expiry.
 
 ### 1. Rebase the mautrix fork
 
@@ -66,6 +84,13 @@ binding, sole-action and epoch checks, bounded password-free GET/PATCH transport
 accepted-but-unverified outcomes and fresh-preview-only no-op evidence. Server
 403/404 must remain errors. Run the offline tests on both backends after
 rebasing and confirm no mutation retries or credential logging are introduced. Keep
+the disappearing-message extensions as well: ACI-bound contact timer metadata must own its
+pointer values, retain zero/presence and emit only after successful contact storage; malformed
+or truncated contact framing, downloads, decoding and transactions must fail without partial
+lists or acknowledgements. Preserve sent-message/edit handler failure propagation. Group
+ordinary and edit content must use one retrieved revision for context and seconds, including
+zero, and clear the direct timer version. Exercise all these boundaries on both backends;
+retain the real cgo rollback test and record the controlled pure-Go fixture limitation. Keep
 the fork's fixes that upstream doesn't have yet (the cgo clock fix in `message.go`,
 `prekeybundle.go` and `sessionrecord.go`, the combined endorsement result; see `PUREGO.md`).
 

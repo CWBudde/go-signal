@@ -306,7 +306,7 @@ func TestDaemonReceivesWithoutReadReceipts(t *testing.T) {
 	session := startDaemon(t, fake, "daemon:\n  token: "+httpToken+"\n", addr, "--listen="+addr)
 	session.ready(t)
 
-	messages := daemonMessagesAfterQueue(t, session)
+	messages := daemonMessagesAfterQueue(t, session, fake)
 	if len(messages) != 1 || !strings.Contains(string(messages[0]), "hello inbox") {
 		t.Errorf("inbox response: %s", messages)
 	}

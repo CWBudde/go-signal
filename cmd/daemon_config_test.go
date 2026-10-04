@@ -116,8 +116,16 @@ func seedDaemonInbox(t *testing.T, fake *signaltest.Fake) {
 	}
 }
 
-func daemonMessagesAfterQueue(t *testing.T, session *daemonSession) []json.RawMessage {
+func daemonMessagesAfterQueue(t *testing.T, session *daemonSession, fake *signaltest.Fake) []json.RawMessage {
 	t.Helper()
+
+	if len(fake.Incoming) == 0 {
+		t.Fatal("queue barrier requires a trailing QueueEmpty event")
+	}
+
+	if _, ok := fake.Incoming[len(fake.Incoming)-1].(*signal.QueueEmpty); !ok {
+		t.Fatal("queue barrier requires a trailing QueueEmpty event")
+	}
 
 	ticker := time.NewTicker(time.Millisecond)
 	defer ticker.Stop()
@@ -125,26 +133,13 @@ func daemonMessagesAfterQueue(t *testing.T, session *daemonSession) []json.RawMe
 	deadline := time.NewTimer(5 * time.Second)
 	defer deadline.Stop()
 
-	for {
-		_, body := session.request(t, http.MethodGet, "/v1/health", httpToken, "")
-
-		var health struct {
-			Connection struct {
-				LastEvent time.Time `json:"lastEvent"`
-			} `json:"connection"`
-		}
-
-		err := json.Unmarshal([]byte(body), &health)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if !health.Connection.LastEvent.IsZero() {
-			break
-		}
-
+	// The trailing QueueEmpty is delivered only after Inbox finishes storing and
+	// pruning preceding events. LastEvent is updated before that work completes.
+	for fake.Delivered() < len(fake.Incoming) {
 		select {
 		case <-ticker.C:
+		case <-t.Context().Done():
+			t.Fatal(t.Context().Err())
 		case <-deadline.C:
 			t.Fatal("queue marker never received")
 		}
@@ -210,7 +205,7 @@ func TestDaemonPolicyRetentionPrecedence(t *testing.T) {
 			session := startDaemon(t, fake, config, addr, args...)
 			session.ready(t)
 
-			if messages := daemonMessagesAfterQueue(t, session); len(messages) != test.want {
+			if messages := daemonMessagesAfterQueue(t, session, fake); len(messages) != test.want {
 				t.Errorf("retained %d messages, want %d", len(messages), test.want)
 			}
 

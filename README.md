@@ -101,6 +101,17 @@ test covers text edits. Signal normally permits 10 edits within 24 hours; Note t
 time limit. Recipients enforce eligibility, and a successful send only confirms transport.
 See [Signal's editing rules](https://support.signal.org/hc/en-us/articles/6255134251546-Edit-Message).
 
+Outgoing messages automatically inherit each chat's disappearing-message timer, including
+edits and Note to Self. Direct-chat settings are learned from received messages and the
+phone's contact sync, saved per account, and retained across restarts. Zero seconds explicitly
+disables expiry; delayed older updates cannot replace a newer learned version. An unknown
+chat sends without expiry until its settings are learned. After changing a timer on another
+device, run `receive` or `sync` before relying on the refreshed setting. Send-only connections
+can learn queued settings, but a concurrent send may precede their arrival. Group sends use
+the backend's retrieved group state and its existing cache freshness rules. Expiry happens
+in the receiving Signal clients; go-signal does not automatically purge its local inbox.
+See [the phone acceptance procedure](docs/dev.md#disappearing-messages-live-check).
+
 Pin/unpin messages in users, groups or Note to Self with `pins add` and `pins remove`.
 Supply `--target <author>:<timestamp>` and, for adding, explicit `--duration <seconds>` or
 `--forever`. `pins list --chat <ACI|group:ID>` inspects retained inbox observations offline,

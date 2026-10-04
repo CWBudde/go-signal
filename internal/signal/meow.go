@@ -118,6 +118,9 @@ type meowClient struct {
 	// drainTimeout is sendDrainTimeout (tests shorten it).
 	drainTimeout time.Duration
 	acked        atomic.Bool
+
+	// timerPersistenceContext is a scoped offline-test synchronization hook; nil in production.
+	timerPersistenceContext func(context.Context) context.Context
 }
 
 func (c *meowClient) Link(ctx context.Context, deviceName string, onURI func(string)) (Account, error) {
@@ -560,6 +563,17 @@ func (c *meowClient) handle(raw events.SignalEvent) bool {
 		return false
 	}
 	defer c.handling.Done()
+
+	ctx, cancel := context.WithTimeout(c.zlog.WithContext(context.Background()), overrideSettleTimeout)
+	err := c.learnChatTimers(ctx, raw)
+
+	cancel()
+
+	if err != nil {
+		c.log.Warn("persist chat timers", "error", err)
+
+		return false
+	}
 
 	if list, ok := raw.(*events.ContactList); ok {
 		c.contactsStored(list)
