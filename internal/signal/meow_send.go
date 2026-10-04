@@ -265,17 +265,9 @@ func dataMessage(req SendRequest, attachments []*signalpb.AttachmentPointer, pro
 		msg.ProfileKey = profileKey
 	}
 
-	for _, mention := range req.Mentions {
-		aci, err := aciBytes(mention.Recipient)
-		if err != nil {
-			return nil, fmt.Errorf("mention: %w", err)
-		}
-
-		msg.BodyRanges = append(msg.BodyRanges, &signalpb.BodyRange{
-			Start:           new(mention.Start),
-			Length:          new(mention.Length),
-			AssociatedValue: &signalpb.BodyRange_MentionAciBinary{MentionAciBinary: aci},
-		})
+	msg.BodyRanges, err = mentionBodyRanges(req.Mentions)
+	if err != nil {
+		return nil, err
 	}
 
 	err = addReactionOrDelete(msg, req)
@@ -298,9 +290,32 @@ func dataMessage(req SendRequest, attachments []*signalpb.AttachmentPointer, pro
 		if req.Quote.Text != "" {
 			msg.Quote.Text = new(req.Quote.Text)
 		}
+
+		msg.Quote.BodyRanges, err = mentionBodyRanges(req.Quote.Mentions)
+		if err != nil {
+			return nil, fmt.Errorf("quote: %w", err)
+		}
 	}
 
 	return msg, nil
+}
+
+func mentionBodyRanges(mentions []Mention) ([]*signalpb.BodyRange, error) {
+	var ranges []*signalpb.BodyRange
+
+	for _, mention := range mentions {
+		aci, err := aciBytes(mention.Recipient)
+		if err != nil {
+			return nil, fmt.Errorf("mention: %w", err)
+		}
+
+		ranges = append(ranges, &signalpb.BodyRange{
+			Start: new(mention.Start), Length: new(mention.Length),
+			AssociatedValue: &signalpb.BodyRange_MentionAciBinary{MentionAciBinary: aci},
+		})
+	}
+
+	return ranges, nil
 }
 
 // addReactionOrDelete adds the reaction or remote delete of req to msg, as the official clients

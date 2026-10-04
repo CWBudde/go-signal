@@ -32,7 +32,7 @@ type sendMessageInput struct {
 	Text          string   `json:"text,omitempty"          jsonschema:"the message; @{<user>} mentions a user"`
 	Attachments   []string `json:"attachments,omitempty"   jsonschema:"files relative to the attachment directory"`
 	Quote         string   `json:"quote,omitempty"         jsonschema:"reply to inbox id or <author>:<timestamp>"`
-	QuoteText     string   `json:"quoteText,omitempty"     jsonschema:"quoted text if the recipient lacks the message"`
+	QuoteText     string   `json:"quoteText,omitempty"     jsonschema:"quote text; @{<user>} mentions a user"`
 	EditTimestamp *uint64  `json:"editTimestamp,omitempty" jsonschema:"our message timestamp (ms) to edit"`
 }
 

@@ -174,6 +174,28 @@ type quoteJSON struct {
 	Author    recipientJSON `json:"author"`
 	Timestamp uint64        `json:"timestamp"`
 	Text      string        `json:"text,omitempty"`
+	Mentions  []mentionJSON `json:"mentions,omitempty"`
+}
+
+type mentionJSON struct {
+	Start     uint32        `json:"start"`
+	Length    uint32        `json:"length"`
+	Recipient recipientJSON `json:"recipient"`
+}
+
+func (p *Printer) mentionsJSON(mentions []signal.Mention) []mentionJSON {
+	if len(mentions) == 0 {
+		return nil
+	}
+
+	out := make([]mentionJSON, 0, len(mentions))
+	for _, mention := range mentions {
+		out = append(out, mentionJSON{
+			Start: mention.Start, Length: mention.Length, Recipient: p.recipient(mention.Recipient),
+		})
+	}
+
+	return out
 }
 
 type messageDoc struct {
@@ -182,6 +204,7 @@ type messageDoc struct {
 
 	Poll        *pollJSON        `json:"poll,omitempty"`
 	Body        string           `json:"body,omitempty"`
+	Mentions    []mentionJSON    `json:"mentions,omitempty"`
 	Attachments []attachmentJSON `json:"attachments,omitempty"`
 	Sticker     *stickerJSON     `json:"sticker,omitempty"`
 	Quote       *quoteJSON       `json:"quote,omitempty"`
@@ -193,8 +216,9 @@ type editDoc struct {
 	eventHead
 	envelopeJSON
 
-	TargetTimestamp uint64 `json:"targetTimestamp"`
-	Body            string `json:"body"`
+	TargetTimestamp uint64        `json:"targetTimestamp"`
+	Body            string        `json:"body"`
+	Mentions        []mentionJSON `json:"mentions,omitempty"`
 }
 
 type deleteDoc struct {
@@ -308,6 +332,7 @@ func (p *Printer) eventDoc(evt signal.Event) any {
 		return editDoc{
 			eventHead: head(typeEdit), envelopeJSON: p.envelope(evt.Envelope),
 			TargetTimestamp: evt.TargetTimestamp, Body: evt.Body,
+			Mentions: p.mentionsJSON(evt.Mentions),
 		}
 	case *signal.Delete:
 		return deleteDoc{
@@ -367,6 +392,7 @@ func (p *Printer) messageDocOf(msg *signal.Message, saved []app.SavedAttachment)
 		eventHead:    head(typeMessage),
 		envelopeJSON: p.envelope(msg.Envelope),
 		Body:         msg.Body,
+		Mentions:     p.mentionsJSON(msg.Mentions),
 		Poll:         pollToJSON(msg.Poll),
 		ViewOnce:     msg.ViewOnce,
 		Unsupported:  msg.Unsupported,
@@ -395,6 +421,7 @@ func (p *Printer) messageDocOf(msg *signal.Message, saved []app.SavedAttachment)
 	if msg.Quote != nil {
 		doc.Quote = &quoteJSON{
 			Author: p.recipient(msg.Quote.Author), Timestamp: msg.Quote.Timestamp, Text: msg.Quote.Text,
+			Mentions: p.mentionsJSON(msg.Quote.Mentions),
 		}
 	}
 
@@ -447,7 +474,7 @@ func (p *Printer) eventLine(evt signal.Event) string {
 		return p.envelopeLine(evt.Envelope, fmt.Sprintf("[poll close for %d]", evt.TargetTimestamp))
 	case *signal.Edit:
 		return p.envelopeLine(evt.Envelope,
-			"[edit of message sent "+p.msDateTime(evt.TargetTimestamp)+"] "+oneLine(evt.Body))
+			"[edit of message sent "+p.msDateTime(evt.TargetTimestamp)+"] "+oneLine(p.mentionText(evt.Body, evt.Mentions)))
 	case *signal.Delete:
 		return p.envelopeLine(evt.Envelope, "[deleted message sent "+p.msDateTime(evt.TargetTimestamp)+"]")
 	case *signal.Reaction:
@@ -514,14 +541,14 @@ func (p *Printer) messageMediaText(msg *signal.Message, media app.MessageMediaRe
 	if msg.Quote != nil {
 		quote := "[quote " + p.who(msg.Quote.Author) + " " + p.msDateTime(msg.Quote.Timestamp)
 		if msg.Quote.Text != "" {
-			quote += ": " + oneLine(truncate(msg.Quote.Text, quoteLength))
+			quote += ": " + oneLine(truncate(p.mentionText(msg.Quote.Text, msg.Quote.Mentions), quoteLength))
 		}
 
 		parts = append(parts, quote+"]")
 	}
 
 	if msg.Body != "" {
-		parts = append(parts, oneLine(msg.Body))
+		parts = append(parts, oneLine(p.mentionText(msg.Body, msg.Mentions)))
 	}
 
 	for i, att := range msg.Attachments {

@@ -1023,18 +1023,32 @@ The **envelope fields** appear at the top level of `message`, `edit`, `delete`, 
 
 The envelope fields, plus:
 
-| Field         | Type     | Description                                                                                            |
-| ------------- | -------- | ------------------------------------------------------------------------------------------------------ |
-| `body`        | string   | Message text; _optional_. Mentions are U+FFFC placeholders for now                                     |
-| `attachments` | array    | _optional_. See below                                                                                  |
-| `sticker`     | object   | _optional_. `packId` (hex), `stickerId` (number), _optional_ `emoji` and `image` (see below)           |
-| `poll`        | object   | _optional_. Creation: `question` (string), ordered `options` (string array), `allowMultiple` (boolean) |
-| `quote`       | object   | The message this one replies to; _optional_. `author` (recipient), `timestamp` and _optional_ `text`   |
-| `viewOnce`    | boolean  | `true` for a view-once message; _optional_ (left out when `false`)                                     |
-| `unsupported` | string[] | Parts of the message go-signal can't show yet (names as in `unsupported` below); _optional_            |
+| Field         | Type     | Description                                                                                                      |
+| ------------- | -------- | ---------------------------------------------------------------------------------------------------------------- |
+| `body`        | string   | Original message text; _optional_. Mention ranges refer to this text, usually U+FFFC placeholders                |
+| `mentions`    | array    | _optional_. Mention ranges in `body`; see below                                                                  |
+| `attachments` | array    | _optional_. See below                                                                                            |
+| `sticker`     | object   | _optional_. `packId` (hex), `stickerId` (number), _optional_ `emoji` and `image` (see below)                     |
+| `poll`        | object   | _optional_. Creation: `question` (string), ordered `options` (string array), `allowMultiple` (boolean)           |
+| `quote`       | object   | The message this one replies to; _optional_. `author` (recipient), `timestamp`, _optional_ `text` and `mentions` |
+| `viewOnce`    | boolean  | `true` for a view-once message; _optional_ (left out when `false`)                                               |
+| `unsupported` | string[] | Parts of the message go-signal can't show yet (names as in `unsupported` below); _optional_                      |
 
 A message has a `body`, an attachment, a sticker or poll creation; data messages with none of these are reported
 as `unsupported`.
+
+Each `mentions` entry has `start` and `length` (numbers counting UTF-16 code units in the
+original text) and `recipient` (a recipient object, including `name` when known). An emoji
+outside the basic multilingual plane counts as two UTF-16 units. For example, a mention
+in `"😀 ￼"` starts at 3 and has length 1. `quote.mentions` uses offsets in `quote.text`.
+Edits use the same format in their replacement `body`.
+
+Plain output expands valid ranges to `@Name`, `@me` for self, or the known number/identifier.
+It ignores zero-length, out-of-bounds and surrogate-splitting ranges, and keeps the first valid
+range when mentions overlap after sorting by start. JSON preserves the original offsets and
+text; invalid identities and text-style ranges are excluded from mention metadata. Stored
+inbox events retain these ranges for MCP and daemon output. Older inbox events without ranges
+remain readable. These optional fields are additive; the schema remains version 1.
 
 Each entry of `attachments` has:
 
@@ -1064,10 +1078,11 @@ result envelope and per-recipient outcomes.
 
 The envelope fields (`timestamp` is the edit's own), plus:
 
-| Field             | Type   | Description                     |
-| ----------------- | ------ | ------------------------------- |
-| `targetTimestamp` | number | Timestamp of the edited message |
-| `body`            | string | The new text                    |
+| Field             | Type   | Description                                                              |
+| ----------------- | ------ | ------------------------------------------------------------------------ |
+| `targetTimestamp` | number | Timestamp of the edited message                                          |
+| `body`            | string | The new text                                                             |
+| `mentions`        | array  | _optional_. Mention ranges in the replacement `body`, as described above |
 
 ### `delete`
 

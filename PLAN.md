@@ -188,8 +188,11 @@ following the docs.
       and stamp outgoing direct/group messages; offline tests and docs on both backends.
 - [ ] Disappearing-message phone acceptance on disposable accounts and both backends
       ([procedure](docs/dev.md)); deferred with the live checks until a phone session is arranged.
-- [ ] Render received mentions with the mentioned user's name instead of U+FFFC; carry mentions
-      in quotes.
+- [x] Mention implementation: render names in received message bodies, edits and quotes;
+      retain raw text and UTF-16 metadata in JSON/inbox events; send mentions in quote text.
+      Offline unit/golden tests and docs cover both backends.
+- [ ] Mention and quote phone acceptance on disposable accounts and both backends
+      ([procedure](docs/dev.md#mention-and-quote-live-check)); deferred until a phone session is arranged.
 - [ ] Plain `receive` output shows the ms timestamp that `--quote`/`react --target` need.
 - [ ] Send viewed receipts (`ReceiptViewed` exists in the facade but nothing sends it).
 - [ ] Respect the phone's read-receipt setting before sending read receipts.

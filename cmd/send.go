@@ -25,6 +25,7 @@ attached with --attach (up to 100 MiB each) are uploaded once for all recipients
 --quote <author>:<timestamp> replies to a message: the author is a user recipient (self
 for your own messages) and the timestamp is the message's time in ms, as receive -o json
 shows it. --quote-text is the quoted text shown when the recipient no longer has the message.
+It accepts the same @{<recipient>} mention syntax as message text.
 
 --sticker-pack <link> --sticker-id <number> sends one sticker from a Signal pack link
 (https://signal.art/addstickers/#pack_id=...&pack_key=...). Sticker ID 0 is valid.

@@ -89,6 +89,10 @@ func TestDataMessageUnresolved(t *testing.T) {
 	for _, req := range []signal.SendRequest{
 		{Body: "x", Quote: &signal.Quote{Author: signal.Recipient{Number: "+15550101"}, Timestamp: 1}},
 		{Body: "\uFFFC", Mentions: []signal.Mention{{Length: 1, Recipient: signal.Recipient{Username: "bob.42"}}}},
+		{Body: "reply", Quote: &signal.Quote{
+			Author: signal.Recipient{ACI: otherACI}, Text: "\uFFFC",
+			Mentions: []signal.Mention{{Length: 1, Recipient: signal.Recipient{Username: "quote-user.42"}}},
+		}},
 	} {
 		_, err := signal.DataMessage(req, nil, nil)
 		if !errors.Is(err, signal.ErrUnresolvable) {

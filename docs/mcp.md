@@ -240,7 +240,8 @@ confirmation first with `--confirm`.
     edit eligibility; sending successfully does not prove application. The allowlist and
     `--confirm` apply to edits too, and confirmation names the target timestamp.
   - Sends to users and groups: `recipients` take the same values as a `chat`.
-  - In `text`, `@{<user>}` mentions a user.
+  - In `text` and `quoteText`, `@{<user>}` mentions a user. Inbox JSON retains raw text
+    with optional `mentions` metadata, including ranges in quotes and edits.
   - `attachments` are paths inside `--attach-dir`, relative to it.
   - `quote` makes the message a reply, to an inbox entry `id` or to `<author>:<timestamp>`.
 - **`react`**
