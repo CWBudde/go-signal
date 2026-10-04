@@ -8,7 +8,7 @@
 
 **Tech Stack:** Go 1.26, SQLite (mattn/modernc), signalmeow fork, protobuf, cgo and libsignal_go, existing facade and offline fixtures.
 
-**Spec:** [Approved design](../specs/2026-10-03-disappearing-messages-design.md). Written spec and plan approved; offline implementation and task reviews complete. Whole-branch review and shipping pending; phone acceptance unrun. Use scoped implementation/review subagents as requested.
+**Spec:** [Approved design](../specs/2026-10-03-disappearing-messages-design.md). Written spec and plan approved; offline implementation and task reviews complete. Whole-branch and final-fix reviews complete; shipping pending; phone acceptance unrun. Use scoped implementation/review subagents as requested.
 
 ## Global Constraints
 
@@ -131,7 +131,7 @@ bridge/lint failures remain; record comparison evidence separately.
 - [x] Record the approved plan and baseline evidence, then execute all three tasks without further task-by-task approval prompts. Record implementation rulings and tests in this plan.
 - [x] Update PLAN.md with separate disappearing-message implementation and phone acceptance checkboxes; mark only offline work complete. Keep the Phase 12 done-when-phone condition, Phase 11 live tests and unrelated messaging gaps open.
 - [x] Controller runs just fmt, just lint, full just check (formatting, lint, libsignal guard, cgo race suite, tidy), just check-purego (vet/lint/tests/AES assembly), `CGO_ENABLED=0 go test -count=1 ./...`, just build and just build-cgo. Require fresh passing evidence; classify any inherited fork limitations precisely. Run git diff --check and inspect the changed output/doc contracts.
-- [ ] Request one whole-branch review of actual main and fork ranges. Address material findings, recheck changed boundaries and keep durable review rulings. Final status records must distinguish offline success from unrun phone checks.
+- [x] Request one whole-branch review of actual main and fork ranges. Address material findings, recheck changed boundaries and keep durable review rulings. Final status records must distinguish offline success from unrun phone checks.
 - [ ] Commit verified integration records, normally push feat/disappearing-messages and create one PR targeting main with concrete problem, final behaviour, fork provenance, validation and live limitation. Inspect final-head CI and report its actual outcome. No merge or live Signal calls. Clean only this plan's owned scratch workspace; retain worktrees/branches for review.
 
 ## Planning record
@@ -150,3 +150,13 @@ Task 2 review required strict contact framing: reject incomplete message/avatar 
 Controller Task 3 verification: `just fmt` changed no files, repository lint reported zero issues, libsignal guard matched v0.102.2 and cgo race/tidy passed on a full rerun. An initial run hit the unchanged fake daemon test's first-event/inbox timing gap; five focused race runs and the full rerun passed. `just check-purego`, the no-backend full suite, `just build` and `just build-cgo` passed. Product task commit `9317138`; independent task and whole-branch reviews remain pending. Phone acceptance is unrun.
 
 Task 3 independent spec/quality review approved `18413f0..9317138` with no findings. All offline implementation tasks are complete. PLAN.md marks implementation separately from deferred phone acceptance; other Phase 12 work and Phase 11 live checks remain open. Whole-branch review and shipping follow.
+
+Whole-branch review approved the offline implementation with no Critical or Important findings. One final fix wave addressed the inherited daemon fixture race (`2509154`) and reproduced/fixed the optional contact avatar MIME panic (`622eab1` in the fork). Scoped re-review found both addressed with no new breakage. Fresh controller affected fork suites pass on pure-Go and cgo race; API parity remains 516 declarations. The fresh immutable `v0.2609.0-purego.16` tag points to `622eab11d06f82755445d371faf33d876c686e34`; downloaded Origin and all five changed production files match. The `.15` tag remains unchanged. Final main verification and publication records follow.
+
+Implementation rulings, in order:
+
+- Use real cgo SQLite plus a controlled pure-Go fork contact fixture rather than add a new dependency. If wrong, backend-specific contact SQL needs stronger coverage; facade/store still exercise real modernc transactions.
+- Tighten incomplete contact framing as part of the no-partial-list/ack contract. If valid phone framing is rejected, sync may redeliver until compatibility is corrected.
+- Address the observed daemon fixture race and inherited avatar MIME panic in the final fix wave. This costs an additional immutable fork release; an incorrect barrier or MIME expectation would require test/compatibility adjustment.
+
+Final integration at `.16`: controller `just check` passes (format0, lint0, libsignal v0.102.2, full cgo race suite, tidy); `just check-purego`, the no-backend suite, `just build` and `just build-cgo` pass. Both exact-head fork pure-Go CI runs pass; broad fork formatting/bridge limitations remain documented in maintenance. Phone acceptance is unrun. PR publication follows.

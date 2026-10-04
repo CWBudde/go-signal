@@ -19,6 +19,8 @@ go-signal depends on three pinned pieces that have to move together:
   stamps group timer seconds from the same retrieved state as the GroupV2 context, clears
   direct timer versions on group messages and propagates sent-transcript/contact-sync
   handler failures to acknowledgement. Incomplete contact attachment framing is rejected.
+  `v0.2609.0-purego.16` additionally handles an absent optional contact-avatar MIME type
+  with content detection, preserving avatar bytes and paired timer metadata.
 - [`cwbudde/libsignal-go`](https://github.com/cwbudde/libsignal-go) (tags `vX.Y.Z-cw.N`), the
   pure-Go libsignal that the default backend runs on. Its Rust compat harness is pinned to the
   libsignal tag libsignalgo was generated against (its `decisions/0007-cwbudde-fork-policy.md`).
@@ -30,19 +32,20 @@ Always move to an upstream release tag, never a pseudo-version of `main`. Commit
 release branches and push; don't open PRs.
 
 The current disappearing-message release is the immutable
-[`v0.2609.0-purego.15`](https://github.com/cwbudde/mautrix-signal/tree/v0.2609.0-purego.15)
-tag at [commit `0d00d3f`](https://github.com/cwbudde/mautrix-signal/commit/0d00d3fd3bc86f49b89c77183f841c5eb516c25e).
+[`v0.2609.0-purego.16`](https://github.com/cwbudde/mautrix-signal/tree/v0.2609.0-purego.16)
+tag at [commit `622eab1`](https://github.com/cwbudde/mautrix-signal/commit/622eab11d06f82755445d371faf33d876c686e34).
 The downloaded module's Origin and production source match that commit. Both pure-Go CI
-runs passed ([37181145486](https://github.com/cwbudde/mautrix-signal/actions/runs/37181145486),
-[37181145445](https://github.com/cwbudde/mautrix-signal/actions/runs/37181145445)).
+runs passed ([37183497231](https://github.com/cwbudde/mautrix-signal/actions/runs/37183497231),
+[37183497248](https://github.com/cwbudde/mautrix-signal/actions/runs/37183497248)).
 The broad Go CI runs
-([37181145488](https://github.com/cwbudde/mautrix-signal/actions/runs/37181145488),
-[37181145480](https://github.com/cwbudde/mautrix-signal/actions/runs/37181145480))
+([37183497235](https://github.com/cwbudde/mautrix-signal/actions/runs/37183497235),
+[37183497226](https://github.com/cwbudde/mautrix-signal/actions/runs/37183497226))
 failed pre-commit formatting on six libsignalgo files, all byte-identical to the `.14`
 baseline `9cd9cbd`. Local whole-fork lint likewise retains 40 default-backend and 42
 pure-Go inherited findings; the broad Matrix bridge pure-Go build still fails on
-`sqlite3.Error`/`sqlite3.ErrCorrupt`. These are dependency limitations, not passing
-whole-fork checks.
+`sqlite3.Error`/`sqlite3.ErrCorrupt`. Its cgo build also needs the external `olm/olm.h`
+header, unavailable in the local validation environment. These are dependency
+limitations, not passing whole-fork checks.
 
 Affected fork tests passed on both backends. Contact transaction rollback is exercised
 with the real cgo database; the pure-Go counterpart uses a controlled transaction fixture

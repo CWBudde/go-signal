@@ -1,7 +1,7 @@
 # Inherit disappearing-message timers
 
 Date: 2026-10-03. Baseline: `9e1781d`, after merged PR #26.
-Status: written spec approved by the user; offline implementation and task reviews complete; whole-branch review and shipping pending. Phone acceptance is unrun.
+Status: written spec approved by the user; offline implementation and task reviews complete; whole-branch and final-fix reviews complete; shipping pending. Phone acceptance is unrun.
 
 ## Intent and scope
 
