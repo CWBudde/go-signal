@@ -22,6 +22,8 @@ import (
 //nolint:cyclop // one case per event type
 func convertEvent(raw events.SignalEvent, ownACI string) Event {
 	switch evt := raw.(type) {
+	case *events.Story:
+		return convertStory(evt, ownACI)
 	case *events.ChatEvent:
 		return convertChatEvent(evt, ownACI)
 	case *events.Receipt:

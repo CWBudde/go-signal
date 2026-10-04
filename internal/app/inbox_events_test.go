@@ -18,6 +18,7 @@ func TestInboxEntryChatAndTime(t *testing.T) {
 	changedAt := time.UnixMilli(5000)
 
 	events := []signal.Event{
+		&signal.Story{Envelope: env, Text: &signal.StoryText{Text: "story"}},
 		&signal.Edit{Envelope: env, TargetTimestamp: 1000, Body: "fixed"},
 		&signal.Delete{Envelope: env, TargetTimestamp: 1000},
 		&signal.Reaction{Envelope: env, Emoji: "👍", TargetAuthor: aliceUser(), TargetTimestamp: 1000},
@@ -45,10 +46,11 @@ func TestInboxEntryChatAndTime(t *testing.T) {
 		{groupChat(), time.UnixMilli(3000)},
 		{groupChat(), time.UnixMilli(3000)},
 		{groupChat(), time.UnixMilli(3000)},
+		{groupChat(), time.UnixMilli(3000)},
 		{bobChat, time.UnixMilli(4000)},
 		{bobChat, changedAt},
-		{bobChat, entries[6].ReceivedAt},
-		{aliceChat(), entries[7].ReceivedAt},
+		{bobChat, entries[7].ReceivedAt},
+		{aliceChat(), entries[8].ReceivedAt},
 	} {
 		entry := entries[i]
 		if entry.Chat.Key() != want.chat.Key() || !entry.Time.Equal(want.time) {

@@ -1017,6 +1017,7 @@ any release, so scripts should skip types they don't know.
 
 | `type`              | Event                                                            |
 | ------------------- | ---------------------------------------------------------------- |
+| `story`             | A received text/media story, including sent-device transcripts   |
 | `message`           | A message, received or sent from another of our devices (`sync`) |
 | `edit`              | An earlier message was edited                                    |
 | `delete`            | An earlier message was deleted for everyone (remote delete)      |
@@ -1066,7 +1067,7 @@ when the event isn't about a single conversation.
 | `recipient`  | recipient | The other party of a 1:1 chat (see `sync`); _optional_                              |
 
 The **envelope fields** appear at the top level of `message`, `edit`, `delete`, `reaction`, `pin`, `unpin`,
-`typing` and `unsupported`:
+`typing`, `story` and `unsupported`:
 
 | Field        | Type      | Description                                                                                                                                                                            |
 | ------------ | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1131,6 +1132,31 @@ Sticker image downloads use the embedded message attachment. An expired or inval
 produces `sticker.image.downloadError`; other media and subsequent messages still proceed.
 These fields are additive; the schema remains version 1. Sticker sends use the existing send
 result envelope and per-recipient outcomes.
+
+### `story`
+
+A story has the shared envelope fields, `allowsReplies` (boolean), and either `file`
+(an attachment object) or `text` (a text card). Optional `mentions` use the same UTF-16
+format as message mentions. A malformed or missing attachment becomes `unsupported`
+with `content: "invalidStory"` and its original envelope.
+
+The text card contains optional `body`, `style`, `foregroundColor`, `textBackgroundColor`,
+`backgroundColor`, `gradient` and `preview`. Style is a lowercase wire name (`default`,
+`regular`, `bold`, `serif`, `script`, `condensed`), or the wire enum number for a future style.
+Colors are packed ARGB integers; an explicit zero is preserved. A gradient can have optional
+legacy `startColor`/`endColor`, `angle` in degrees, and `colors`/`positions` arrays for modern
+stops. Non-finite gradient positions are reported as `invalidStory`.
+
+A preview contains `url` and optional `title`, `description`, `date` (wire milliseconds) and
+`image` (an attachment object). `file` and preview `image` use the message attachment fields,
+including `path`/`downloadError` with `--download-attachments`. Attachment encryption keys,
+digests, CDN locations and group master keys are never printed.
+
+`sync: true` identifies a story sent from another of our devices. Group stories have a group
+chat; private sent stories use the account's own chat because there is no single destination.
+Audience/distribution lists are not represented. Stories use the same shape in the
+MCP/daemon inbox; they do not count as unread messages or generate read/viewed receipts.
+Retained entries are not automatically removed at story expiry. Schema version remains 1.
 
 ### `edit`
 

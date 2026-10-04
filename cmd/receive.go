@@ -52,6 +52,10 @@ Quoted messages, edits, reactions and receipts also show the original message's 
 to dir, which is created if missing, as "<timestamp>-<n>-<name>", where name is the sender's file
 name reduced to safe characters. Existing files are kept; a taken name gets a number. The output
 shows each file's path; a failed download is reported there and does not stop receive.
+Story media and link-preview images are saved through the same verified download path.
+Story events show text cards, media, reply permission and transcripts sent by other devices.
+They do not send read or viewed receipts, and do not count as unread inbox messages.
+
 Embedded sticker images are also saved, as "<timestamp>-sticker-<id><extension>"; sticker
 downloads use the message's image pointer without a permanent-pack fallback.
 
@@ -113,7 +117,7 @@ func newReceiveCmd(clients *clientOpener, printers *printerFactory) *cobra.Comma
 		"exit after this long without events (one-shot mode)")
 	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "stream events until interrupted")
 	cmd.Flags().IntVar(&maxEvts, "max", 0, "exit after this many events with content (0: no limit)")
-	cmd.Flags().StringVar(&dlDir, "download-attachments", "", "save attachments and sticker images to this directory")
+	cmd.Flags().StringVar(&dlDir, "download-attachments", "", "save attachments, stickers and story media here")
 	cmd.Flags().BoolVar(&rcpts, "send-read-receipts", false, "send read receipts for received messages")
 	cmd.MarkFlagsMutuallyExclusive("timeout", "follow")
 

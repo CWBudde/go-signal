@@ -84,6 +84,7 @@ const (
 	storedPin               = "pin"
 	storedUnpin             = "unpin"
 	storedMessage           = "message"
+	storedStory             = "story"
 	storedEdit              = "edit"
 	storedDelete            = "delete"
 	storedReaction          = "reaction"
@@ -100,7 +101,7 @@ const UnreadableEntry = "unreadableInboxEntry"
 
 // marshalEvent encodes evt and its chat for the inbox.
 //
-//nolint:cyclop // one case per event type
+//nolint:cyclop,funlen // one case per event type
 func marshalEvent(evt Event, chat Chat) ([]byte, error) {
 	var (
 		typ     string
@@ -116,6 +117,8 @@ func marshalEvent(evt Event, chat Chat) ([]byte, error) {
 		typ = "pollVote"
 	case *PollClose:
 		typ = "pollClose"
+	case *Story:
+		typ = storedStory
 	case *Message:
 		typ = storedMessage
 	case *Edit:
@@ -189,6 +192,8 @@ func decodeEvent(stored storedEvent) (Event, error) {
 		evt = &PollVote{}
 	case "pollClose":
 		evt = &PollClose{}
+	case storedStory:
+		evt = &Story{}
 	case storedMessage:
 		evt = &Message{}
 	case storedEdit:

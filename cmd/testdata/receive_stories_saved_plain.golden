@@ -1,0 +1,4 @@
+[2026-09-20 12:30:01 UTC; timestamp=1789907401000] aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa → me: [story; replies allowed] Hello\nStory [link https://example.org] Story link [attachment image/png 3 B story.png → $DIR/1789907401000-1-story.png]
+[2026-09-20 12:30:01 UTC; timestamp=1789907401000] aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa → me: [story; replies disabled] [attachment image/png 3 B story.png (download failed: CDN unreachable)]
+[2026-09-20 12:30:02 UTC; timestamp=1789907402000] me → group:Z3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXAtaWQtZ3JvdXA=: [story; replies disabled] Shared from phone
+[2026-09-20 12:30:01 UTC; timestamp=1789907401000] aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa → me: still receiving

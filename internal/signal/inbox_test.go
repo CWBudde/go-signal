@@ -38,14 +38,38 @@ func TestChatKey(t *testing.T) {
 
 // TestInboxEventRoundTrip stores every storable event type and checks that it comes back as it
 // was, with its chat.
+//
+//nolint:funlen // one fixture for each storable event
 func TestInboxEventRoundTrip(t *testing.T) {
 	t.Parallel()
 
 	alice := signal.Recipient{ACI: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", Number: "+4915199999999"}
-	env := signal.Envelope{Sender: alice, Chat: signal.Chat{Recipient: alice}, Timestamp: 1000, ServerTimestamp: 1001}
+	env := signal.Envelope{
+		Sender:          alice,
+		Chat:            signal.Chat{Recipient: alice},
+		Timestamp:       1000,
+		ServerTimestamp: 1001,
+	}
 	chat := signal.Chat{GroupID: testGroupID}
 
 	events := []signal.Event{
+		&signal.Story{
+			Envelope:      env,
+			AllowsReplies: true,
+			File: &signal.Attachment{
+				ContentType: pngType,
+				Remote:      signal.RemoteAttachment{CDNKey: "story-image", Key: []byte{1, 2}},
+			},
+		},
+		&signal.Story{
+			Envelope: env,
+			Text: &signal.StoryText{
+				Text:            "retained text card",
+				BackgroundColor: new(uint32(0)),
+				Gradient:        &signal.StoryGradient{Colors: []uint32{1, 2}, Positions: []float32{0, 1}},
+				Preview:         &signal.StoryPreview{URL: "https://example.org"},
+			},
+		},
 		&signal.Message{
 			Envelope: env, Body: "hi",
 			Attachments: []signal.Attachment{{
@@ -58,7 +82,13 @@ func TestInboxEventRoundTrip(t *testing.T) {
 		},
 		&signal.Edit{Envelope: env, TargetTimestamp: 900, Body: "edited"},
 		&signal.Delete{Envelope: env, TargetTimestamp: 900},
-		&signal.Reaction{Envelope: env, Emoji: "👍", Remove: true, TargetAuthor: alice, TargetTimestamp: 900},
+		&signal.Reaction{
+			Envelope:        env,
+			Emoji:           "👍",
+			Remove:          true,
+			TargetAuthor:    alice,
+			TargetTimestamp: 900,
+		},
 		&signal.Typing{Envelope: env, Started: true},
 		&signal.Receipt{Sender: alice, Type: signal.ReceiptRead, Timestamps: []uint64{1, 2}},
 		&signal.ReadSync{Timestamp: 5, Messages: []signal.ReadMark{{Sender: alice, Timestamp: 4}}},

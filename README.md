@@ -83,7 +83,7 @@ go-signal send +491234567890 --edit 1790000000000 -m "Corrected text"
 # 3. Receive what is waiting on the server, or keep streaming with --follow.
 go-signal receive
 go-signal receive --follow -o json   # one JSON document per event (docs/json.md)
-go-signal receive --download-attachments ./downloads   # includes embedded sticker images
+go-signal receive --download-attachments ./downloads   # includes sticker and story media
 ```
 
 `go-signal <command> --help` and the man pages (`man go-signal-send`) describe every command.
@@ -97,6 +97,13 @@ sync has been recorded. The command reads local data and does not contact the se
 setting. Run `account sync` after changing it. Until the setting is learned, the backend permits
 peer receipts; when disabled, it still attempts read sync to your other devices. Success and
 mark-read sender counts describe submissions, not confirmed delivery.
+
+`receive` also shows text and media stories, including stories sent by another of your devices.
+`--download-attachments` saves story media and link-preview images. JSON preserves text-card
+presentation (colors, gradients and style) and reply permission; plain output shows text and
+media details. Stories are retained as events in the MCP/daemon inbox, without message unread
+counts or automatic read/viewed receipts. Retained stories and downloaded files are not
+removed when the phone's story expires. Story sending and audience management remain planned.
 
 Plain receive output shows the local date and the message's exact millisecond timestamp:
 

@@ -319,6 +319,7 @@ func (c *meowClient) Close() error {
 // restart: signalmeow only reports a status that differs from the last one it reported.
 func (c *meowClient) startLoops(ctx context.Context) (<-chan loopStatus, error) {
 	cli := signalmeow.NewClient(c.connDevice, c.zlog, c.handle)
+	cli.ReceiveStories = true
 
 	raw, err := cli.StartReceiveLoops(ctx)
 	if err != nil {

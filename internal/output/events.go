@@ -301,6 +301,8 @@ type connectionDoc struct {
 //nolint:cyclop,funlen // one case per event type
 func (p *Printer) eventDoc(evt signal.Event) any {
 	switch evt := evt.(type) {
+	case *signal.Story:
+		return p.storyDocOf(evt, app.StoryMediaResult{})
 	case *signal.Message:
 		return p.messageDocOf(evt, nil)
 	case *signal.Pin:
@@ -461,6 +463,8 @@ const self = "me"
 //nolint:cyclop // one case per event type
 func (p *Printer) eventLine(evt signal.Event) string {
 	switch evt := evt.(type) {
+	case *signal.Story:
+		return p.envelopeLine(evt.Envelope, p.storyText(evt, app.StoryMediaResult{}))
 	case *signal.Message:
 		return p.envelopeLine(evt.Envelope, p.messageText(evt, nil))
 	case *signal.Pin:

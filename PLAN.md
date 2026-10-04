@@ -255,8 +255,14 @@ following the docs.
 
 ### Phase 14 — Stories and sticker extras
 
-- [ ] Stories: define and implement send/receive. Needs fork transport work first: the pinned
-      signalmeow drops story payloads on receive and has no story-send API.
+- [x] Story reception implementation: opt-in fork transport delivers incoming and sent-device
+      text/media stories, with typed events, group/profile key storage and failed-handler
+      acknowledgement protection. Plain/JSON output, verified media downloads, durable inbox
+      retention and MCP list/wait tests cover both backends. No automatic story receipts.
+- [ ] Story sending: define the CLI and audience model, then implement fork transport and
+      facade/command/output tests and docs; signalmeow still has no story-send API.
+- [ ] Story reception phone acceptance on disposable accounts and both backends
+      ([procedure](docs/dev.md#story-reception-live-check)); deferred until a phone session is arranged.
 - [ ] Sticker pack installation/caching, expired-image fallback, MCP sticker tools.
 - [ ] Polls: direct-chat sends, automatic vote counters, durable projections, MCP/daemon poll tools.
 - [ ] Facade/command/output tests, docs and live checks for each.
@@ -302,7 +308,9 @@ signalmeow doesn't cover it; build on `libsignalgo` + `web` if there is demand.
 
 ### Known limitations (no task yet)
 
-- signalmeow drops stories, null messages and the destination number of sync transcripts.
+- signalmeow drops null messages and the destination number of sync transcripts.
+- Received stories are retained as inbox events, without automatic expiry removal or audience
+  projections. Story media downloads are currently CLI-only.
 - Attachments are held in memory (up to 100 MiB); failed downloads can't be retried later; no
   thumbnails, blurhash or voice-note flags on send or receive.
 - The storage service is always fetched in full; contact avatars, blocked groups and story

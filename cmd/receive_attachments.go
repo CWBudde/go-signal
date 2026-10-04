@@ -61,7 +61,7 @@ func (p eventPrinter) print(ctx context.Context, evt signal.Event) error {
 
 	msg, ok := evt.(*signal.Message)
 	if !ok || p.dir == "" || !messageHasMedia(msg) {
-		return p.out.Event(evt) //nolint:wrapcheck // the caller wraps it
+		return p.printOther(ctx, evt)
 	}
 
 	saved := p.app.SaveMessageMedia(ctx, app.SaveAttachmentsRequest{Dir: p.dir, Message: msg})
@@ -87,4 +87,13 @@ func (p eventPrinter) print(ctx context.Context, evt signal.Event) error {
 
 func messageHasMedia(msg *signal.Message) bool {
 	return len(msg.Attachments) > 0 || (msg.Sticker != nil && msg.Sticker.Image != nil)
+}
+
+func (p eventPrinter) printOther(ctx context.Context, evt signal.Event) error {
+	if story, ok := evt.(*signal.Story); ok && p.dir != "" {
+		saved := p.app.SaveStoryMedia(ctx, p.dir, story)
+		return p.out.SavedStory(story, saved) //nolint:wrapcheck // the caller wraps it
+	}
+
+	return p.out.Event(evt) //nolint:wrapcheck // the caller wraps it
 }

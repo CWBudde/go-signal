@@ -24,6 +24,9 @@ go-signal depends on three pinned pieces that have to move together:
   `v0.2609.0-purego.17` adds an opt-in provisioning API that renews only an idle scan
   wait. After an envelope arrives, acknowledgement, decryption and registration failures
   are terminal. The original API keeps its one-shot two-minute timeout.
+  `v0.2609.0-purego.19` adds opt-in websocket story delivery and typed incoming/
+  sent-transcript story events, retaining group/profile key storage and handler-failure
+  acknowledgement behavior. Story handling sends no delivery/read/viewed receipts.
 - [`cwbudde/libsignal-go`](https://github.com/cwbudde/libsignal-go) (tags `vX.Y.Z-cw.N`), the
   pure-Go libsignal that the default backend runs on. Its Rust compat harness is pinned to the
   libsignal tag libsignalgo was generated against (its `decisions/0007-cwbudde-fork-policy.md`).
@@ -70,6 +73,22 @@ The broad Go CI runs failed pre-commit formatting
 on the same six libsignalgo files, all byte-identical to the `.16` baseline.
 QR-refresh phone acceptance remains unrun.
 
+The story-reception release is the immutable
+[`v0.2609.0-purego.19`](https://github.com/cwbudde/mautrix-signal/tree/v0.2609.0-purego.19)
+tag at [commit `f2b5e49`](https://github.com/cwbudde/mautrix-signal/commit/f2b5e49cc89af2582df1d1dd42f34e3be446f9de).
+The downloaded module's Origin and all changed fork files match that commit. The affected
+`pkg/libsignalgo/...` and `pkg/signalmeow/...` suites passed locally on pure Go and cgo
+with the race detector on cgo. Pure-Go vet and the backend API parity check passed.
+Both pure-Go CI runs passed
+([37238649485](https://github.com/CWBudde/mautrix-signal/actions/runs/37238649485),
+[37238648974](https://github.com/CWBudde/mautrix-signal/actions/runs/37238648974)).
+The broad Go CI runs failed pre-commit formatting
+([37238649428](https://github.com/CWBudde/mautrix-signal/actions/runs/37238649428),
+[37238648965](https://github.com/CWBudde/mautrix-signal/actions/runs/37238648965))
+on six libsignalgo files, all byte-identical to the `.17` baseline. Changed story files pass
+the fork's exact `goimports -local github.com/cwbudde/mautrix-signal` formatting check.
+Story reception phone acceptance remains unrun; sending and audience management remain planned.
+
 ### 1. Rebase the mautrix fork
 
 In a `cwbudde/mautrix-signal` checkout:
@@ -109,6 +128,11 @@ lists or acknowledgements. Preserve sent-message/edit handler failure propagatio
 ordinary and edit content must use one retrieved revision for context and seconds, including
 zero, and clear the direct timer version. Exercise all these boundaries on both backends;
 retain the real cgo rollback test and record the controlled pure-Go fixture limitation.
+Preserve story reception: go-signal opts into `X-Signal-Receive-Stories` before connecting;
+private blocked stories are omitted, group stories retain typed group keys and revisions,
+private sent transcripts use the own-account stream, and failed handlers/storage retain
+buffered plaintext without acknowledgement. Story timestamps come from client envelopes or
+sent transcripts, with no automatic receipts. Verify these paths on both backends.
 Preserve scan-only QR renewal: fresh socket/address/key, caller cancellation, no retries
 after a submitted envelope (including acknowledgement failures), and one-shot registration. Keep
 the fork's fixes that upstream doesn't have yet (the cgo clock fix in `message.go`,

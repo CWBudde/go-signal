@@ -595,6 +595,8 @@ func isIncoming(evt signal.Event) bool {
 //nolint:cyclop // One case per envelope-bearing event type.
 func envelopeOf(evt signal.Event) (signal.Envelope, bool) {
 	switch evt := evt.(type) {
+	case *signal.Story:
+		return evt.Envelope, true
 	case *signal.Message:
 		return evt.Envelope, true
 	case *signal.PollVote:

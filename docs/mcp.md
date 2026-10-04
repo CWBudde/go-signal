@@ -297,6 +297,7 @@ recipient.
 The inbox stores these event types:
 
 - messages, including those you sent from another device;
+- text and media stories, including sent-device transcripts;
 - edits;
 - deletes;
 - reactions;
@@ -306,6 +307,11 @@ The inbox stores these event types:
 It doesn't store typing indicators, receipts or connection changes. When another of your devices
 marks messages as read, they are marked read in the inbox too. An entry that can't be decoded any
 more, e.g. after an upgrade, shows as `unsupported` with `content` `unreadableInboxEntry`.
+
+Stories have `unread: false` and do not generate READ or VIEWED receipts. They remain in
+list/wait results and resources until pruned, including after phone story expiry. Story media
+can be saved with CLI `receive --download-attachments`; the MCP attachment tools currently
+accept ordinary message attachments only.
 
 The inbox lives in the account's database. It keeps what was received while no client was
 reading, also across restarts. Messages that arrive while the server isn't running wait on

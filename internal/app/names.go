@@ -215,13 +215,15 @@ func (b *NameBook) reload(ctx context.Context) (bool, error) {
 // EventRecipients returns the users evt names: sender, chat partner, quote or reaction author,
 // mentioned users and the senders of read messages.
 //
-//nolint:cyclop // one case per event type
+//nolint:cyclop,funlen // one case per event type
 func EventRecipients(evt signal.Event) []signal.Recipient {
 	envelope := func(env signal.Envelope, more ...signal.Recipient) []signal.Recipient {
 		return append([]signal.Recipient{env.Sender, env.Chat.Recipient}, more...)
 	}
 
 	switch evt := evt.(type) {
+	case *signal.Story:
+		return appendMentionRecipients(envelope(evt.Envelope), evt.Mentions)
 	case *signal.Message:
 		out := envelope(evt.Envelope)
 		if evt.Quote != nil {

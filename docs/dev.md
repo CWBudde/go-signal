@@ -1012,3 +1012,35 @@ with separate data directories. Record backend versions, account selection and f
    proves no server change occurred. Confirm removal notifications on the phones.
 7. Restore invitations and memberships as needed, then remove the test peers and leave the
    disposable groups. Keep phone acceptance open until both backends pass these observations.
+
+## Story reception live check
+
+This is an opt-in production phone session, not part of the offline checks. Run it for both
+cgo and pure-Go binaries using separate linked data directories and disposable test accounts.
+Story sending from go-signal is still planned and is not covered by this procedure.
+
+1. Have a peer's phone share a text story with the test account. Run `receive -o json` and
+   confirm one `story` event has the peer ACI, sender timestamp, reply permission, text card
+   and any solid/gradient background. Compare plain output, including Unicode and mentions.
+2. Share image and video stories with captions. Confirm their attachment metadata and save
+   them with `--download-attachments`; compare downloaded bytes with the original files.
+   Share a text card with a link preview and verify its preview image uses the same path.
+3. Share a group story in a disposable group. Confirm the group ID/title and retained key;
+   check `groups show`. A group story from a blocked member follows the existing group
+   message policy, while a direct story from a blocked sender is omitted.
+4. Send private and group stories from the test account's phone. Confirm `sync: true`, the
+   phone's sent timestamp, group routing and the account's own chat for private transcripts.
+   Do not interpret the private transcript chat as its audience.
+5. With `--send-read-receipts`, print stories and an ordinary incoming message. Confirm that
+   only the ordinary message generates READ receipts and no story VIEWED receipt is sent.
+6. Receive stories through `mcp serve` or `daemon serve`, then restart and list retained
+   entries. Confirm story text/media metadata survives, remains outside message unread
+   counts, and JSON contains no attachment keys, digests or group keys. Entries/files remain
+   after phone expiry until explicitly pruned/deleted; this is an event log, not a story feed.
+7. Interrupt before a pending story is consumed and reconnect; confirm it is delivered
+   again. Consume it, close cleanly and confirm it is acknowledged. Include a failed CDN
+   download and verify that a later ordinary message still arrives.
+
+Record server/phone observations and backend versions. Restore the phone's block list and
+remove the disposable group, stories, linked devices and saved media. This procedure has not
+been run; offline tests do not establish production delivery, rendering or phone expiry.
