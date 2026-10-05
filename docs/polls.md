@@ -1,10 +1,15 @@
-# Group polls
+# Polls
 
-Poll sends support one group per command. Use its canonical base64 ID from `groups list`.
-Creation, voting and closing report delivery per group member; partial failures return a
-nonzero exit code and are not retried automatically. Delivery does not prove phone rendering.
+Poll sends support exactly one chat per command. Use `--group` with its canonical base64 ID
+from `groups list`, or `--recipient` with an ACI, E.164 number, `@username` or `self`.
+Do not combine or repeat these destination flags. `self` sends an own-device transcript.
+Creation, voting and closing report delivery per direct recipient or group member; partial
+failures return a nonzero exit code and are not retried automatically. Delivery does not prove phone rendering.
 
 ```sh
+go-signal polls create --recipient '+15550101' --question 'When?' --option 'Today' --option 'Tomorrow'
+go-signal polls vote --recipient '+15550101' --target '<creator-aci>:<creation-timestamp>' --vote-count 1 --option 0
+go-signal polls close --recipient '+15550101' --target '<creation-timestamp>'
 go-signal polls create --group '<group-id>' --question 'When?' --option 'Today' --option 'Tomorrow'
 go-signal polls create --group '<group-id>' --question 'Pick one' --option 'Yes' --option 'No' --single-choice
 go-signal polls vote --group '<group-id>' --target '<creator-aci>:<creation-timestamp>' --vote-count 1 --option 0
@@ -31,8 +36,8 @@ options. Coordinate it with activity on your other devices. Older counters can b
 receivers; incomplete local history cannot safely choose the next one. Withdrawal requires
 explicit `--clear` instead of `--option`.
 
-Polls are standalone content and use their own command group. Direct-chat and self sending,
-automatic vote-counter allocation and poll write tools for MCP/daemon are deferred.
+Polls are standalone content and use their own command group. Automatic vote-counter
+allocation, durable poll projections and poll write tools for MCP/daemon are deferred.
 Incoming polls, votes and closures from any chat and your other devices appear in `receive`.
 Creation is a `message` with `poll`; controls are `pollVote` and `pollClose` events.
 Malformed poll content is reported as `unsupported` with `content:"invalidPoll"`.
@@ -44,17 +49,19 @@ The daemon and MCP server collect received events in the local inbox. Stop that 
 release the account lock, then inspect a poll without connecting or sending:
 
 ```sh
+go-signal polls show --recipient '<chat-aci>' --target '<creator-aci>:<creation-timestamp>' -o json
 go-signal polls show --group '<group-id>' --target '<creator-aci>:<creation-timestamp>' -o json
 go-signal polls show --group '<group-id>' --target '<creator-aci>:<creation-timestamp>' --scan-limit 10000
 ```
 
-`show` requires a canonical creator ACI and group ID; it does not resolve numbers, usernames or
-group titles. Ordinary `receive` prints and acknowledges events without saving them in this
-inbox, and outgoing sends do not automatically save their own poll events. To collect an
+`show` requires a canonical creator ACI and either a canonical chat ACI or group ID; it
+does not resolve numbers, usernames, `self` or group titles. For note-to-self use the selected
+account’s ACI as the chat ACI. Chat identity is independent of the poll creator. Ordinary
+`receive` prints and acknowledges events without saving them in this inbox, and outgoing sends do not automatically save their own poll events. To collect an
 outgoing poll's creation, receive its own-device transcript if supplied by another device.
 Do not expect a poll sent by this CLI to appear in `show` immediately.
 
-The view scans the latest 1,000 retained entries in that group by default, with a maximum of
+The view scans the latest 1,000 retained entries in that chat by default, with a maximum of
 10,000. All chat events count toward the limit. Output reports entry bounds, scanned count and
 whether older retained entries were excluded. Retention pruning or events never received here
 can remove creation, votes or closure even when the scan is not truncated. Completeness is

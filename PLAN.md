@@ -288,7 +288,16 @@ following the docs.
       backend checks cover implementation. Installation is local, without phone-state sync.
 - [ ] Sticker extras phone acceptance on disposable accounts and both backends
       ([procedure](docs/dev.md#sticker-extras-live-check)); deferred until a phone session is arranged.
-- [ ] Polls: direct-chat sends, automatic vote counters, durable projections, MCP/daemon poll tools.
+- [x] Direct-chat poll implementation: `polls create`/`vote`/`close` accept one `--recipient`
+      (ACI, number, username or self), preserving send-only delivery, account selection,
+      allowlist policy and explicit vote counters. `polls show --recipient <ACI>` reads
+      bounded retained observations offline, matching stable chat identity. Facade/app tests,
+      real wire/timer checks, plain/JSON goldens, docs and both backend checks cover implementation.
+- [ ] Direct-chat poll phone acceptance on disposable accounts and both backends
+      ([procedure](docs/dev.md#poll-live-check)); deferred until a phone session is arranged.
+- [ ] Polls: automatic vote counters.
+- [ ] Polls: durable projections.
+- [ ] Polls: MCP/daemon poll tools.
 - [ ] Facade/command/output tests, docs and live checks for each.
 
 **Done when:** a story sent from the phone appears in `receive`, and one sent with go-signal

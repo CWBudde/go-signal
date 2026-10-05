@@ -507,9 +507,10 @@ profile sends no write. Each changed update attempts one write; if an error repo
 or an unknown outcome, inspect `profile show` before retrying. Errors leave stdout empty.
 See [the live-check procedure](docs/dev.md#own-profile-live-check) for phone and metadata checks.
 
-### Group polls
+### Polls
 
-`polls create`, `polls vote` and `polls close` send standalone polls to one group. Options use
+`polls create`, `polls vote` and `polls close` send standalone polls to one group or direct chat
+(`--group <id>` or `--recipient <ACI|+number|@username|self>`). Options use
 zero-based indexes; votes require an explicit increasing `--vote-count`, and `--clear`
 withdraws a selection. `polls show` reads retained daemon/MCP inbox observations offline,
 with unknown completeness. See [poll commands and results](docs/polls.md).

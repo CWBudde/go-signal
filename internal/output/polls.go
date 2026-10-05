@@ -157,8 +157,13 @@ func (p *Printer) PollState(state app.PollState) error {
 }
 
 func (p *Printer) pollStatePlain(state app.PollState) error {
+	chat := p.who(state.Chat.Recipient)
+	if state.Chat.IsGroup() {
+		chat = p.groupLabel(state.Chat.GroupID)
+	}
+
 	lines := []string{
-		fmt.Sprintf("Poll %s:%d in %s", p.who(state.Author), state.Timestamp, p.groupLabel(state.Chat.GroupID)),
+		fmt.Sprintf("Poll %s:%d in %s", p.who(state.Author), state.Timestamp, chat),
 		"Based on retained observations; completeness: unknown.",
 		fmt.Sprintf("Scanned %d entries (IDs %d–%d); truncated: %t; ignored invalid: %d; conflicts: %d.",
 			state.Scanned, state.FirstEntryID, state.LastEntryID, state.Truncated, state.IgnoredInvalid, state.Conflicts),

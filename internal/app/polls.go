@@ -24,9 +24,36 @@ func checkPollGroup(id string) error {
 	return nil
 }
 
+// pollRecipient validates exactly one destination without resolving it.
+func pollRecipient(groupID, recipient string) (string, error) {
+	if (groupID == "") == (recipient == "") {
+		return "", fmt.Errorf("%w: supply one group or direct recipient", signal.ErrInvalidPoll)
+	}
+
+	if groupID != "" {
+		err := checkPollGroup(groupID)
+		if err != nil {
+			return "", err
+		}
+
+		return GroupPrefix + groupID, nil
+	}
+
+	target, err := ParseRecipient(recipient)
+	if err != nil {
+		return "", err
+	}
+
+	if target.IsGroup() || target.Recipient.ACI == uuid.Nil.String() {
+		return "", fmt.Errorf("%w: need a direct recipient", ErrInvalidRecipient)
+	}
+
+	return recipient, nil
+}
+
 // Check validates creation before opening a client.
 func (req PollCreateRequest) Check() error {
-	err := checkPollGroup(req.GroupID)
+	_, err := pollRecipient(req.GroupID, req.Recipient)
 	if err != nil {
 		return err
 	}
@@ -41,7 +68,7 @@ func (req PollCreateRequest) Check() error {
 
 // Check validates a vote before opening a client.
 func (req PollVoteRequest) Check() error {
-	err := checkPollGroup(req.GroupID)
+	_, err := pollRecipient(req.GroupID, req.Recipient)
 	if err != nil {
 		return err
 	}
@@ -58,7 +85,7 @@ func (req PollVoteRequest) Check() error {
 	if req.Clear == (len(req.OptionIndexes) > 0) {
 		return fmt.Errorf("%w: select options or explicitly clear", signal.ErrInvalidPoll)
 	}
-	// Author resolution is intentionally deferred until after group allowlist checking.
+	// Author resolution is intentionally deferred until after destination allowlist checking.
 	vote := signal.OutgoingPollVote{
 		TargetAuthor:    signal.Recipient{ACI: "00000000-0000-0000-0000-000000000001"},
 		TargetTimestamp: timestamp, OptionIndexes: req.OptionIndexes, VoteCount: req.VoteCount,
@@ -74,7 +101,7 @@ func (req PollVoteRequest) Check() error {
 
 // Check validates closure before opening a client.
 func (req PollCloseRequest) Check() error {
-	err := checkPollGroup(req.GroupID)
+	_, err := pollRecipient(req.GroupID, req.Recipient)
 	if err != nil {
 		return err
 	}
@@ -87,9 +114,25 @@ func (req PollCloseRequest) Check() error {
 	return nil
 }
 
+func (req PollShowRequest) checkChat() error {
+	_, err := pollRecipient(req.GroupID, req.Recipient)
+	if err != nil {
+		return err
+	}
+
+	if req.Recipient != "" {
+		chat, err := ParseRecipient(req.Recipient)
+		if err != nil || chat.Recipient.ACI == "" || chat.Recipient.ACI != req.Recipient {
+			return fmt.Errorf("%w: show requires a canonical chat ACI", ErrInvalidRecipient)
+		}
+	}
+
+	return nil
+}
+
 // Check validates offline canonical references and the bounded snapshot size.
 func (req PollShowRequest) Check() error {
-	err := checkPollGroup(req.GroupID)
+	err := req.checkChat()
 	if err != nil {
 		return err
 	}
@@ -111,12 +154,14 @@ func (req PollShowRequest) Check() error {
 	return nil
 }
 
-// PollCreate sends one group poll through the usual send policy.
+// PollCreate sends one poll through the usual send policy.
 func (a *App) PollCreate(ctx context.Context, req PollCreateRequest) (PollSendResult, error) {
 	err := req.Check()
 	if err != nil {
 		return PollSendResult{}, fmt.Errorf("poll create: %w", err)
 	}
+
+	destination, _ := pollRecipient(req.GroupID, req.Recipient)
 
 	poll := &signal.Poll{Question: req.Question, Options: slices.Clone(req.Options), AllowMultiple: !req.SingleChoice}
 	out := PollSendResult{Operation: "create", Poll: poll}
@@ -124,7 +169,7 @@ func (a *App) PollCreate(ctx context.Context, req PollCreateRequest) (PollSendRe
 	out.SendResult,
 		err = a.sendContent(ctx,
 		"poll create",
-		[]string{GroupPrefix + req.GroupID},
+		[]string{destination},
 		func(ctx context.Context) (content,
 			error,
 		) {
@@ -149,6 +194,8 @@ func (a *App) PollVote(ctx context.Context, req PollVoteRequest) (PollSendResult
 		return PollSendResult{}, fmt.Errorf("poll vote: %w", err)
 	}
 
+	destination, _ := pollRecipient(req.GroupID, req.Recipient)
+
 	author, timestamp, _ := ParseTarget(req.Target)
 	out := PollSendResult{
 		Operation:       "vote",
@@ -160,7 +207,7 @@ func (a *App) PollVote(ctx context.Context, req PollVoteRequest) (PollSendResult
 	out.SendResult,
 		err = a.sendContent(ctx,
 		"poll vote",
-		[]string{GroupPrefix + req.GroupID},
+		[]string{destination},
 		func(ctx context.Context) (content,
 			error,
 		) {
@@ -185,19 +232,21 @@ func (a *App) PollVote(ctx context.Context, req PollVoteRequest) (PollSendResult
 	return out, err
 }
 
-// PollClose closes this account's poll in one group.
+// PollClose closes this account's poll in one chat.
 func (a *App) PollClose(ctx context.Context, req PollCloseRequest) (PollSendResult, error) {
 	err := req.Check()
 	if err != nil {
 		return PollSendResult{}, fmt.Errorf("poll close: %w", err)
 	}
 
+	destination, _ := pollRecipient(req.GroupID, req.Recipient)
+
 	out := PollSendResult{Operation: "close", TargetTimestamp: req.Target}
 
 	out.SendResult,
 		err = a.sendContent(ctx,
 		"poll close",
-		[]string{GroupPrefix + req.GroupID},
+		[]string{destination},
 		func(ctx context.Context) (content,
 			error,
 		) {

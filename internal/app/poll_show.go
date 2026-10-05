@@ -35,6 +35,10 @@ func (a *App) PollShow(ctx context.Context, req PollShowRequest) (PollState, err
 		Timestamp: timestamp, Completeness: "unknown",
 	}
 
+	if req.Recipient != "" {
+		state.Chat = signal.Chat{Recipient: signal.Recipient{ACI: req.Recipient}}
+	}
+
 	limit := req.ScanLimit
 	if limit == 0 {
 		limit = DefaultPollScanLimit
@@ -127,7 +131,7 @@ func samePollSelection(a, b []uint32) bool {
 
 func (state *PollState) observeCreation(event signal.Event) {
 	msg, ok := event.(*signal.Message)
-	if !ok || msg.Poll == nil || msg.Chat != state.Chat {
+	if !ok || msg.Poll == nil || msg.Chat.Key() != state.Chat.Key() {
 		return
 	}
 
@@ -155,7 +159,7 @@ func (state *PollState) observeCreation(event signal.Event) {
 
 func (state *PollState) observeControl(event signal.Event, votes map[string]PollStateVote) {
 	env, ok := envelopeOf(event)
-	if !ok || env.Chat != state.Chat {
+	if !ok || env.Chat.Key() != state.Chat.Key() {
 		return
 	}
 

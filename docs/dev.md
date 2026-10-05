@@ -721,13 +721,18 @@ explicit `--data-dir` and `--account` on every command; stop other receivers for
    tally/closure with observed phone activity. Repeat with a small scan limit: missing
    creation must omit tally and completeness must remain unknown. The old ordinary receive
    events are not expected in this inbox. Delivery receipts alone do not prove rendering.
-5. Rebuild with `just build-cgo` and repeat with fresh polls in the disposable group. Record
+5. Repeat creation, voting, withdrawal and closure in a direct chat with `--recipient <peer>`
+   in place of `--group <id>`. Verify both phones and own-device sync. Also create a `self`
+   poll and verify it on the linked phone. Collect direct-chat controls through daemon/MCP,
+   then inspect with `polls show --recipient <canonical-chat-aci>` and verify isolation from
+   group and other direct-chat events.
+6. Rebuild with `just build-cgo` and repeat with fresh group and direct polls. Record
    backend, poll identity, phone results, sync and received-state evidence. Only then tick
    the separately open roadmap live-acceptance item.
 
-Poll sends are group-only. Direct-chat sending, inferred counters and durable poll projections
-are deferred. Tests cover exact payload construction and retained observations on both
-backends offline; they do not establish phone acceptance.
+Automatic counters, durable poll projections and MCP/daemon poll tools are deferred.
+The direct-chat/self extension has not been verified with a phone session. Tests cover exact
+payload construction and retained observations on both backends offline; they do not establish phone acceptance.
 
 ## CI
 

@@ -81,7 +81,7 @@ type SendRequest struct {
 	Sticker *OutgoingSticker
 	// Story is standalone group or private distribution-list story content.
 	Story *OutgoingStory
-	// PollCreate, PollVote and PollClose are standalone group poll operations.
+	// PollCreate, PollVote and PollClose are standalone poll operations for one chat.
 	PollCreate *Poll
 	PollVote   *OutgoingPollVote
 	PollClose  *OutgoingPollClose

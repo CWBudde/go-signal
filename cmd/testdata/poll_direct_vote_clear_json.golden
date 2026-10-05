@@ -1,0 +1,1 @@
+{"version":1,"poll":{"timestamp":1790000000000,"results":[{"type":"user","number":"+15550101","aci":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","timestamp":1790000000000,"success":true,"unidentified":true}],"operation":"vote","targetAuthor":{"aci":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"},"targetTimestamp":1789999999000,"optionIndexes":[],"voteCount":2}}

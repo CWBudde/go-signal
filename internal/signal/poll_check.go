@@ -83,7 +83,7 @@ func (req SendRequest) hasPoll() bool {
 }
 
 func (req SendRequest) checkPoll() error {
-	if !validPollGroup(req.GroupID) || len(req.Recipients) > 0 || req.pollHasContent() {
+	if !req.validPollChat() || req.pollHasContent() {
 		return ErrInvalidPoll
 	}
 
@@ -113,6 +113,21 @@ func (req SendRequest) checkPoll() error {
 	}
 
 	return req.PollClose.Check()
+}
+
+func (req SendRequest) validPollChat() bool {
+	if req.GroupID != "" {
+		return len(req.Recipients) == 0 && validPollGroup(req.GroupID)
+	}
+
+	if len(req.Recipients) != 1 {
+		return false
+	}
+
+	aci := req.Recipients[0].ACI
+	id, err := uuid.Parse(aci)
+
+	return err == nil && id != uuid.Nil && id.String() == aci
 }
 
 func validPollGroup(groupID string) bool {

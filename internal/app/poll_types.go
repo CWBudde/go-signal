@@ -2,9 +2,11 @@ package app
 
 import "github.com/cwbudde/go-signal/internal/signal"
 
-// PollCreateRequest creates a poll in exactly one group.
+// PollCreateRequest creates a poll in exactly one group or direct chat.
 type PollCreateRequest struct {
-	GroupID      string
+	GroupID string
+	// Recipient is a direct recipient argument, mutually exclusive with GroupID.
+	Recipient    string
 	Question     string
 	Options      []string
 	SingleChoice bool
@@ -13,19 +15,21 @@ type PollCreateRequest struct {
 // PollVoteRequest changes this account's selections with an explicit increasing counter.
 type PollVoteRequest struct {
 	GroupID       string
+	Recipient     string
 	Target        string
 	OptionIndexes []uint32
 	VoteCount     uint32
 	Clear         bool
 }
 
-// PollCloseRequest closes our own poll at Target in one group.
+// PollCloseRequest closes our own poll at Target in one chat.
 type PollCloseRequest struct {
-	GroupID string
-	Target  uint64
+	GroupID   string
+	Recipient string
+	Target    uint64
 }
 
-// PollSendResult preserves the poll operation and partial group delivery outcomes.
+// PollSendResult preserves the poll operation and direct or partial group delivery outcomes.
 type PollSendResult struct {
 	SendResult
 
@@ -37,9 +41,11 @@ type PollSendResult struct {
 	VoteCount       uint32
 }
 
-// PollShowRequest selects a poll from bounded local group inbox history.
+// PollShowRequest selects a poll from bounded local chat inbox history.
 type PollShowRequest struct {
-	GroupID   string
+	GroupID string
+	// Recipient must be a canonical chat ACI for offline inspection.
+	Recipient string
 	Target    string
 	ScanLimit int
 }

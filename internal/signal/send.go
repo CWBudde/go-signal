@@ -9,7 +9,7 @@ import (
 // (ErrInvalidSendRequest), a reaction or remote delete comes without other content and with what
 // it needs (ErrInvalidContent), and a reaction's target author has an ACI (ErrUnresolvable). It
 // An edit needs replacement text and a timestamp newer than its target (ErrInvalidContent).
-// Poll operations are standalone, require one canonical group ID and validate their typed payload
+// Poll operations are standalone, require one canonical group ID or resolved ACI and validate their typed payload
 // (ErrInvalidPoll). Pin and unpin operations are standalone (ErrInvalidPin).
 // Text styles must cover complete characters in Body (ErrInvalidStyle).
 // It doesn't check recipients, attachments, the quote or mentions.

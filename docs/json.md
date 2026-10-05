@@ -565,7 +565,8 @@ Missing/pruned events, eligibility, phone limits and timers prevent inferring cu
 ## `polls create`, `polls vote` and `polls close`
 
 These commands return `{"version":1,"poll":{...}}`. Its `timestamp` and `results` have the
-same shape as [`send`](#send), including per-member failures for the selected group.
+same shape as [`send`](#send), including direct-recipient outcomes or per-member failures
+for the selected group. The existing schema also covers note-to-self.
 
 | Field             | Type      | Description                                                      |
 | ----------------- | --------- | ---------------------------------------------------------------- |
@@ -584,7 +585,7 @@ outgoing sends do not populate it. Stop the active receiver to release the accou
 
 | Field                         | Type                    | Description                                                                               |
 | ----------------------------- | ----------------------- | ----------------------------------------------------------------------------------------- |
-| `chat`, `author`, `timestamp` | chat, recipient, number | Poll identity: group, creator ACI and creation timestamp                                  |
+| `chat`, `author`, `timestamp` | chat, recipient, number | Poll identity: direct chat or group, creator ACI and creation timestamp                   |
 | `creationPresent`             | boolean                 | Whether a valid creation was retained within the scan                                     |
 | `creation`                    | object                  | Optional question/options/allowMultiple, when retained                                    |
 | `tally`                       | number[]                | Optional observed counts by zero-based option; omitted without creation or after deletion |
