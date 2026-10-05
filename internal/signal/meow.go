@@ -609,12 +609,12 @@ func (c *meowClient) handle(raw events.SignalEvent) bool {
 	}
 
 	ctx, cancel = context.WithTimeout(c.zlog.WithContext(context.Background()), overrideSettleTimeout)
-	err = c.learnPollVoteCounter(ctx, evt)
+	err = c.learnPollState(ctx, evt)
 
 	cancel()
 
 	if err != nil {
-		c.log.Warn("persist poll vote counter", "error", err)
+		c.log.Warn("persist poll state", "error", err)
 		return false
 	}
 

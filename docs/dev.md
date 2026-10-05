@@ -735,7 +735,10 @@ explicit `--data-dir` and `--account` on every command; stop other receivers for
    backend, poll identity, phone results, sync and received-state evidence. Only then tick
    the separately open roadmap live-acceptance item.
 
-Durable poll projections and MCP/daemon poll tools are deferred.
+Durable poll projections are implemented; MCP/daemon poll tools remain deferred.
+Also inspect `polls show --durable` after receiving, pruning the general inbox and reopening
+the CLI. Confirm creation/tally/closure persist and repeated receive transcripts do not add
+duplicate observations. The default `show` view remains limited to retained inbox history.
 Automatic-counter phone acceptance also remains open; local allocation cannot establish unseen other-device state.
 The direct-chat/self extension has not been verified with a phone session. Tests cover exact
 payload construction and retained observations on both backends offline; they do not establish phone acceptance.

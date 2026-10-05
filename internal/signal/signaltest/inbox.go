@@ -83,6 +83,16 @@ func (c *client) InboxAdd(_ context.Context, entry signal.InboxEntry) (signal.In
 		return signal.InboxEntry{}, fmt.Errorf("%w: %T (fake)", signal.ErrNotStorable, entry.Event)
 	}
 
+	account, err := c.fake.account(c.opts)
+	if err != nil {
+		return signal.InboxEntry{}, err
+	}
+
+	err = c.fake.observePoll(account.ACI, entry.Event)
+	if err != nil {
+		return signal.InboxEntry{}, err
+	}
+
 	c.fake.inboxID++
 	entry.ID = c.fake.inboxID
 	entry.ReceivedAt = entry.ReceivedAt.UTC().Truncate(time.Millisecond)

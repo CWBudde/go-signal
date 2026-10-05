@@ -147,6 +147,14 @@ func (req PollShowRequest) Check() error {
 		return fmt.Errorf("%w: show requires canonical ACI:timestamp", ErrInvalidTarget)
 	}
 
+	return req.checkScan()
+}
+
+func (req PollShowRequest) checkScan() error {
+	if req.Durable && req.ScanLimit != 0 {
+		return fmt.Errorf("%w: durable view cannot use an inbox scan limit", signal.ErrInvalidPoll)
+	}
+
 	if req.ScanLimit < 0 || req.ScanLimit > MaxPollScanLimit {
 		return fmt.Errorf("%w: scan limit must be 0 through %d", signal.ErrInvalidPoll, MaxPollScanLimit)
 	}

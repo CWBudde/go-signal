@@ -42,8 +42,10 @@ type PollSendResult struct {
 	VoteCount       uint32
 }
 
-// PollShowRequest selects a poll from bounded local chat inbox history.
+// PollShowRequest selects a bounded inbox view or durable poll projection.
 type PollShowRequest struct {
+	// Durable selects the account-local projection instead of bounded inbox history.
+	Durable bool
 	GroupID string
 	// Recipient must be a canonical chat ACI for offline inspection.
 	Recipient string
@@ -51,31 +53,8 @@ type PollShowRequest struct {
 	ScanLimit int
 }
 
-// PollState is a view of retained observations, whose completeness is always unknown.
-type PollState struct {
-	Chat      signal.Chat
-	Author    signal.Recipient
-	Timestamp uint64
-	Creation  *signal.Poll
-	Votes     []PollStateVote
-	// Tally is absent when creation is unavailable or the poll was deleted.
-	Tally           []int
-	ClosureObserved bool
-	ClosedAt        uint64
-	Deleted         bool
-	Completeness    string
-	Scanned         int
-	FirstEntryID    int64
-	LastEntryID     int64
-	Truncated       bool
-	IgnoredInvalid  int
-	Conflicts       int
-}
+// PollState is the shared view of retained observations; completeness remains unknown.
+type PollState = signal.PollState
 
-// PollStateVote is one voter's latest retained selection, including withdrawals.
-type PollStateVote struct {
-	Voter         signal.Recipient
-	OptionIndexes []uint32
-	VoteCount     uint32
-	Timestamp     uint64
-}
+// PollStateVote is one voter's latest retained selection.
+type PollStateVote = signal.PollStateVote

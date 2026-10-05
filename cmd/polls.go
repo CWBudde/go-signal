@@ -162,6 +162,7 @@ Partial delivery is reported without retries.`,
 	return cmd
 }
 
+//nolint:funlen // Offline command preflight, flags and rendering stay together.
 func newPollShowCmd(clients *clientOpener, printers *printerFactory, appOpts []app.Option) *cobra.Command {
 	var (
 		groups, recipients []string
@@ -171,7 +172,10 @@ func newPollShowCmd(clients *clientOpener, printers *printerFactory, appOpts []a
 	cmd := &cobra.Command{
 		Use:   "show (--group <id> | --recipient <ACI>) --target <ACI>:<timestamp>",
 		Short: "Show retained observations of a poll", Args: cobra.NoArgs,
-		Long: `Show poll results from bounded local inbox history collected by daemon or MCP receiving.
+		Long: `Show poll results from bounded local inbox history, or use --durable for stored poll projections.
+Durable projections collect ordinary receive, daemon and MCP observations before acknowledgement,
+seed existing retained inbox history once, and survive inbox pruning. Outgoing sends are not observations.
+The durable view cannot be combined with --scan-limit; missed events keep completeness unknown.
 It does not connect or send. Supply a canonical group ID or direct chat ACI and the creator ACI with timestamp.
 The account lock is required: stop the daemon/MCP process before running this command.
 Ordinary receive and outgoing sends do not populate this inbox. Pruning, missed events and
@@ -185,6 +189,13 @@ examined, not just poll events (default 1000, maximum 10000).`,
 			}
 
 			req.GroupID, req.Recipient = groupID, recipient
+			if req.Durable {
+				if cmd.Flags().Changed("scan-limit") {
+					return fmt.Errorf("%w: --durable cannot use --scan-limit", signal.ErrInvalidPoll)
+				}
+
+				req.ScanLimit = 0
+			}
 
 			err = req.Check()
 			if err != nil {
@@ -216,6 +227,7 @@ examined, not just poll events (default 1000, maximum 10000).`,
 	}
 	pollDestinationFlags(cmd, &groups, &recipients)
 	cmd.Flags().StringVar(&req.Target, "target", "", "canonical creator ACI and sent timestamp: <ACI>:<timestamp>")
+	cmd.Flags().BoolVar(&req.Durable, "durable", false, "read durable poll observations independent of inbox retention")
 	cmd.Flags().IntVar(&req.ScanLimit, "scan-limit", app.DefaultPollScanLimit, "maximum retained chat entries examined")
 	cobra.CheckErr(cmd.MarkFlagRequired("target"))
 

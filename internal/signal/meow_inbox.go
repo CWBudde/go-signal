@@ -10,6 +10,11 @@ import (
 )
 
 func (c *meowClient) InboxAdd(ctx context.Context, entry InboxEntry) (InboxEntry, error) {
+	err := c.learnPollProjection(ctx, entry.Event)
+	if err != nil {
+		return InboxEntry{}, err
+	}
+
 	event, err := marshalEvent(entry.Event, entry.Chat)
 	if err != nil {
 		return InboxEntry{}, err

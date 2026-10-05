@@ -91,6 +91,8 @@ type pollStateVoteJSON struct {
 }
 
 type pollStateJSON struct {
+	Source          string              `json:"source,omitempty"`
+	Observations    int                 `json:"observations,omitempty"`
 	Chat            ChatJSON            `json:"chat"`
 	Author          recipientJSON       `json:"author"`
 	Timestamp       uint64              `json:"timestamp"`
@@ -117,6 +119,7 @@ func (p *Printer) PollState(state app.PollState) error {
 	}
 
 	doc := pollStateJSON{
+		Source: state.Source, Observations: state.Observations,
 		Chat:            NewChatJSON(state.Chat, p.names),
 		Author:          p.recipient(state.Author),
 		Timestamp:       state.Timestamp,
@@ -168,6 +171,11 @@ func (p *Printer) pollStatePlain(state app.PollState) error {
 		fmt.Sprintf("Scanned %d entries (IDs %d–%d); truncated: %t; ignored invalid: %d; conflicts: %d.",
 			state.Scanned, state.FirstEntryID, state.LastEntryID, state.Truncated, state.IgnoredInvalid, state.Conflicts),
 	}
+	if state.Source == "durable" {
+		lines[2] = fmt.Sprintf("Durable projection: %d observations; ignored invalid: %d; conflicts: %d.",
+			state.Observations, state.IgnoredInvalid, state.Conflicts)
+	}
+
 	if state.Creation == nil {
 		lines = append(lines, "Poll creation unavailable; tally unavailable.")
 	} else {

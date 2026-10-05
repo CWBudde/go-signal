@@ -585,6 +585,8 @@ outgoing sends do not populate it. Stop the active receiver to release the accou
 
 | Field                         | Type                    | Description                                                                               |
 | ----------------------------- | ----------------------- | ----------------------------------------------------------------------------------------- |
+| `source`                      | string                  | Optional `durable` for the materialized view selected by `--durable`                      |
+| `observations`                | number                  | Optional positive count of distinct poll evidence in the durable view                     |
 | `chat`, `author`, `timestamp` | chat, recipient, number | Poll identity: direct chat or group, creator ACI and creation timestamp                   |
 | `creationPresent`             | boolean                 | Whether a valid creation was retained within the scan                                     |
 | `creation`                    | object                  | Optional question/options/allowMultiple, when retained                                    |
@@ -604,6 +606,13 @@ Each vote has `voter` (recipient), `optionIndexes` (number array, empty for with
 retain the first observation unless a later own-device sync timestamp replaces it.
 No tally or absence claim is authoritative: history may have been pruned or never received.
 The scan limit defaults to 1,000 chat entries and is capped at 10,000.
+
+With `--durable`, ordinary receive, daemon/MCP observations and a one-time import of retained
+inbox history contribute to a persisted projection. It survives subsequent inbox pruning.
+`scanned`, `firstEntryId` and `lastEntryId` are zero; `truncated` is false. The source and
+observation fields are additive in schema 1. Missing creation or closure still proves nothing
+about unobserved activity. This flag cannot be combined with `--scan-limit`. See
+[durable results](polls.md#durable-results) for storage and bootstrap semantics.
 
 ## `groups list`
 

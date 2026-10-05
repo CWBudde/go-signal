@@ -304,7 +304,16 @@ following the docs.
       activity still requires coordination; local counters are not authoritative global state.
 - [ ] Automatic poll vote counter phone acceptance on disposable accounts and both backends
       ([procedure](docs/dev.md#poll-live-check)); deferred until a phone session is arranged.
-- [ ] Polls: durable projections.
+- [x] Polls: durable projection implementation. `polls show --durable` reads account-local
+      materialized observations independently of inbox retention. Poll evidence is deduplicated
+      by canonical identity/content and stored transactionally before receive acknowledgement;
+      retained inbox history seeds it once. Late creation, votes, closure and deletion use the
+      shared reducer; restarts/pruning, rollback/retry, concurrent database handles, account/key
+      isolation, uint64 timestamps, malformed evidence, plain/JSON goldens, docs and both backend
+      checks cover implementation. Completeness remains unknown; outgoing submissions are not
+      observations. Poll evidence storage grows independently of general inbox retention.
+- [ ] Durable poll projection phone acceptance on disposable accounts and both backends
+      ([procedure](docs/dev.md#poll-live-check)); deferred until a phone session is arranged.
 - [ ] Polls: MCP/daemon poll tools.
 - [ ] Facade/command/output tests, docs and live checks for each.
 

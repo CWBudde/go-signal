@@ -194,6 +194,9 @@ type Fake struct {
 	// LeaveTime is what LeaveGroup records as Group.LeftAt; zero means now.
 	LeaveTime time.Time
 
+	// PollProjectionErr injects durable poll persistence/read failure.
+	PollProjectionErr error
+
 	// InboxErr makes the inbox methods fail. The inbox itself is kept in memory (see Inbox).
 	InboxErr error
 	// PollCounterErr makes counter persistence fail before submission or event delivery.
@@ -215,6 +218,7 @@ type Fake struct {
 	leaves         []LeaveCall
 	left           map[string]time.Time // groups left with LeaveGroup, by ID
 	pollCounters   map[pollCounterKey]uint32
+	pollEvidence   map[pollCounterKey]pollEvidence
 	inbox          []signal.InboxEntry
 	inboxID        int64
 }
@@ -784,6 +788,13 @@ func (c *client) Unlink(_ context.Context, opts signal.UnlinkOptions) (signal.Ac
 
 	c.fake.Linked = slices.DeleteFunc(c.fake.Linked, func(old signal.Account) bool { return old.ACI == acc.ACI })
 	delete(c.fake.installedStickerPacks, acc.ACI)
+
+	for key := range c.fake.pollEvidence {
+		if key.account == acc.ACI {
+			delete(c.fake.pollEvidence, key)
+		}
+	}
+
 	c.fake.unlinks = append(c.fake.unlinks, UnlinkCall{ACI: acc.ACI, LocalOnly: opts.LocalOnly})
 
 	return acc, nil
@@ -899,6 +910,12 @@ func (c *client) deliver(evt signal.Event) bool {
 			c.fake.mu.Unlock()
 			return false
 		}
+	}
+
+	err := c.fake.observePoll(c.connected, evt)
+	if err != nil {
+		c.fake.mu.Unlock()
+		return false
 	}
 	c.fake.mu.Unlock()
 

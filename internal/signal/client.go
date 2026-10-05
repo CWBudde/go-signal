@@ -12,6 +12,11 @@ import (
 // A Client is used by a single command: Open it, then either Link a new account or Connect an
 // existing one, read Events, and Close it.
 type Client interface { //nolint:interfacebloat // the one facade over signalmeow; tests fake it whole
+	// PollProjection reads durable observed state offline in the selected account. It seeds
+	// retained inbox evidence once; later inbox pruning does not remove poll evidence.
+	// Completeness remains unknown, and Close waits for this operation.
+	PollProjection(ctx context.Context, ref PollReference) (PollState, error)
+
 	// ReservePollVote durably reserves this account's next poll vote counter before sending.
 	// Positive Explicit values are returned unchanged and raise the durable maximum. It works
 	// offline in the selected account. Reservations survive failed sends and inbox pruning.

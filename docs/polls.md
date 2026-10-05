@@ -48,8 +48,8 @@ explicit counters may be ignored by receivers. Explicit zero is rejected. Withdr
 `--clear` instead of `--option` and allocates a counter just like a selection change.
 JSON `voteCount` reports the reserved or explicit value even for partial delivery failures.
 
-Polls are standalone content and use their own command group. Durable poll projections and
-poll write tools for MCP/daemon are deferred.
+Polls are standalone content and use their own command group. Poll write tools for MCP/daemon
+remain deferred.
 Incoming polls, votes and closures from any chat and your other devices appear in `receive`.
 Creation is a `message` with `poll`; controls are `pollVote` and `pollClose` events.
 Malformed poll content is reported as `unsupported` with `content:"invalidPoll"`.
@@ -87,6 +87,38 @@ Invalid selections and conflicting observations are counted in the output. A clo
 the creator stops subsequent vote reduction. An observed remote deletion by the creator
 suppresses totals. Without creation, retained votes and closure are shown but no tally is
 computed. These are retained observations, not authoritative server results.
+
+## Durable results
+
+Add `--durable` to read a stored projection independently of the inbox scan and retention:
+
+```sh
+go-signal polls show --recipient '<chat-aci>' --target '<creator-aci>:<creation-timestamp>' --durable -o json
+go-signal polls show --group '<group-id>' --target '<creator-aci>:<creation-timestamp>' --durable
+```
+
+Ordinary `receive`, daemon and MCP receiving now persist poll creation, votes, creator closures
+and deletions before acknowledging them. A persistence failure leaves the event unread for
+redelivery. Repeated identical poll evidence is counted once, even if contact metadata changes.
+Outgoing submissions do not add observations; receive their transcripts when available.
+`--durable` cannot be combined with `--scan-limit`. The default bounded inbox view is unchanged.
+
+On first use, the account's still-retained inbox seeds projections in entry order before new
+poll evidence is added. This happens on the first received/stored poll event or durable view.
+Events pruned before that bootstrap cannot be recovered. New projections survive later inbox
+pruning, process restarts and unrelated chat traffic. A late creation revalidates older votes;
+only valid selections contribute to the tally. Creator closures and deletions apply as in the
+bounded reducer. A closure is keyed to its sender as the creator, so another sender's closure
+cannot close this poll. Completeness remains `unknown`: no local view establishes unseen votes
+or that a poll is open.
+
+JSON adds `source:"durable"` and a positive `observations` count when evidence exists. The inbox
+scan fields are zero and `truncated` is false because this view reads materialized state without
+an inbox scan limit. Plain output reports distinct durable observations. Poll-only evidence is
+kept alongside the projection to preserve arrival-order decisions and late-creation validation;
+it grows with unique poll observations, and each update replays evidence for the affected poll.
+General inbox pruning does not delete it. Account removal deletes it with the account database.
+A remote deletion suppresses the tally; it does not erase the local evidence archive.
 
 Live phone rendering, voting/withdrawal, closing and device sync remain acceptance checks on
 both backends. See the separately opt-in [live procedure](dev.md#poll-live-check).
