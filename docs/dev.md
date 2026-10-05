@@ -125,7 +125,7 @@ work_dir=$(mktemp -d)
 (cd "$work_dir" && go work init "$OLDPWD" "$OLDPWD/../mautrix-signal")
 export GOWORK="$work_dir/go.work"
 CGO_ENABLED=0 scripts/test-zkgroup-integration.sh -tags libsignal_go
-CGO_LDFLAGS="-L $PWD/third_party/lib" scripts/test-zkgroup-integration.sh
+CGO_LDFLAGS="-L $PWD/third_party/lib" scripts/test-zkgroup-integration.sh -race
 ```
 
 The integration script requires Python 3 to write Go's temporary overlay JSON. It
@@ -139,9 +139,16 @@ and decrypts the message at both recipients. Unexpected per-recipient fallback
 requests fail the test; an empty local-device sync is allowed. Test stores provide
 pre-existing session metadata and an already-distributed sender key. The shim
 fixture supplies test server parameters; no account or Signal server is accessed.
-The WebSocket test currently detects an upstream shutdown race under `-race` in
-`web/signalwebsocket.go` (`incomingRequestChan` is cleared while the handler goroutine
-reads it); the ordinary CGO/purego integration runs and go-signal's race suite pass.
+The fork fixes the captured incoming-request-channel shutdown race in
+`web/signalwebsocket.go`. `just test-diff` runs this integration with `-race`; to
+exercise the pure-Go backend with the race detector, enable cgo for instrumentation:
+
+```sh
+CGO_ENABLED=1 scripts/test-zkgroup-integration.sh -tags libsignal_go -race
+```
+
+These checks cover the observed race and the exercised paths, without establishing
+that every websocket shutdown and reconnect path is race-free.
 
 The offline tests don't substitute for live group, profile and send checks; those are in the
 integration suite (see "Integration tests").
@@ -693,10 +700,10 @@ to 1 MiB and 100 MiB respectively, verified before upload. Complete local instal
 bounded to 200 items and 100 MiB of decoded images. Uploading new packs and phone
 installation-state sync remain open.
 
-The real websocket cache fixture synchronizes its cleanup to avoid a known race in the pinned
-dependency: `connectLoop` clears a captured request channel while the handler can still read
-it. This fixture ordering leaves production dependency code unchanged; passing race tests
-do not establish that the dependency's ordinary websocket shutdown is free of that race.
+The real websocket cache and reconnect fixtures use ordinary shutdown without
+log-hook synchronization. The pinned fork keeps the captured incoming request
+channel reference stable while closing the channel during cleanup. The fork
+regression and zkgroup integration exercise this fix with the race detector.
 
 ### Poll live check
 

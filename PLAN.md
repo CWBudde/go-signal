@@ -331,12 +331,20 @@ appears on the phone.
 
 ### Phase 15 — Security and upstream follow-ups
 
-- [ ] Decide whether to commission an external review of the zkgroup and attestation ports;
-      record scope and decision. If commissioned, track findings through fixes; otherwise record
-      the deferral explicitly (the internal review is not an audit).
+- [x] External review decision: the project owner deferred commissioning on 2026-10-06.
+      The proposed zkgroup/attestation scope, evidence and review boundaries are recorded in
+      [docs/security-review.md](docs/security-review.md). No independent audit was commissioned;
+      revisit when a reviewer and budget can be chosen. The internal review is not an audit.
 - [ ] Report IT-01 (cgo libsignalgo passes seconds where libsignal expects ms) to upstream mautrix.
-- [ ] Get signalmeow's `SignalWebsocket.connectLoop` data race fixed (upstream or in the fork), then
-      run the zkgroup integration script with `-race`.
+- [x] Fix signalmeow's captured incoming-request-channel race in `SignalWebsocket.connectLoop`:
+      fork `v0.2609.0-purego.22` (`fda5a06`) keeps the channel reference immutable during cleanup.
+      The cancel-during-dial regression reproduces the original race and passes after the fix.
+      `just test-diff` now runs zkgroup integration with `-race`; both backend race integrations,
+      ordinary profile/reconnect shutdown without fixture barriers, affected fork suites and
+      full cgo/pure-Go/no-cgo checks pass. Published Origin/source match the reviewed commit.
+- [ ] Investigate remaining websocket lifecycle hazards: immediate-cancellation `Connect`
+      status-channel access, handler completion, incoming-queue cancellation and pending-response
+      cleanup. The captured-channel fix and passing race checks do not certify all lifecycle paths.
 - [ ] Group sends: sender-key encryption doesn't check identity trust, so members whose key changed
       but who hold our sender key still receive group messages.
 - [ ] Identities: PNI identities can't be listed or trusted; verification state doesn't sync with
@@ -400,12 +408,12 @@ Out of scope: voice/video calls (RingRTC), DBus, signal-cli JSON-RPC compatibili
 
 ## 6. Risks
 
-| Risk                                                         | Mitigation                                                                                                                  |
-| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
-| Signal server/protocol changes break us                      | Track mautrix-signal releases; the facade limits how far changes spread; `docs/maintenance.md` bump procedure               |
-| Two forks drift from upstream (libsignal-go, mautrix-signal) | Bounded shim/join/logging scope; backend parity and offline wire tests; harness pinned to our libsignal tag                 |
-| Bugs in the pure-Go crypto ports (zkgroup, attestation)      | Vectors, interop, differential tests, fuzzing, cgo backend kept as reference; external review open (Phase 15)               |
-| libsignal drift between libsignalgo and the cgo `.a`         | Submodule pinned to the tag libsignalgo expects; `just check-libsignal` fails on mismatch                                   |
-| Linked devices get unlinked after ~30 days offline           | Documented; run `receive` periodically (systemd timer in `contrib/systemd/`)                                                |
-| Signal ToS / unofficial client                               | Same position as signal-cli. Document it and don't spam.                                                                    |
-| Prompt injection via incoming messages (MCP, hooks)          | Default-deny recipient allowlist, `--read-only`, attach-dir restriction, no automatic read receipts, `--hook-from` required |
+| Risk                                                         | Mitigation                                                                                                                                            |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Signal server/protocol changes break us                      | Track mautrix-signal releases; the facade limits how far changes spread; `docs/maintenance.md` bump procedure                                         |
+| Two forks drift from upstream (libsignal-go, mautrix-signal) | Bounded shim/join/logging scope; backend parity and offline wire tests; harness pinned to our libsignal tag                                           |
+| Bugs in the pure-Go crypto ports (zkgroup, attestation)      | Vectors, interop, differential tests, fuzzing, cgo backend kept as reference; external review deferred (Phase 15; scope in `docs/security-review.md`) |
+| libsignal drift between libsignalgo and the cgo `.a`         | Submodule pinned to the tag libsignalgo expects; `just check-libsignal` fails on mismatch                                                             |
+| Linked devices get unlinked after ~30 days offline           | Documented; run `receive` periodically (systemd timer in `contrib/systemd/`)                                                                          |
+| Signal ToS / unofficial client                               | Same position as signal-cli. Document it and don't spam.                                                                                              |
+| Prompt injection via incoming messages (MCP, hooks)          | Default-deny recipient allowlist, `--read-only`, attach-dir restriction, no automatic read receipts, `--hook-from` required                           |

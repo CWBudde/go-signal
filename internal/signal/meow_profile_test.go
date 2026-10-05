@@ -29,7 +29,6 @@ import (
 	"github.com/cwbudde/mautrix-signal/pkg/signalmeow/web"
 	"github.com/cwbudde/mautrix-signal/pkg/signalmeow/wspb"
 	"github.com/google/uuid"
-	"github.com/rs/zerolog"
 )
 
 const (
@@ -574,22 +573,6 @@ func TestOwnProfileBypassesFailedDisplayCache(t *testing.T) { //nolint:cyclop,fu
 	socketCtx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
-	// The pinned dependency assigns its captured incomingRequestChan to nil in
-	// connectLoop's defer before joining the request handler. Synchronize these
-	// two known log points so this cache test does not trigger that upstream race.
-	handlerExited := make(chan struct{})
-	socketLog := zerolog.New(io.Discard).Hook(zerolog.HookFunc(func(_ *zerolog.Event, _ zerolog.Level, message string) {
-		switch message {
-		case "ctx done, stopping request loop":
-			close(handlerExited)
-		case "ctx done, stopping connection loop":
-			<-handlerExited
-		case "Finished websocket cleanup":
-			<-handlerExited
-		}
-	}))
-	socketCtx = socketLog.WithContext(socketCtx)
-
 	statuses := cli.UnauthedWS.Connect(socketCtx, nil)
 	select {
 	case status := <-statuses:
@@ -674,7 +657,6 @@ func (ctx *pausedProfileErr) Err() error {
 	return err //nolint:wrapcheck // context.Err must preserve the exact context sentinel
 }
 
-//nolint:cyclop,funlen // complete local websocket lifetime
 func newProfileCancellationSocket(
 	t *testing.T, received chan<- string,
 ) (*web.SignalWebsocket, <-chan struct{}) {
@@ -715,23 +697,8 @@ func newProfileCancellationSocket(
 		return http.DefaultTransport.RoundTrip(routed)
 	})))
 	socketCtx, cancelSocket := context.WithCancel(t.Context())
-	handlerExited := make(chan struct{})
-	// Isolate only the dependency's final captured-channel shutdown race. Forced
-	// reconnects remain fully active while this socket context is still alive.
-	socketLog := zerolog.New(io.Discard).Hook(zerolog.HookFunc(func(_ *zerolog.Event, _ zerolog.Level, message string) {
-		switch message {
-		case "ctx done, stopping request loop":
-			close(handlerExited)
-		case "ctx done, stopping connection loop":
-			<-handlerExited
-		case "Finished websocket cleanup":
-			if socketCtx.Err() != nil {
-				<-handlerExited
-			}
-		}
-	}))
 	socket := web.NewSignalWebsocket(nil)
-	statuses := socket.Connect(socketLog.WithContext(socketCtx), nil)
+	statuses := socket.Connect(socketCtx, nil)
 	connected := make(chan struct{}, 64)
 
 	drained := make(chan struct{})

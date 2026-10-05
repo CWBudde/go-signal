@@ -33,6 +33,8 @@ go-signal depends on three pinned pieces that have to move together:
   resubmitted to repair a failed transcript.
   `v0.2609.0-purego.21` adds ACI private distribution-list story sends, including
   My Story, with explicit audiences and intended-recipient manifests in own-device sync.
+  `v0.2609.0-purego.22` fixes the captured incoming-request-channel shutdown race
+  in `SignalWebsocket.connectLoop`, allowing zkgroup integration with `-race`.
 - [`cwbudde/libsignal-go`](https://github.com/cwbudde/libsignal-go) (tags `vX.Y.Z-cw.N`), the
   pure-Go libsignal that the default backend runs on. Its Rust compat harness is pinned to the
   libsignal tag libsignalgo was generated against (its `decisions/0007-cwbudde-fork-policy.md`).
@@ -139,6 +141,29 @@ Full encrypted websocket submission and Android/iOS display still require the pe
 The fork accepts a caller-expanded ACI audience; go-signal fetches it freshly from phone
 storage rather than inventing it. PNI audience entries, list editing and custom card
 presentation remain unsupported.
+
+The websocket shutdown fix is the immutable
+[`v0.2609.0-purego.22`](https://github.com/cwbudde/mautrix-signal/tree/v0.2609.0-purego.22)
+tag at [commit `fda5a06`](https://github.com/cwbudde/mautrix-signal/commit/fda5a06d822321a8e4fdc93f5f74af657fab8569).
+The downloaded module's Origin and all three changed files match that commit.
+The cancel-during-dial regression first reproduced the captured-variable race;
+affected signalmeow/libsignalgo suites then passed locally on pure Go and on cgo with
+the race detector. Pure-Go vet, backend API parity and changed-file formatting
+passed. The published pin passes zkgroup integration with `-race` on both backends,
+and parent facade tests pass without the former log-hook shutdown workaround.
+Both pure-Go fork CI runs passed
+([37389203409](https://github.com/CWBudde/mautrix-signal/actions/runs/37389203409),
+[37389203740](https://github.com/CWBudde/mautrix-signal/actions/runs/37389203740)).
+The broad Go CI runs failed pre-commit formatting
+([37389203426](https://github.com/CWBudde/mautrix-signal/actions/runs/37389203426),
+[37389203670](https://github.com/CWBudde/mautrix-signal/actions/runs/37389203670))
+on the same six libsignalgo files, all byte-identical to `.21`. Neither failed log
+reports a changed websocket file.
+This fixes the observed captured-channel race; it does not certify every websocket
+lifecycle path. Immediate cancellation at `Connect`, handler completion, bounded
+incoming queue cancellation and pending-response cleanup remain follow-up review
+areas. The [external security review decision](security-review.md) is a separate
+deferral, not an audit result.
 
 ### 1. Rebase the mautrix fork
 

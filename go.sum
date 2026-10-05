@@ -12,8 +12,8 @@ github.com/cpuguy83/go-md2man/v2 v2.0.6 h1:XJtiaUW6dEEqVuZiMTn1ldk455QWwEIsMIJlo
 github.com/cpuguy83/go-md2man/v2 v2.0.6/go.mod h1:oOW0eioCTA6cOiMLiUPZOpcVxMig6NIQQ7OS05n1F4g=
 github.com/cwbudde/libsignal-go v0.7.1-cw.5 h1:uPm00lxE0TYBQqvuiVDFB9iTn18ozyWntiDuaX9d5y0=
 github.com/cwbudde/libsignal-go v0.7.1-cw.5/go.mod h1:tjVi5Ho6GLDneLyCSLkfmH1cIXgRtVF6woOglSa5n0Y=
-github.com/cwbudde/mautrix-signal v0.2609.0-purego.21 h1:O9jABYc465OnTDoiqhRtPsd7UT9KKmzIdrWNPdvQeoA=
-github.com/cwbudde/mautrix-signal v0.2609.0-purego.21/go.mod h1:PdAiOhrobYAUnUSueBekPD/YBoxpBNvnQPAuz1oQR5Y=
+github.com/cwbudde/mautrix-signal v0.2609.0-purego.22 h1:BdbK2OoSxRUXOtI7NDN3877y/raPAy05613HSDjpXTs=
+github.com/cwbudde/mautrix-signal v0.2609.0-purego.22/go.mod h1:PdAiOhrobYAUnUSueBekPD/YBoxpBNvnQPAuz1oQR5Y=
 github.com/dustin/go-humanize v1.0.1 h1:GzkhY7T5VNhEkwH0PVJgjz+fX1rhBrR7pRT3mDkpeCY=
 github.com/dustin/go-humanize v1.0.1/go.mod h1:Mu1zIs6XwVuF/gI1OepvI0qD18qycQx+mFykh5fBlto=
 github.com/frankban/quicktest v1.14.6 h1:7Xjx+VpznH+oBnejlPUj8oUpdxnVs4f8XU8WnHkI4W8=
