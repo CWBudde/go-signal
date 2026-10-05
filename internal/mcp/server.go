@@ -121,6 +121,7 @@ func NewServer(a *app.App, opts Options) *Server {
 	server.AddReceivingMiddleware(logCalls(logger))
 
 	addReadTools(server.Server, handlers)
+	addStickerTools(server.Server, handlers)
 	addDoctor(server.Server, handlers)
 	addInboxTools(server.Server, handlers)
 	addResources(server.Server, handlers)

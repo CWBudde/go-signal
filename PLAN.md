@@ -61,6 +61,8 @@ go-signal link [--name <device-name>] [--sync-timeout 60s]
 go-signal send <recipient>... -m <text> | --stdin [--attach <file>]... [--group <id>] [--quote <author>:<ts>]
 go-signal send <recipient>... --edit <timestamp> -m <replacement>
 go-signal send <recipient>... --sticker-pack <link> --sticker-id <n>
+go-signal stickers install <signal.art-link>
+go-signal stickers list
 go-signal stories audiences
 go-signal stories send (--group <id> | --distribution-list <uuid> | --my-story) (-m <text> | --stdin | --attach <image-or-video>) [--no-replies]
 go-signal receive [--timeout 5s] [--max N] [--follow] [--download-attachments <dir>] [--send-read-receipts]
@@ -278,7 +280,14 @@ following the docs.
       ([procedure](docs/dev.md#group-story-sending-live-check)); deferred until a phone session is arranged.
 - [ ] Story reception phone acceptance on disposable accounts and both backends
       ([procedure](docs/dev.md#story-reception-live-check)); deferred until a phone session is arranged.
-- [ ] Sticker pack installation/caching, expired-image fallback, MCP sticker tools.
+- [x] Sticker extras implementation: `stickers install`/`list` atomically cache complete packs
+      per account, with bounded authenticated downloads and offline reuse by ID/key. Received
+      expired/absent images fall back to the pack, including cover-only stickers, without
+      bypassing integrity failures. MCP list/install/send/get preserve read-only, confirmation,
+      allowlist and receipt policy. Facade/store/app tests, plain/JSON goldens, docs and both
+      backend checks cover implementation. Installation is local, without phone-state sync.
+- [ ] Sticker extras phone acceptance on disposable accounts and both backends
+      ([procedure](docs/dev.md#sticker-extras-live-check)); deferred until a phone session is arranged.
 - [ ] Polls: direct-chat sends, automatic vote counters, durable projections, MCP/daemon poll tools.
 - [ ] Facade/command/output tests, docs and live checks for each.
 
@@ -326,11 +335,13 @@ signalmeow doesn't cover it; build on `libsignalgo` + `web` if there is demand.
 - signalmeow drops null messages and the destination number of sync transcripts.
 - Received stories are retained as inbox events, without automatic expiry removal or audience
   projections. Story media downloads are currently CLI-only.
-- Attachments are held in memory (up to 100 MiB); failed downloads can't be retried later; no
+- Ordinary attachments are held in memory (up to 100 MiB); failed downloads can't be retried later; no
   thumbnails, blurhash or voice-note flags on send or receive.
 - The storage service is always fetched in full; contact avatars and blocked groups aren't
   handled; group blocking isn't supported. Private story audiences are fetched on demand,
   without list creation/editing; PNI audience entries and custom exclusion lists are unsupported.
+- Sticker installation is local; phone installation-state sync, pack uploads and uninstall
+  commands aren't supported. Pack listing currently loads cached images along with metadata.
 - `groups list` fetches every group sequentially; "left on another device" and "removed" both look
   like a 403.
 - Polls and pins are reconstructed only from the retained inbox (`mcp serve`/`daemon serve`), with

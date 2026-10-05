@@ -21,7 +21,7 @@ var (
 func stickerMessage() *signal.Message {
 	msg := incoming("")
 	msg.Sticker = &signal.Sticker{
-		PackID: "public-pack", StickerID: 7, Emoji: "🙂",
+		PackID: "public-pack", PackKey: []byte("secret-pack-key"), StickerID: 7, Emoji: "🙂",
 		Image: &signal.Attachment{
 			ContentType: "image/webp", Filename: "sticker.webp", Size: 123, Caption: "caption",
 			Remote: signal.RemoteAttachment{
@@ -50,7 +50,9 @@ func assertStickerJSON(t *testing.T, got, want string) {
 		t.Errorf("got version %d sticker %s, want version 1 sticker %s", doc.Version, doc.Sticker, want)
 	}
 
-	for _, secret := range []string{"secret-cdn", "secret-key", "secret-digest", "Remote", "cdn", "digest", "packKey"} {
+	for _, secret := range []string{
+		"secret-pack-key", "secret-cdn", "secret-key", "secret-digest", "Remote", "cdn", "digest", "packKey",
+	} {
 		if strings.Contains(got, secret) {
 			t.Errorf("leaked %q: %s", secret, got)
 		}
@@ -153,7 +155,10 @@ func TestSavedStickerMedia(t *testing.T) {
 				msg.Sticker.Image = nil
 			}
 
-			saved := app.MessageMediaResult{Attachments: []app.SavedAttachment{testCase.regular}, Sticker: testCase.sticker}
+			saved := app.MessageMediaResult{
+				Attachments: []app.SavedAttachment{testCase.regular},
+				Sticker:     testCase.sticker,
+			}
 			if testCase.name == "no result" {
 				saved.Attachments = nil
 			}
@@ -209,6 +214,46 @@ func checkSavedStickerMedia(t *testing.T, msg *signal.Message, saved app.Message
 			}
 		} else if !strings.HasSuffix(got, wantPlain+"\n") || strings.Count(got, "\n") != 1 {
 			t.Errorf("unexpected plain: %q", got)
+		}
+	}
+}
+
+func TestSavedStickerFallbackMetadata(t *testing.T) {
+	t.Parallel()
+
+	for _, pointer := range []bool{true, false} {
+		msg := stickerMessage()
+		if !pointer {
+			msg.Sticker.Image = nil
+		}
+
+		saved := app.MessageMediaResult{
+			Sticker: &app.SavedAttachment{
+				Path:  "/fallback.gif",
+				Image: &signal.Attachment{ContentType: "image/gif", Size: 8},
+			},
+		}
+
+		var jsonBuf bytes.Buffer
+
+		err := output.New(&jsonBuf, output.JSON, time.UTC).SavedMessageMedia(msg, saved)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !strings.Contains(jsonBuf.String(), `"image":{"contentType":"image/gif","size":8,"path":"/fallback.gif"}`) {
+			t.Fatalf("fallback metadata %s", jsonBuf.String())
+		}
+
+		var plainBuf bytes.Buffer
+
+		err = output.New(&plainBuf, output.Plain, time.UTC).SavedMessageMedia(msg, saved)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !strings.Contains(plainBuf.String(), "→ /fallback.gif") {
+			t.Fatalf("fallback path %s", plainBuf.String())
 		}
 	}
 }

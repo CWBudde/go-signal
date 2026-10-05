@@ -128,7 +128,7 @@ func TestStickerInboxImageRoundTrip(t *testing.T) {
 	t.Parallel()
 
 	image := &signal.Attachment{ContentType: stickerWebPType, Remote: signal.RemoteAttachment{CDNKey: "sticker-image-key", Key: []byte{1, 2}, Digest: []byte{3}}}
-	evt := &signal.Message{Sticker: &signal.Sticker{PackID: "ab", Image: image}}
+	evt := &signal.Message{Sticker: &signal.Sticker{PackID: "ab", PackKey: []byte{9, 8}, Image: image}}
 
 	blob, err := signal.MarshalEvent(evt, signal.Chat{})
 	if err != nil {
@@ -138,6 +138,12 @@ func TestStickerInboxImageRoundTrip(t *testing.T) {
 	decoded, _ := signal.UnmarshalEvent(blob)
 
 	got := decoded.(*signal.Message).Sticker.Image //nolint:forcetypeassert // fixture marshals a Message
+
+	messageWithKey, ok := decoded.(*signal.Message)
+	if !ok || len(messageWithKey.Sticker.PackKey) != 2 {
+		t.Fatal("pack key missing from private inbox")
+	}
+
 	if got == nil || got.Remote.CDNKey != "sticker-image-key" || len(got.Remote.Key) != 2 {
 		t.Fatalf("image %+v", got)
 	}

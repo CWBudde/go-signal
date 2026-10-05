@@ -26,6 +26,11 @@ func (c *client) FetchSticker(ctx context.Context, ref signal.StickerReference) 
 		return signal.StickerData{}, fmt.Errorf("fetch sticker: %w", err)
 	}
 
+	data, found, err := c.cachedSticker(ref)
+	if found || err != nil {
+		return data, err
+	}
+
 	ref.PackKey = slices.Clone(ref.PackKey)
 
 	c.fake.fetchedStickers = append(c.fake.fetchedStickers, ref)
@@ -54,4 +59,30 @@ func (f *Fake) FetchedStickers() []signal.StickerReference {
 	}
 
 	return out
+}
+
+func (c *client) cachedSticker(ref signal.StickerReference) (signal.StickerData, bool, error) {
+	acc, err := c.fake.account(c.opts)
+	if err != nil {
+		return signal.StickerData{}, false, nil //nolint:nilerr // standalone CDN fixtures need no account.
+	}
+
+	for _, pack := range c.fake.installedStickerPacks[acc.ACI] {
+		if pack.Reference.PackID != ref.PackID || !sameFakeStickerKey(pack.Reference, ref) {
+			continue
+		}
+
+		for _, item := range pack.Stickers {
+			if item.ID == ref.StickerID {
+				data := item.Data
+				data.Image.Data = slices.Clone(data.Image.Data)
+
+				return data, true, nil
+			}
+		}
+
+		return signal.StickerData{}, false, signal.ErrStickerNotFound
+	}
+
+	return signal.StickerData{}, false, nil
 }

@@ -47,7 +47,9 @@ type Message struct {
 // Sticker is a sticker from a sticker pack.
 type Sticker struct {
 	// PackID is the hex-encoded ID of the sticker pack.
-	PackID    string
+	PackID string
+	// PackKey is retained privately for authenticated expired-image fallback.
+	PackKey   []byte
 	StickerID uint32
 	// Emoji is the emoji the sticker stands for, if the sender set one.
 	Emoji string

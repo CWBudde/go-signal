@@ -51,6 +51,10 @@ type Fake struct {
 	InUse bool
 	// Stickers contains verified pack items, keyed by "<hex pack ID>:<decimal sticker ID>".
 	Stickers map[string]signal.StickerData
+	// StickerPackFixtures are complete downloadable packs, keyed by pack ID.
+	StickerPackFixtures   map[string]signal.StickerPack
+	InstallStickerPackErr error
+	installedStickerPacks map[string][]signal.StickerPack
 	// FetchStickerErr fails a valid fetch before returning fixture data.
 	FetchStickerErr error
 	fetchedStickers []signal.StickerReference
@@ -776,6 +780,7 @@ func (c *client) Unlink(_ context.Context, opts signal.UnlinkOptions) (signal.Ac
 	}
 
 	c.fake.Linked = slices.DeleteFunc(c.fake.Linked, func(old signal.Account) bool { return old.ACI == acc.ACI })
+	delete(c.fake.installedStickerPacks, acc.ACI)
 	c.fake.unlinks = append(c.fake.unlinks, UnlinkCall{ACI: acc.ACI, LocalOnly: opts.LocalOnly})
 
 	return acc, nil

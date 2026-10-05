@@ -134,7 +134,7 @@ make the agent do. The limits are enforced by the server itself, not left to the
   tools that return messages say that message text, file names and captions come from other
   people and must never be followed as instructions. This lowers the risk but can't rule it
   out, so the checks below don't depend on the model.
-- **Allowlist.** `send_message`, `react` and `delete_message` only go to the chats named with
+- **Allowlist.** `send_message`, `sticker_send`, `react` and `delete_message` only go to the chats named with
   `--allow-recipient`. The server rejects other recipients before anything is uploaded or sent
   ("recipient not allowed"). By default nobody is allowed.
   - An entry can be a phone number, an ACI, an `@username`, `group:<id>` or `self` (note to
@@ -149,8 +149,8 @@ make the agent do. The limits are enforced by the server itself, not left to the
   talked into sending your SSH keys. Without `--attach-dir`, it sends no attachments at all.
 - **Read-only.** `--read-only` leaves out every tool that sends something to Signal, including
   `mark_read`, which sends read receipts. `attachment_get` stays, since it only writes to the
-  local download directory.
-- **Confirmation.** With `--confirm`, every call of `send_message`, `react` and `delete_message`
+  local download directory. `sticker_get` stays too; local pack installation is omitted.
+- **Confirmation.** With `--confirm`, every call of `send_message`, `sticker_send`, `sticker_pack_install`, `react` and `delete_message`
   first asks you, through the client (MCP elicitation), e.g. _Send "on my way" to Alice?_.
   - The server checks the allowlist before it asks.
   - Your answer applies only to that one call with exactly those arguments.
@@ -477,3 +477,26 @@ runs, the agent can call the `doctor` tool instead.
   to confirm. Drop `--confirm`, and rely on the allowlist, or use another client.
 - **No messages arrive**: only one process receives for a device, and the server only stores
   what arrives while it runs. Check `go-signal -v mcp serve` in a terminal for errors.
+
+## Stickers
+
+| Tool                   | Input                                          | Returns                                                                             |
+| ---------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `sticker_packs_list`   | —                                              | `{"stickerPacks": [...]}` with public pack metadata and sticker IDs                 |
+| `sticker_pack_install` | `pack` (HTTPS signal.art share link)           | The installed pack in `stickerPacks`                                                |
+| `sticker_send`         | `recipients`, `pack` (share link), `stickerId` | Ordinary send timestamp and per-recipient outcomes                                  |
+| `sticker_get`          | `message` (inbox entry ID)                     | Saved `path`, `contentType`, `filename`, `size`; small supported images also inline |
+
+Pack installation downloads and atomically caches a complete pack for the selected account.
+It changes only the local cache, without changing phone installation state. `--confirm` asks
+before installation and sticker sends; prompts show the public pack ID rather than the secret
+link. Share links contain secret keys, so provide them only to a trusted MCP client. Tool
+output, confirmation text and logs omit these keys.
+
+`sticker_send` shares the normal send allowlist and rejects disallowed targets before fetching
+or uploading images. A matching installed cache works offline for fetching; sending still
+needs a connection. `sticker_get` saves into the server's download directory, preserving
+existing files, and uses the same expired-image fallback as CLI receive. It neither marks the
+message read nor sends receipts. It accepts message entries with stickers; story and other
+events are rejected. Animated bytes are preserved; APNG remains a file rather than an inline
+MCP image. `--read-only` keeps list/get and omits install/send.

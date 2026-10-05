@@ -681,7 +681,7 @@ sticker ID; `0` is a valid ID. No live sticker checks run in ordinary tests or C
    metadata should appear without a local file, path or download error.
 3. Repeat with a static WebP and an available animated PNG/APNG or GIF pack. File bytes
    are preserved; go-signal performs no conversion. Missing images are reported per item,
-   without stopping receive, and have no permanent-pack fallback.
+   without stopping receive; authenticated pack fallback is available for missing/expired images.
 4. Rebuild with `just build-cgo` and repeat on the same dedicated account. Record backend,
    pack ID/sticker ID, actual phone rendering, sync and downloaded file evidence. Do not
    record pack keys in the roadmap. Leave live acceptance open if either backend or phone
@@ -689,8 +689,9 @@ sticker ID; `0` is a valid ID. No live sticker checks run in ordinary tests or C
 
 Outgoing pack fetching accepts only Signal share links, then requests fixed Signal CDN paths;
 it never contacts the link's supplied host. Manifest and image encrypted responses are limited
-to 1 MiB and 100 MiB respectively, verified before upload. Pack installation, caching, MCP
-sticker tools and uploading new packs are deferred.
+to 1 MiB and 100 MiB respectively, verified before upload. Complete local installations are
+bounded to 200 items and 100 MiB of decoded images. Uploading new packs and phone
+installation-state sync remain open.
 
 The real websocket cache fixture synchronizes its cleanup to avoid a known race in the pinned
 dependency: `connectLoop` clears a captured request channel while the handler can still read
@@ -1108,3 +1109,27 @@ Not yet run. Use disposable linked accounts and repeat with both pure Go and cgo
    must not become a delivery fallback.
 6. Remove the test stories, restore audience/privacy settings, and unlink/delete disposable
    accounts. Record both backend results before checking off phone acceptance in PLAN.md.
+
+### Sticker extras live check
+
+This acceptance check has not been run. Use the disposable accounts and both backends from
+the [sticker live check](#sticker-live-check); never record share links or pack keys in PLAN.md.
+
+1. Install a known static pack and an animated pack with `stickers install '<link>'`.
+   List in plain and JSON; verify title/author, cover and IDs, including zero. Repeat on a
+   second selected account and confirm caches are separate. Phone installation state should
+   remain unchanged because installation is local.
+2. Restart, block CDN access and reinstall the same link; cached fetching should still work.
+   Restore access and send a cached sticker to self/peer/group. Confirm image, emoji,
+   animation and normal own-device message sync. Try a wrong key and failed pack/image
+   retrieval; the installed cache must remain intact and must not supply bytes for that key.
+3. Receive a peer sticker with `--download-attachments`. For a retained message with an
+   expired embedded image, call MCP `sticker_get`; verify authenticated pack fallback, actual
+   MIME/size/path and no read receipt. Real CDN expiry is required for phone acceptance;
+   synthetic expired/integrity/cancellation cases are covered by offline tests.
+4. Exercise all four MCP sticker tools. Check read-only list/get, omitted install/send,
+   confirmation acceptance/decline and rejected recipients before fetch/upload. Inspect output
+   and logs for key omission; confirm downloads preserve existing files and reject non-message
+   events. Stop/restart receiving and confirm the private inbox retained enough data for fallback.
+5. Repeat with the other backend on the same dedicated account, restore network settings and
+   clean up disposable accounts. Record actual evidence before marking acceptance complete.

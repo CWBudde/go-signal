@@ -177,10 +177,10 @@ func TestListTools(t *testing.T) {
 
 	readTools := []string{
 		accountShowTool, "attachment_get", "contacts_list", "contacts_show", "doctor", "groups_list", "groups_show",
-		"identities_list", "messages_list", "messages_wait",
+		"identities_list", "messages_list", "messages_wait", "sticker_get", "sticker_packs_list",
 	}
 	allTools := slices.Sorted(slices.Values(append(slices.Clone(readTools),
-		"delete_message", "mark_read", "react", "send_message")))
+		"delete_message", "mark_read", "react", "send_message", "sticker_pack_install", "sticker_send")))
 
 	for _, test := range []struct {
 		readOnly bool
@@ -217,6 +217,7 @@ func checkAnnotations(t *testing.T, tool *sdk.Tool) {
 	writes := map[string]hints{
 		"attachment_get": {}, "mark_read": {openWorld: true}, "send_message": {destructive: true, openWorld: true},
 		"react": {openWorld: true}, "delete_message": {destructive: true, openWorld: true},
+		"sticker_get": {}, "sticker_pack_install": {openWorld: true}, "sticker_send": {destructive: true, openWorld: true},
 	}
 
 	want, ok := writes[tool.Name]

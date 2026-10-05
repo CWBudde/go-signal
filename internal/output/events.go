@@ -43,10 +43,7 @@ func (p *Printer) SavedMessage(msg *signal.Message, saved []app.SavedAttachment)
 func (p *Printer) SavedMessageMedia(msg *signal.Message, saved app.MessageMediaResult) error {
 	if p.format == JSON {
 		doc := p.messageDocOf(msg, saved.Attachments)
-		if doc.Sticker != nil && doc.Sticker.Image != nil && saved.Sticker != nil {
-			doc.Sticker.Image.Path = saved.Sticker.Path
-			doc.Sticker.Image.DownloadError = errorText(saved.Sticker.Err)
-		}
+		applySavedSticker(doc.Sticker, saved.Sticker)
 
 		return p.writeJSON(doc)
 	}
@@ -581,7 +578,7 @@ func stickerText(sticker *signal.Sticker, saved *app.SavedAttachment) string {
 		text += " " + oneLine(sticker.Emoji)
 	}
 
-	if sticker.Image == nil || saved == nil {
+	if saved == nil || (sticker.Image == nil && saved.Image == nil) {
 		return text + "]"
 	}
 

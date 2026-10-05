@@ -161,6 +161,7 @@ func convertDataMessage(env Envelope, msg *signalpb.DataMessage) Event {
 	if sticker := msg.GetSticker(); sticker != nil {
 		out.Sticker = &Sticker{
 			PackID:    hex.EncodeToString(sticker.GetPackId()),
+			PackKey:   append([]byte(nil), sticker.GetPackKey()...),
 			StickerID: sticker.GetStickerId(),
 			Emoji:     sticker.GetEmoji(),
 		}

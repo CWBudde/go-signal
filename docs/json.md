@@ -1183,8 +1183,11 @@ is `<dir>/<timestamp>-sticker-<stickerId><extension>`; collisions get a numeric 
 existing files are never overwritten. Pack keys and the image's cryptographic/CDN details are
 not rendered. Metadata-only stickers and old inbox entries may have no `image`.
 
-Sticker image downloads use the embedded message attachment. An expired or invalid attachment
-produces `sticker.image.downloadError`; other media and subsequent messages still proceed.
+Sticker image downloads prefer the embedded attachment. A missing or expired image can fall
+back to an installed cache or authenticated pack download using the privately retained pack
+key. The resulting `image` metadata and path describe the downloaded image, including when the
+original pointer was absent. Integrity errors and cancellation do not trigger fallback. A failed
+download produces `sticker.image.downloadError`; other media and later messages still proceed.
 These fields are additive; the schema remains version 1. Sticker sends use the existing send
 result envelope and per-recipient outcomes.
 
@@ -1345,3 +1348,33 @@ connected, and can come again after a reconnect.
 
 After `logged-out` (the device was unlinked) or `failed` (reconnecting gave up), `receive` exits
 with an error.
+
+## `stickers install` / `stickers list`
+
+Both return version 1 with a `stickerPacks` array. Installation returns the installed pack;
+listing returns all locally installed packs of the selected account, sorted by ID. An empty
+cache returns `[]`. Installation does not change phone installation state.
+
+```json
+{
+  "version": 1,
+  "stickerPacks": [
+    {
+      "id": "0123456789abcdef0123456789abcdef",
+      "title": "Animals",
+      "author": "Artist",
+      "coverId": 0,
+      "stickers": [
+        { "id": 0, "emoji": "😀", "contentType": "image/webp", "size": 4 }
+      ]
+    }
+  ]
+}
+```
+
+`coverId` is optional; zero is a valid ID. `stickers` lists every cached item, including a
+cover-only item, with ID, optional emoji, image MIME type and decoded byte size. Pack keys,
+links containing keys and cached image bytes are never output. MCP's `sticker_packs_list`
+and `sticker_pack_install` return the same array without `version`; `sticker_send` returns
+ordinary per-recipient send results. `sticker_get` returns the saved image's `path`,
+`contentType`, `filename` and decoded `size`, without pack keys or CDN locations.

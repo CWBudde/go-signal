@@ -57,9 +57,14 @@ type Client interface { //nolint:interfacebloat // the one facade over signalmeo
 	// It requires Connect and the storage master key; unavailable data never uses a cache.
 	StoryAudiences(ctx context.Context) (StoryAudiences, error)
 
-	// FetchSticker fetches and verifies a pack's selected image and metadata. It needs
+	// FetchSticker uses a matching installed cache or fetches/verifies the selected image. It needs
 	// no Connect, respects ctx and fails with ErrClosed after Close.
 	FetchSticker(ctx context.Context, ref StickerReference) (StickerData, error)
+
+	// InstallStickerPack atomically caches a complete pack locally for the selected account.
+	// StickerPacks lists installed packs offline. Neither operation needs Connect.
+	InstallStickerPack(ctx context.Context, ref StickerReference) (StickerPack, error)
+	StickerPacks(ctx context.Context) ([]StickerPack, error)
 
 	// Resolve returns recipients with their ACI filled in, in the same order. Recipients that
 	// already have one are returned as they are. A number is looked up in the store first and

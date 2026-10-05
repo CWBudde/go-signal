@@ -197,12 +197,32 @@ Received styles currently remain plain text and have no style metadata in receiv
 Phone rendering remains a separate [live check](docs/dev.md#text-style-live-check).
 
 Sticker sends contain only the sticker: text, stdin, attachments, replies and edits cannot be
-combined with `--sticker-pack` and `--sticker-id`. The pack link supplies its ID and key; only
-the selected image is fetched and uploaded, once for all recipients. Use a sticker ID from
-that pack's author or another source that lists its IDs. Pack installation/listing is deferred.
-WebP, PNG/APNG and GIF bytes are preserved, including animation. Received sticker images are
-downloaded only with `--download-attachments`; failures appear per image and receiving continues.
-Downloads use the image embedded in the message, without fallback if it has expired on the CDN.
+combined with `--sticker-pack` and `--sticker-id`. The pack link supplies its ID and key;
+the selected image is uploaded once for all recipients. WebP, PNG/APNG and GIF bytes are
+preserved, including animation.
+
+Install a pack locally to cache all its images and inspect its sticker IDs:
+
+```sh
+go-signal stickers install 'https://signal.art/addstickers/#pack_id=<id>&pack_key=<key>'
+go-signal stickers list
+go-signal send self --sticker-pack '<same-link>' --sticker-id 0
+```
+
+The selected account's database holds the secret key and verified images. Installation is
+atomic and limited to 200 items (including a cover-only item) and 100 MiB of decoded images.
+Installing the same ID and key again works offline; a failed download leaves the previous
+cache intact. Sends use a matching installed cache, or fetch just the selected image.
+Installation is local; it does not install the pack on your phone. Uploading new packs,
+uninstall commands and phone installation-state sync remain open.
+
+Received stickers are downloaded with `--download-attachments`. A missing or expired embedded
+image falls back to the matching installed cache or authenticated pack CDN download, when the
+message contains its pack key. Other failures, including cancellation and invalid attachment
+integrity, do not trigger fallback. Older retained messages without a pack key cannot use it.
+Paths use the downloaded image's type, and existing files are preserved. Failures appear per
+image and receiving continues. MCP supports listing/installing packs, sending stickers and
+[downloading received stickers](docs/mcp.md#stickers).
 
 `send --edit <timestamp>` works for users, groups (`--group <id>`) and `self`, including messages
 sent from your other devices when you know their timestamp. Supply the replacement content;

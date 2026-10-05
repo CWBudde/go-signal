@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/url"
-	"strconv"
 	"strings"
 
 	"github.com/cwbudde/go-signal/internal/signal"
@@ -70,26 +69,15 @@ func (a *App) buildSticker(ctx context.Context, ref signal.StickerReference) (co
 	return content{sticker: &signal.OutgoingSticker{Reference: ref, Emoji: data.Emoji, Image: uploaded[0]}}, nil
 }
 
-// SaveMessageMedia saves ordinary attachments and the embedded sticker image separately.
+// SaveMessageMedia saves regular attachments and a sticker, including expired-image fallback.
 func (a *App) SaveMessageMedia(ctx context.Context, req SaveAttachmentsRequest) MessageMediaResult {
 	out := MessageMediaResult{Attachments: a.SaveAttachments(ctx, req)}
-
-	sticker := req.Message.Sticker
-	if sticker == nil || sticker.Image == nil {
+	if req.Message.Sticker == nil || (req.Message.Sticker.Image == nil && len(req.Message.Sticker.PackKey) == 0) {
 		return out
 	}
 
-	out.Sticker = &SavedAttachment{}
-
-	err := PrepareDownloadDir(req.Dir)
-	if err != nil {
-		out.Sticker.Err = err
-		return out
-	}
-
-	name := strconv.FormatUint(req.Message.Timestamp, 10) + "-sticker-" +
-		strconv.FormatUint(uint64(sticker.StickerID), 10) + extension(sticker.Image.ContentType)
-	out.Sticker.Path, out.Sticker.Err = a.saveAttachment(ctx, req.Dir, name, *sticker.Image)
+	saved, err := a.saveSticker(ctx, req)
+	out.Sticker = &SavedAttachment{Path: saved.Path, Err: err, Image: &saved.Attachment}
 
 	return out
 }

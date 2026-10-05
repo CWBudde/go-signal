@@ -88,6 +88,8 @@ type SaveAttachmentsRequest struct {
 
 // SavedAttachment is the outcome of saving one attachment.
 type SavedAttachment struct {
+	// Image optionally supplies actual downloaded sticker metadata, including fallback images.
+	Image *signal.Attachment
 	// Path is the file written, Dir joined with its name; empty if Err is set.
 	Path string
 	// Err says why the attachment wasn't saved, e.g. signal.ErrAttachmentNotFound.

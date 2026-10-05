@@ -200,6 +200,7 @@ and offer a local HTTP API for scripts and bots.`,
 		newReceiveCmd(clients, printers),
 		newSendCmd(clients, printers, rootOpts.appOpts),
 		newStoriesCmd(clients, printers, rootOpts.appOpts),
+		newStickerPacksCmd(clients, printers, rootOpts.appOpts),
 		newVersionCmd(),
 	)
 

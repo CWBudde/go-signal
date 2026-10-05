@@ -33,11 +33,17 @@ func (c *meowClient) FetchSticker(ctx context.Context, ref StickerReference) (St
 	}
 	defer c.sending.Done()
 
-	client := *web.SignalHTTPClient
-	client.Timeout = stickerFetchTimeout
-	client.CheckRedirect = func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }
+	err := ref.Check()
+	if err != nil {
+		return StickerData{}, err
+	}
 
-	return fetchSticker(ctx, ref, &client)
+	data, found, err := c.cachedSticker(ctx, ref)
+	if err != nil || found {
+		return data, err
+	}
+
+	return fetchSticker(ctx, ref, stickerHTTPClient())
 }
 
 func fetchSticker(ctx context.Context, ref StickerReference, client *http.Client) (StickerData, error) {
@@ -88,7 +94,7 @@ func fetchSticker(ctx context.Context, ref StickerReference, client *http.Client
 }
 
 func supportedStickerMIME(mime string) bool {
-	return mime == "image/webp" || mime == "image/png" || mime == "image/apng" || mime == "image/gif"
+	return stickerMIME(mime)
 }
 
 func fetchStickerBlob(ctx context.Context, client *http.Client, path string, key []byte, limit int64) ([]byte, error) {
@@ -175,11 +181,11 @@ func unpadSticker(plain []byte) ([]byte, error) {
 	return plain[:len(plain)-padding], nil
 }
 
-func selectSticker(pack *signalpb.Pack, id uint32) (*signalpb.Pack_Sticker, error) {
+func selectSticker(pack *signalpb.Pack, stickerID uint32) (*signalpb.Pack_Sticker, error) {
 	var selected *signalpb.Pack_Sticker
 
 	for _, item := range pack.GetStickers() {
-		if item == nil || item.Id == nil || item.GetId() != id {
+		if item == nil || item.Id == nil || item.GetId() != stickerID {
 			continue
 		}
 
@@ -191,8 +197,21 @@ func selectSticker(pack *signalpb.Pack, id uint32) (*signalpb.Pack_Sticker, erro
 	}
 
 	if selected == nil {
-		return nil, ErrStickerNotFound
+		return selectStickerCover(pack, stickerID)
 	}
 
 	return selected, nil
+}
+
+func selectStickerCover(pack *signalpb.Pack, stickerID uint32) (*signalpb.Pack_Sticker, error) {
+	cover := pack.GetCover()
+	if cover == nil || cover.GetId() != stickerID {
+		return nil, ErrStickerNotFound
+	}
+
+	if !validStickerManifestItem(cover) {
+		return nil, ErrInvalidSticker
+	}
+
+	return cover, nil
 }
