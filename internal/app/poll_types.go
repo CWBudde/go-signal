@@ -12,14 +12,15 @@ type PollCreateRequest struct {
 	SingleChoice bool
 }
 
-// PollVoteRequest changes this account's selections with an explicit increasing counter.
+// PollVoteRequest changes this account's selections, reserving a durable counter before sending.
 type PollVoteRequest struct {
 	GroupID       string
 	Recipient     string
 	Target        string
 	OptionIndexes []uint32
-	VoteCount     uint32
-	Clear         bool
+	// VoteCount is zero for automatic allocation; positive values are sent unchanged.
+	VoteCount uint32
+	Clear     bool
 }
 
 // PollCloseRequest closes our own poll at Target in one chat.

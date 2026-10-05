@@ -196,6 +196,8 @@ type Fake struct {
 
 	// InboxErr makes the inbox methods fail. The inbox itself is kept in memory (see Inbox).
 	InboxErr error
+	// PollCounterErr makes counter persistence fail before submission or event delivery.
+	PollCounterErr error
 
 	mu             sync.Mutex
 	opened         []signal.Options
@@ -212,6 +214,7 @@ type Fake struct {
 	profileUpdates []ProfileUpdateCall
 	leaves         []LeaveCall
 	left           map[string]time.Time // groups left with LeaveGroup, by ID
+	pollCounters   map[pollCounterKey]uint32
 	inbox          []signal.InboxEntry
 	inboxID        int64
 }
@@ -887,6 +890,18 @@ func (c *client) feed(incoming []signal.Event) {
 
 // deliver hands evt to the consumer of Events; false means that Close came first.
 func (c *client) deliver(evt signal.Event) bool {
+	c.fake.mu.Lock()
+
+	req, ok := signal.OwnPollVoteCounter(evt, c.connected)
+	if ok {
+		_, err := c.fake.reservePollVote(c.connected, req)
+		if err != nil {
+			c.fake.mu.Unlock()
+			return false
+		}
+	}
+	c.fake.mu.Unlock()
+
 	select {
 	case c.events <- evt:
 		c.fake.mu.Lock()

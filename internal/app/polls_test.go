@@ -73,11 +73,17 @@ func TestPollRequestChecks(t *testing.T) {
 		{GroupID: groupID, Target: aliceACI + ":10", VoteCount: 1},
 		{GroupID: groupID, Target: aliceACI + ":10", VoteCount: 1, Clear: true, OptionIndexes: []uint32{0}},
 		{GroupID: groupID, Target: aliceACI + ":10", VoteCount: 1, OptionIndexes: []uint32{1, 1}},
-		{GroupID: groupID, Target: aliceACI + ":10", OptionIndexes: []uint32{0}},
 	} {
 		if req.Check() == nil {
 			t.Fatalf("accepted %+v", req)
 		}
+	}
+
+	automatic := app.PollVoteRequest{GroupID: groupID, Target: aliceACI + ":10", OptionIndexes: []uint32{0}}
+
+	err := automatic.Check()
+	if err != nil {
+		t.Fatalf("automatic counter preflight: %v", err)
 	}
 
 	if (app.PollShowRequest{GroupID: groupID, Target: "self:10"}).Check() == nil {

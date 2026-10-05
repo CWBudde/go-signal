@@ -511,7 +511,7 @@ See [the live-check procedure](docs/dev.md#own-profile-live-check) for phone and
 
 `polls create`, `polls vote` and `polls close` send standalone polls to one group or direct chat
 (`--group <id>` or `--recipient <ACI|+number|@username|self>`). Options use
-zero-based indexes; votes require an explicit increasing `--vote-count`, and `--clear`
+zero-based indexes; votes allocate durable local counters unless `--vote-count` overrides them, and `--clear`
 withdraws a selection. `polls show` reads retained daemon/MCP inbox observations offline,
 with unknown completeness. See [poll commands and results](docs/polls.md).
 

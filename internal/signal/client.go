@@ -12,6 +12,11 @@ import (
 // A Client is used by a single command: Open it, then either Link a new account or Connect an
 // existing one, read Events, and Close it.
 type Client interface { //nolint:interfacebloat // the one facade over signalmeow; tests fake it whole
+	// ReservePollVote durably reserves this account's next poll vote counter before sending.
+	// Positive Explicit values are returned unchanged and raise the durable maximum. It works
+	// offline in the selected account. Reservations survive failed sends and inbox pruning.
+	ReservePollVote(ctx context.Context, req PollVoteCounterRequest) (uint32, error)
+
 	// Link provisions a new secondary device. It calls onURI with the sgnl://linkdevice URI to
 	// show to the user, refreshing unscanned codes about every 45 seconds. Each call to onURI
 	// replaces the previous code. Link blocks until the account is stored or ctx is cancelled.

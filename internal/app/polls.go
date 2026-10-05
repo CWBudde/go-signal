@@ -88,7 +88,7 @@ func (req PollVoteRequest) Check() error {
 	// Author resolution is intentionally deferred until after destination allowlist checking.
 	vote := signal.OutgoingPollVote{
 		TargetAuthor:    signal.Recipient{ACI: "00000000-0000-0000-0000-000000000001"},
-		TargetTimestamp: timestamp, OptionIndexes: req.OptionIndexes, VoteCount: req.VoteCount,
+		TargetTimestamp: timestamp, OptionIndexes: req.OptionIndexes, VoteCount: max(req.VoteCount, 1),
 	}
 
 	err = vote.Check()
@@ -187,7 +187,7 @@ func (a *App) PollCreate(ctx context.Context, req PollCreateRequest) (PollSendRe
 	return out, err
 }
 
-// PollVote sends the caller's explicit vote counter and selection.
+// PollVote reserves a durable counter for selections or withdrawal, with an optional explicit override.
 func (a *App) PollVote(ctx context.Context, req PollVoteRequest) (PollSendResult, error) {
 	err := req.Check()
 	if err != nil {
@@ -205,10 +205,10 @@ func (a *App) PollVote(ctx context.Context, req PollVoteRequest) (PollSendResult
 	}
 
 	out.SendResult,
-		err = a.sendContent(ctx,
+		err = a.sendPreparedContent(ctx,
 		"poll vote",
 		[]string{destination},
-		func(ctx context.Context) (content,
+		func(ctx context.Context, targets []Target) (content,
 			error,
 		) {
 			authors := []Target{author}
@@ -219,12 +219,20 @@ func (a *App) PollVote(ctx context.Context, req PollVoteRequest) (PollSendResult
 			}
 
 			out.TargetAuthor = authors[0].Recipient
+			chat := signal.Chat{GroupID: targets[0].GroupID, Recipient: targets[0].Recipient}
+
+			out.VoteCount, err = a.client.ReservePollVote(ctx, signal.PollVoteCounterRequest{
+				Chat: chat, Author: out.TargetAuthor, Timestamp: timestamp, Explicit: req.VoteCount,
+			})
+			if err != nil {
+				return content{}, fmt.Errorf("reserve counter: %w", err)
+			}
 
 			return content{pollVote: &signal.OutgoingPollVote{
 					TargetAuthor:    out.TargetAuthor,
 					TargetTimestamp: timestamp,
 					OptionIndexes:   slices.Clone(req.OptionIndexes),
-					VoteCount:       req.VoteCount,
+					VoteCount:       out.VoteCount,
 				}},
 				nil
 		})

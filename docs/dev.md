@@ -726,11 +726,17 @@ explicit `--data-dir` and `--account` on every command; stop other receivers for
    poll and verify it on the linked phone. Collect direct-chat controls through daemon/MCP,
    then inspect with `polls show --recipient <canonical-chat-aci>` and verify isolation from
    group and other direct-chat events.
-6. Rebuild with `just build-cgo` and repeat with fresh group and direct polls. Record
+6. Omit `--vote-count` for successive selections and `--clear`; confirm JSON counters increase
+   across CLI restarts and the phone shows each change. Vote from the linked phone, receive
+   its own-device transcript, then confirm the next automatic CLI counter exceeds it. Prune
+   the daemon/MCP inbox and confirm the counter still increases. On a disposable poll, send
+   an explicit higher counter, then confirm automatic allocation continues above it.
+7. Rebuild with `just build-cgo` and repeat with fresh group and direct polls. Record
    backend, poll identity, phone results, sync and received-state evidence. Only then tick
    the separately open roadmap live-acceptance item.
 
-Automatic counters, durable poll projections and MCP/daemon poll tools are deferred.
+Durable poll projections and MCP/daemon poll tools are deferred.
+Automatic-counter phone acceptance also remains open; local allocation cannot establish unseen other-device state.
 The direct-chat/self extension has not been verified with a phone session. Tests cover exact
 payload construction and retained observations on both backends offline; they do not establish phone acceptance.
 

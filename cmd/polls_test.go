@@ -210,7 +210,7 @@ func pollPreflightCases() [][]string {
 			pollOptionFlag, pollSecond, "--message", "mixed",
 		},
 		{pollCreateVerb, pollQuestionFlag, "Q", pollOptionFlag, pollFirst, pollOptionFlag, pollSecond},
-		{pollVoteVerb, groupFlag, groupID, targetFlg, aliceACI + ":" + targetTS, pollOptionFlag, "0"},
+		{pollVoteVerb, groupFlag, groupID, targetFlg, aliceACI + ":" + targetTS, pollOptionFlag, "10"},
 		{
 			pollVoteVerb, groupFlag, groupID, targetFlg, aliceACI + ":" + targetTS, pollCountFlag, "0",
 			pollOptionFlag, "0",

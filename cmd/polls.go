@@ -75,14 +75,15 @@ func newPollVoteCmd(clients *clientOpener, printers *printerFactory, appOpts []a
 	)
 
 	cmd := &cobra.Command{
-		Use:   "vote (--group <id> | --recipient <user>) --target <author>:<timestamp> --vote-count <number>",
+		Use:   "vote (--group <id> | --recipient <user>) --target <author>:<timestamp> [--vote-count <number>]",
 		Short: "Change or withdraw your selections on a poll",
 		Long: `Vote on a poll identified by its creator and creation timestamp in milliseconds.
 The creator can be an ACI, number, @username or self. --option is a zero-based index (0–9)
 and can be repeated; duplicate indexes are rejected. Use --clear instead of options to withdraw.
---vote-count is a positive uint32 counter: start at 1 and increase it for every change,
-including withdrawals. Coordinate counters with your other devices; retained inbox history
-cannot safely determine the next counter. Supply one --group or --recipient.
+Omit --vote-count to reserve the next durable account-local counter, including withdrawals.
+Own-device votes observed while receiving advance it; failed sends still consume a reservation.
+Use a positive --vote-count to override when coordinating with unseen other-device activity.
+Local counters cannot establish the latest vote on another device. Supply one --group or --recipient.
 The phone validates selections against the original poll; this command does not require it locally.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -92,6 +93,9 @@ The phone validates selections against the original poll; this command does not 
 			}
 
 			req.GroupID, req.Recipient = groupID, recipient
+			if cmd.Flags().Changed("vote-count") && req.VoteCount == 0 {
+				return fmt.Errorf("%w: explicit vote count must be positive", signal.ErrInvalidPoll)
+			}
 
 			req.OptionIndexes, err = pollOptionIndexes(options)
 			if err != nil {
@@ -111,11 +115,11 @@ The phone validates selections against the original poll; this command does not 
 	flags := cmd.Flags()
 	pollDestinationFlags(cmd, &groups, &recipients)
 	flags.StringVar(&req.Target, "target", "", "poll creator and sent timestamp: <author>:<timestamp>")
-	flags.Uint32Var(&req.VoteCount, "vote-count", 0, "positive counter, increased for each vote change")
+	flags.Uint32Var(&req.VoteCount, "vote-count", 0,
+		"explicit positive counter override (default: automatic local allocation)")
 	flags.StringArrayVar(&options, "option", nil, "zero-based selected index (repeatable)")
 	flags.BoolVar(&req.Clear, "clear", false, "withdraw your selections")
 	cobra.CheckErr(cmd.MarkFlagRequired("target"))
-	cobra.CheckErr(cmd.MarkFlagRequired("vote-count"))
 	cmd.MarkFlagsMutuallyExclusive("option", "clear")
 
 	return cmd

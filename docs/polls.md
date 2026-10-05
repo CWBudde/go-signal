@@ -8,7 +8,7 @@ failures return a nonzero exit code and are not retried automatically. Delivery 
 
 ```sh
 go-signal polls create --recipient '+15550101' --question 'When?' --option 'Today' --option 'Tomorrow'
-go-signal polls vote --recipient '+15550101' --target '<creator-aci>:<creation-timestamp>' --vote-count 1 --option 0
+go-signal polls vote --recipient '+15550101' --target '<creator-aci>:<creation-timestamp>' --option 0
 go-signal polls close --recipient '+15550101' --target '<creation-timestamp>'
 go-signal polls create --group '<group-id>' --question 'When?' --option 'Today' --option 'Tomorrow'
 go-signal polls create --group '<group-id>' --question 'Pick one' --option 'Yes' --option 'No' --single-choice
@@ -30,14 +30,26 @@ from `account show` for its author. Only the account that created a poll can clo
 The poll's original options need not be stored locally to send a vote; the receiving phone
 validates it against the original poll.
 
-`--vote-count` orders successive votes by the same account. Start at 1 and increase it for
-every change, including withdrawals. It is a positive uint32 counter, not a tally of selected
-options. Coordinate it with activity on your other devices. Older counters can be ignored by
-receivers; incomplete local history cannot safely choose the next one. Withdrawal requires
-explicit `--clear` instead of `--option`.
+Omit `--vote-count` to allocate the next positive uint32 counter automatically, starting at
+1 for a poll with no local counter. It orders this account's changes, including withdrawals;
+it is not a tally. The counter is stored per account, chat, creator ACI and creation timestamp.
+Reservations are atomic and durable before submission: failed and partial sends consume them,
+so a later command uses a larger counter. Reopening the CLI or pruning the inbox does not reset
+it. Allocation at the uint32 maximum fails before sending.
 
-Polls are standalone content and use their own command group. Automatic vote-counter
-allocation, durable poll projections and poll write tools for MCP/daemon are deferred.
+Valid own-device votes observed by ordinary `receive`, daemon or MCP receiving advance the
+local maximum before delivery is acknowledged. Other voters do not affect your counter.
+Send-only commands leave incoming votes unread on the server. Local counters cannot guarantee
+they exceed activity on devices whose votes have not been received here, including activity
+before upgrading or linking. Receive pending own-device transcripts before voting, or supply
+an explicit positive `--vote-count` greater than the other devices' latest counter. An explicit
+counter is sent unchanged and raises the local maximum; it never lowers that maximum. Older
+explicit counters may be ignored by receivers. Explicit zero is rejected. Withdrawal requires
+`--clear` instead of `--option` and allocates a counter just like a selection change.
+JSON `voteCount` reports the reserved or explicit value even for partial delivery failures.
+
+Polls are standalone content and use their own command group. Durable poll projections and
+poll write tools for MCP/daemon are deferred.
 Incoming polls, votes and closures from any chat and your other devices appear in `receive`.
 Creation is a `message` with `poll`; controls are `pollVote` and `pollClose` events.
 Malformed poll content is reported as `unsupported` with `content:"invalidPoll"`.

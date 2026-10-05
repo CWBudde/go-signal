@@ -568,14 +568,14 @@ These commands return `{"version":1,"poll":{...}}`. Its `timestamp` and `results
 same shape as [`send`](#send), including direct-recipient outcomes or per-member failures
 for the selected group. The existing schema also covers note-to-self.
 
-| Field             | Type      | Description                                                      |
-| ----------------- | --------- | ---------------------------------------------------------------- |
-| `operation`       | string    | `create`, `vote` or `close`                                      |
-| `targetAuthor`    | recipient | Poll creator; our account for creation and closure               |
-| `targetTimestamp` | number    | Creation timestamp; equals `timestamp` for creation              |
-| `creation`        | object    | Creation only: `question`, ordered `options` and `allowMultiple` |
-| `optionIndexes`   | number[]  | Vote only; zero-based selections, `[]` for withdrawal            |
-| `voteCount`       | number    | Vote only; explicit counter ordering this account's changes      |
+| Field             | Type      | Description                                                             |
+| ----------------- | --------- | ----------------------------------------------------------------------- |
+| `operation`       | string    | `create`, `vote` or `close`                                             |
+| `targetAuthor`    | recipient | Poll creator; our account for creation and closure                      |
+| `targetTimestamp` | number    | Creation timestamp; equals `timestamp` for creation                     |
+| `creation`        | object    | Creation only: `question`, ordered `options` and `allowMultiple`        |
+| `optionIndexes`   | number[]  | Vote only; zero-based selections, `[]` for withdrawal                   |
+| `voteCount`       | number    | Vote only; reserved or explicit counter ordering this account's changes |
 
 ## `polls show`
 

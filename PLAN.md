@@ -295,7 +295,15 @@ following the docs.
       real wire/timer checks, plain/JSON goldens, docs and both backend checks cover implementation.
 - [ ] Direct-chat poll phone acceptance on disposable accounts and both backends
       ([procedure](docs/dev.md#poll-live-check)); deferred until a phone session is arranged.
-- [ ] Polls: automatic vote counters.
+- [x] Polls: automatic vote counter implementation. Omitted `--vote-count` atomically reserves
+      a durable account-local counter per chat, creator and creation timestamp; explicit positive
+      overrides raise the local maximum. Reservations survive failed sends, restarts and inbox
+      pruning; validated own-device votes advance it before acknowledgement. Allowlist ordering,
+      key/account isolation, concurrent allocation, uint32 exhaustion, receive persistence failures,
+      plain/JSON goldens, docs and both backend checks cover implementation. Unseen other-device
+      activity still requires coordination; local counters are not authoritative global state.
+- [ ] Automatic poll vote counter phone acceptance on disposable accounts and both backends
+      ([procedure](docs/dev.md#poll-live-check)); deferred until a phone session is arranged.
 - [ ] Polls: durable projections.
 - [ ] Polls: MCP/daemon poll tools.
 - [ ] Facade/command/output tests, docs and live checks for each.

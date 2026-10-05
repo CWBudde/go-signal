@@ -158,6 +158,15 @@ func (a *App) checkEdit(req SendRequest) error {
 func (a *App) sendContent(
 	ctx context.Context, action string, recipients []string, build func(context.Context) (content, error),
 ) (SendResult, error) {
+	return a.sendPreparedContent(ctx, action, recipients, func(ctx context.Context, _ []Target) (content, error) {
+		return build(ctx)
+	})
+}
+
+// sendPreparedContent supplies resolved, allowed targets before reserving poll state.
+func (a *App) sendPreparedContent(
+	ctx context.Context, action string, recipients []string, build func(context.Context, []Target) (content, error),
+) (SendResult, error) {
 	err := a.connectSendOnly(ctx)
 	if err != nil {
 		return SendResult{}, fmt.Errorf("%s: connect: %w", action, err)
@@ -173,7 +182,7 @@ func (a *App) sendContent(
 		return SendResult{}, fmt.Errorf("%s: %w", action, err)
 	}
 
-	msg, err := build(ctx)
+	msg, err := build(ctx, targets)
 	if err != nil {
 		return SendResult{}, fmt.Errorf("%s: %w", action, err)
 	}
