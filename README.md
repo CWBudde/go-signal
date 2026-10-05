@@ -118,9 +118,33 @@ default font, white on black. Media is one image/video, up to 100 MiB, with its 
 from the bytes. Replies are allowed by default. Other devices receive a story transcript
 with the same timestamp. Results report peer submission and transcript failures, preserving
 partial peer outcomes; retrying the command can duplicate a story already submitted.
-Stories do not use the chat's disappearing-message timer. Private stories, My Story,
-distribution-list management and custom card presentation remain planned. Phone acceptance
-of story sending remains pending.
+Stories do not use the chat's disappearing-message timer. Phone acceptance of story sending
+remains pending.
+
+Private stories use one audience defined on your phone:
+
+```sh
+go-signal stories audiences
+go-signal stories send --distribution-list '<uuid-from-audiences>' -m 'Friends only'
+go-signal stories send --my-story --attach photo.jpg
+```
+
+Each listing and private send fetches a fresh, complete storage snapshot. Run `sync` if the
+storage key is unknown. My Story follows the phone's saved inclusion or exclusion policy;
+an absent policy is refused. Exclusion audiences expand from phone-stored system contacts
+or profile-sharing contacts. Self, blocked, hidden and previously unregistered contacts are
+excluded. Recipients are deduplicated ACIs; PNI audience entries and exclusion lists other
+than My Story are currently refused. `stories audiences` shows the expanded recipients and
+storage version. Inspect it before sending; later phone edits can change the next snapshot.
+Unknown/empty lists and incomplete storage fail before upload; saved snapshots never supply
+a fallback audience. Replies follow the list's setting, with `--no-replies` able to disable
+them further. A configured recipient allowlist must permit every expanded recipient.
+
+Private results show each peer and a separate own-device transcript outcome, using the same
+timestamp and the selected distribution ID. The transcript includes intended recipients,
+including failed peer submissions, so other devices can reconstruct the audience. A transcript
+failure does not trigger another peer send. Incoming messages and stories remain queued for
+`receive`. Distribution-list creation/editing and custom card presentation remain planned.
 
 Plain receive output shows the local date and the message's exact millisecond timestamp:
 

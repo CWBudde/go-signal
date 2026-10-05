@@ -1,0 +1,5 @@
+Audience: 00000000-0000-0000-0000-000000000000 (storage version 42)
+RECIPIENT                             TIMESTAMP      STATUS  DETAILS
+aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa  1790000000000  sent    sealed sender
+cccccccc-cccc-4ccc-8ccc-cccccccccccc  1790000000000  failed  recipient unreachable
+Story transcript: failed: transcript rejected

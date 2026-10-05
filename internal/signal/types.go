@@ -79,7 +79,7 @@ type SendRequest struct {
 	Attachments []UploadedAttachment
 	// Sticker is standalone sticker content instead of text or ordinary attachments.
 	Sticker *OutgoingSticker
-	// Story is standalone group story content; private distribution lists are not supported.
+	// Story is standalone group or private distribution-list story content.
 	Story *OutgoingStory
 	// PollCreate, PollVote and PollClose are standalone group poll operations.
 	PollCreate *Poll

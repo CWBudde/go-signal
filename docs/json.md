@@ -376,7 +376,7 @@ Each entry of `members`:
 ## `stories send`
 
 The `storySend` object contains the `send` result's `timestamp` and `results`, plus
-`allowsReplies`. The audience is one explicit group, so `results` contains one group
+`allowsReplies`. For an explicit group, `results` contains one group
 entry with peer outcomes in `members`. Pending invitations and requests are excluded.
 Success means all peer submissions and the own-device story transcript succeeded;
 it does not prove phone display. A transcript failure sets the group's `error` and
@@ -410,6 +410,23 @@ other members succeeds when its own-device transcript succeeds.
 
 Text, media keys, profile keys and the group master key are absent from submission output.
 Received story events keep their separate `type: "story"` format below. Schema version remains 1.
+
+Private sends add `distributionListId` and a nonzero `storageVersion` to `storySend`; `results`
+contains one `user` entry per expanded ACI. These entries report peer submission only.
+The optional `syncError` reports a failed own-device transcript independently, even when
+every peer succeeded. The command exits unsuccessfully if any peer or transcript failed.
+My Story uses `00000000-0000-0000-0000-000000000000`. Story text, media bytes, profile keys
+and group master keys are omitted.
+
+## `stories audiences`
+
+The document contains `version`, `storageVersion` and `storyAudiences` (always an array).
+Each audience has `id`, `name`, `isBlockList`, `allowsReplies` and `recipients` (an array of
+expanded canonical ACI strings, with self and ineligible contacts excluded). `isBlockList`
+records the phone's exclusion policy; `recipients` contains the resulting delivery audience,
+not the excluded contacts. Listing fetches a complete fresh snapshot and fails when it cannot
+be determined. An empty array means the phone's storage currently defines no active lists.
+This is an additive schema-version-1 document.
 
 ## `receipts send-viewed`
 

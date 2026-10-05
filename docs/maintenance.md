@@ -31,6 +31,8 @@ go-signal depends on three pinned pieces that have to move together:
   encryption, same-state group context/audience and an own-device story transcript.
   Peer failures and transcript failures are separate outcomes; accepted peers are not
   resubmitted to repair a failed transcript.
+  `v0.2609.0-purego.21` adds ACI private distribution-list story sends, including
+  My Story, with explicit audiences and intended-recipient manifests in own-device sync.
 - [`cwbudde/libsignal-go`](https://github.com/cwbudde/libsignal-go) (tags `vX.Y.Z-cw.N`), the
   pure-Go libsignal that the default backend runs on. Its Rust compat harness is pinned to the
   libsignal tag libsignalgo was generated against (its `decisions/0007-cwbudde-fork-policy.md`).
@@ -110,8 +112,33 @@ on the same six libsignalgo files, all byte-identical to the `.19` baseline.
 Offline tests cover the public API's own-profile-key lookup and member guard, production
 story policy, content ownership, peer/sync failure combinations and self-only groups.
 Full encrypted websocket submission and Android/iOS display still require the pending
-[phone acceptance procedure](dev.md#group-story-sending-live-check). Private stories,
-My Story and distribution-list management remain open.
+[phone acceptance procedure](dev.md#group-story-sending-live-check). Private story sending is added by `.21` below; distribution-list management remains open.
+
+The private-story sending release is the immutable
+[`v0.2609.0-purego.21`](https://github.com/cwbudde/mautrix-signal/tree/v0.2609.0-purego.21)
+tag at [commit `a9d9e43`](https://github.com/cwbudde/mautrix-signal/commit/a9d9e43e63aab1e2b85c02f63e441944a4b835bf).
+The downloaded module's cached `.info` Origin and all three changed fork files match that
+commit. The affected `pkg/libsignalgo/...` and `pkg/signalmeow/...` suites passed locally
+on pure Go and cgo with the race detector on cgo. Pure-Go vet and the 516-entry backend
+API parity check passed; all three changed files pass exact `goimports -local` formatting.
+Both pure-Go CI runs passed
+([37246001990](https://github.com/CWBudde/mautrix-signal/actions/runs/37246001990),
+[37246001429](https://github.com/CWBudde/mautrix-signal/actions/runs/37246001429)).
+The broad Go CI jobs failed pre-commit formatting
+([37246001961](https://github.com/CWBudde/mautrix-signal/actions/runs/37246001961),
+[37246001409](https://github.com/CWBudde/mautrix-signal/actions/runs/37246001409))
+on the same six libsignalgo files, all byte-identical to the `.20` baseline; neither log
+reports a private-story file failure.
+Offline tests cover custom lists and My Story, peer/sync failure combinations, intended
+recipient manifests, media/input ownership, audience guards and the public API's own
+profile-key lookup. Parent tests cover complete storage projection, tombstones, binary IDs,
+ACI-absent contacts, selected accounts, local blocks, persistent snapshots without stale
+fallback, allowlist preflight, media and plain/JSON outcomes.
+Full encrypted websocket submission and Android/iOS display still require the pending
+[private story phone acceptance procedure](dev.md#private-story-sending-live-check).
+The fork accepts a caller-expanded ACI audience; go-signal fetches it freshly from phone
+storage rather than inventing it. PNI audience entries, list editing and custom card
+presentation remain unsupported.
 
 ### 1. Rebase the mautrix fork
 
@@ -161,7 +188,12 @@ same-state full-member audience/context, own profile key and sealed pairwise ses
 peer requests use `?story=true`, non-urgent delivery and the implicit content hint; own-device
 sync uses an ordinary authenticated sent-story transcript. Keep peer outcomes when sync fails
 and never resubmit accepted peers to repair a transcript. No sender-key or group endorsement
-changes are needed for this path. Verify these paths on both backends.
+changes are needed for this path. Private stories must retain a group-free payload and
+an intended-recipient distribution-list manifest with the selected list ID and reply policy,
+including failed peer submissions. Keep own-device sync separate from peer outcomes. The
+parent must require fresh complete storage and never use cached audiences after fetch failure;
+My Story exclusions expand only from eligible connections, and list reply settings can only
+be restricted by the sender. Verify these paths on both backends.
 Preserve scan-only QR renewal: fresh socket/address/key, caller cancellation, no retries
 after a submitted envelope (including acknowledgement failures), and one-shot registration. Keep
 the fork's fixes that upstream doesn't have yet (the cgo clock fix in `message.go`,

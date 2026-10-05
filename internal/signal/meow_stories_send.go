@@ -10,6 +10,7 @@ import (
 	"github.com/cwbudde/mautrix-signal/pkg/signalmeow"
 	"github.com/cwbudde/mautrix-signal/pkg/signalmeow/protobuf/signalpb"
 	"github.com/cwbudde/mautrix-signal/pkg/signalmeow/types"
+	"github.com/google/uuid"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -49,7 +50,7 @@ func (c *meowClient) sendStory(ctx context.Context, req SendRequest) (SendResult
 	cli := c.cli
 	c.cliMu.Unlock()
 
-	sent, err := cli.SendGroupStory(c.zlog.WithContext(ctx), types.GroupIdentifier(req.GroupID), story, req.Timestamp)
+	sent, err := submitStory(c.zlog.WithContext(ctx), cli, req, story)
 	if errors.Is(err, signalmeow.ErrStoryNotMember) {
 		return SendResult{}, ErrNotAMember
 	}
@@ -90,4 +91,31 @@ func outgoingStoryMessage(story *OutgoingStory, pointer *signalpb.AttachmentPoin
 	}}
 
 	return msg, nil
+}
+
+func submitStory(
+	ctx context.Context, cli *signalmeow.Client, req SendRequest, story *signalpb.StoryMessage,
+) (*signalmeow.GroupStorySendResult, error) {
+	if req.GroupID != "" {
+		//nolint:wrapcheck // sendStory maps and wraps fork errors.
+		return cli.SendGroupStory(ctx, types.GroupIdentifier(req.GroupID), story, req.Timestamp)
+	}
+
+	distribution, err := uuid.Parse(req.Story.DistributionListID)
+	if err != nil {
+		return nil, ErrInvalidStory
+	}
+
+	recipients := make([]uuid.UUID, len(req.Recipients))
+	for i, recipient := range req.Recipients {
+		aci, err := uuid.Parse(recipient.ACI)
+		if err != nil || aci == cli.Store.ACI {
+			return nil, ErrInvalidStory
+		}
+
+		recipients[i] = aci
+	}
+
+	//nolint:wrapcheck // sendStory maps and wraps fork errors.
+	return cli.SendPrivateStory(ctx, distribution, recipients, story, req.Timestamp)
 }

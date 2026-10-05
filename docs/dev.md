@@ -1080,3 +1080,31 @@ with stories enabled and one other group member before testing.
    story: resubmission can create duplicates.
 6. Remove the test stories on the phone, restore settings and delete/unlink disposable
    devices. Record backend, phone version, timestamps, visible audience and cleanup.
+
+## Private story sending live check
+
+Not yet run. Use disposable linked accounts and repeat with both pure Go and cgo.
+
+1. On the primary phone create a custom story audience containing two disposable peers,
+   and configure My Story first as selected contacts, then as all contacts except one peer.
+   Run `sync`, then `stories audiences`; compare expanded ACIs and reply settings with the
+   phone. Select a second linked account and confirm its own lists are used.
+2. Send a text card with `stories send --distribution-list <uuid> -m 'Private story'`,
+   then send an image and video. Check the intended peers' story feeds and your own phone's
+   sent feed, distribution audience, timestamp and reply controls. Repeat with `--my-story`
+   and `--no-replies`; a list with replies disabled must never be enabled by the command.
+3. Verify exclusions: self, blocked, hidden, unregistered and My Story excluded peers must
+   receive nothing. Change the phone audience, delete a custom list, or remove all members,
+   then verify the next invocation uses fresh storage or refuses before media upload.
+   An unknown My Story policy must refuse rather than choose all contacts.
+4. Exercise a changed peer identity: it must fail until trusted. Arrange a failed peer and
+   a failed own-device transcript independently and together; inspect plain/JSON outcomes
+   and nonzero exit status. Confirm the transcript's manifest includes the intended peers
+   and selected distribution ID. Never rerun a partly successful command without checking
+   the phone, because accepted peer stories can be duplicated.
+5. Queue ordinary messages and stories, perform a send, then receive them; send-only mode
+   must leave both queued. Check literal mention text, independent story expiry, and no
+   automatic READ/VIEWED receipts. Test storage unavailable/incomplete: persisted snapshots
+   must not become a delivery fallback.
+6. Remove the test stories, restore audience/privacy settings, and unlink/delete disposable
+   accounts. Record both backend results before checking off phone acceptance in PLAN.md.

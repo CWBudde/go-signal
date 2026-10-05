@@ -7,29 +7,65 @@ import (
 	"strings"
 
 	"github.com/cwbudde/go-signal/internal/signal"
+	"github.com/google/uuid"
 )
 
-// StorySendRequest names one group audience and either a plain text card or one media file.
+// StorySendRequest names one group or private audience and either a plain text card or one media file.
 type StorySendRequest struct {
-	GroupID    string
-	Text       string
-	Attachment string
-	NoReplies  bool
-	AttachDir  string
+	GroupID            string
+	DistributionListID string
+	MyStory            bool
+	Text               string
+	Attachment         string
+	NoReplies          bool
+	AttachDir          string
 }
 
 // StorySendResult separates story delivery from ordinary message output.
 type StorySendResult struct {
 	SendResult
 
-	AllowsReplies bool
+	AllowsReplies      bool
+	DistributionListID string
+	StorageVersion     uint64
+	SyncErr            error
 }
 
 // Check validates the audience and exclusive content before opening a client.
 func (req StorySendRequest) Check() error {
-	id, ok := decodeGroupKey(req.GroupID)
-	if !ok || id != req.GroupID || (req.Attachment == "" && strings.TrimSpace(req.Text) == "") ||
-		(req.Attachment != "" && req.Text != "") {
+	if (req.Attachment == "" && strings.TrimSpace(req.Text) == "") || (req.Attachment != "" && req.Text != "") {
+		return signal.ErrInvalidStory
+	}
+
+	return req.checkAudience()
+}
+
+func (req StorySendRequest) checkAudience() error {
+	audiences := 0
+
+	if req.GroupID != "" {
+		id, ok := decodeGroupKey(req.GroupID)
+		if !ok || id != req.GroupID {
+			return signal.ErrInvalidStory
+		}
+
+		audiences++
+	}
+
+	if req.DistributionListID != "" {
+		id, err := uuid.Parse(req.DistributionListID)
+		if err != nil || id.String() != req.DistributionListID {
+			return signal.ErrInvalidStory
+		}
+
+		audiences++
+	}
+
+	if req.MyStory {
+		audiences++
+	}
+
+	if audiences != 1 {
 		return signal.ErrInvalidStory
 	}
 
@@ -54,6 +90,10 @@ func (a *App) StorySend(ctx context.Context, req StorySendRequest) (StorySendRes
 		return StorySendResult{}, fmt.Errorf("story send: connect: %w", err)
 	}
 
+	if req.GroupID == "" {
+		return a.privateStorySend(ctx, req, files)
+	}
+
 	target := Target{GroupID: req.GroupID}
 
 	err = a.checkAllowed(ctx, []Target{target})
@@ -68,17 +108,9 @@ func (a *App) StorySend(ctx context.Context, req StorySendRequest) (StorySendRes
 
 	story := &signal.OutgoingStory{Text: req.Text, AllowsReplies: !req.NoReplies}
 
-	if len(files) != 0 {
-		uploaded, err := a.client.Upload(ctx, files)
-		if err != nil {
-			return StorySendResult{}, fmt.Errorf("story send: upload: %w", err)
-		}
-
-		if len(uploaded) != 1 {
-			return StorySendResult{}, fmt.Errorf("story send: %w", signal.ErrUnknownAttachment)
-		}
-
-		story.File = &uploaded[0]
+	err = a.uploadStory(ctx, story, files)
+	if err != nil {
+		return StorySendResult{}, err
 	}
 
 	res := StorySendResult{

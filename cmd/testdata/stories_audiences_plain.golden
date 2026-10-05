@@ -1,0 +1,4 @@
+Storage version: 42
+ID                                    NAME      POLICY      REPLIES  RECIPIENTS
+00000000-0000-0000-0000-000000000000  My Story  exclusions  true     aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa, cccccccc-cccc-4ccc-8ccc-cccccccccccc
+76543210-1234-4321-8234-123456789abc  Friends   inclusions  false    aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa

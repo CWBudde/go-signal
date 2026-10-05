@@ -10,21 +10,35 @@ import (
 type storySendJSON struct {
 	SendJSON
 
-	AllowsReplies bool `json:"allowsReplies"`
+	AllowsReplies      bool   `json:"allowsReplies"`
+	DistributionListID string `json:"distributionListId,omitempty"`
+	StorageVersion     uint64 `json:"storageVersion,omitempty"`
+	SyncError          string `json:"syncError,omitempty"`
 }
 
-// StorySend prints submission outcomes for a group story, including partial peer delivery.
+// StorySend prints submission outcomes for a group or private story, including partial peer delivery.
 func (p *Printer) StorySend(res app.StorySendResult) error {
 	if p.format != JSON {
-		return p.storySendTable(res.SendResult)
+		return p.privateStorySendTable(res)
+	}
+
+	syncError := ""
+	if res.SyncErr != nil {
+		syncError = res.SyncErr.Error()
 	}
 
 	return p.writeJSON(struct {
 		Version   int           `json:"version"`
 		StorySend storySendJSON `json:"storySend"`
 	}{
-		Version:   SchemaVersion,
-		StorySend: storySendJSON{SendJSON: p.sendToJSON(res.SendResult), AllowsReplies: res.AllowsReplies},
+		Version: SchemaVersion,
+		StorySend: storySendJSON{
+			SendJSON:           p.sendToJSON(res.SendResult),
+			AllowsReplies:      res.AllowsReplies,
+			DistributionListID: res.DistributionListID,
+			StorageVersion:     res.StorageVersion,
+			SyncError:          syncError,
+		},
 	})
 }
 
@@ -41,4 +55,32 @@ func (p *Printer) storySendTable(res app.SendResult) error {
 	}
 
 	return p.sendTable(res)
+}
+
+func (p *Printer) privateStorySendTable(res app.StorySendResult) error {
+	if res.DistributionListID == "" {
+		return p.storySendTable(res.SendResult)
+	}
+
+	_, err := fmt.Fprintf(p.w, "Audience: %s (storage version %d)\n", res.DistributionListID, res.StorageVersion)
+	if err != nil {
+		return fmt.Errorf("write story audience: %w", err)
+	}
+
+	err = p.sendTable(res.SendResult)
+	if err != nil {
+		return err
+	}
+
+	syncStatus := "sent"
+	if res.SyncErr != nil {
+		syncStatus = "failed: " + res.SyncErr.Error()
+	}
+
+	_, err = fmt.Fprintf(p.w, "Story transcript: %s\n", syncStatus)
+	if err != nil {
+		return fmt.Errorf("write story transcript: %w", err)
+	}
+
+	return nil
 }

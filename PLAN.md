@@ -61,7 +61,8 @@ go-signal link [--name <device-name>] [--sync-timeout 60s]
 go-signal send <recipient>... -m <text> | --stdin [--attach <file>]... [--group <id>] [--quote <author>:<ts>]
 go-signal send <recipient>... --edit <timestamp> -m <replacement>
 go-signal send <recipient>... --sticker-pack <link> --sticker-id <n>
-go-signal stories send --group <id> (-m <text> | --stdin | --attach <image-or-video>) [--no-replies]
+go-signal stories audiences
+go-signal stories send (--group <id> | --distribution-list <uuid> | --my-story) (-m <text> | --stdin | --attach <image-or-video>) [--no-replies]
 go-signal receive [--timeout 5s] [--max N] [--follow] [--download-attachments <dir>] [--send-read-receipts]
 go-signal receipts send-viewed <sender> --timestamp <ms> [--timestamp <ms>]...
 go-signal react <recipient>... --target <author>:<ts> --emoji 👍 [--remove]
@@ -265,8 +266,14 @@ following the docs.
       same-timestamp own-device transcript. Fork transport uses sealed pairwise sessions;
       facade/app preflight, account selection, media validation, plain/JSON partial peer
       and transcript outcomes, tests and docs cover both backends.
-- [ ] Private story sending: define the CLI and distribution-list audience model, including
-      My Story, then implement storage/fork transport and facade/command/output tests and docs.
+- [x] Private story sending implementation: `stories audiences` inspects freshly fetched,
+      complete phone-defined distribution lists; `stories send --distribution-list <uuid>`
+      or `--my-story` sends text/media to their expanded ACI audiences. Per-account snapshots
+      never provide a stale send fallback. Inclusion/exclusion rules, local blocks, list reply
+      policy, allowlist preflight, sealed pairwise transport, intended-recipient transcripts,
+      separate peer/sync outcomes, offline tests and docs cover both backends.
+- [ ] Private story sending phone acceptance on disposable accounts and both backends
+      ([procedure](docs/dev.md#private-story-sending-live-check)); deferred until a phone session is arranged.
 - [ ] Group story sending phone acceptance on disposable accounts and both backends
       ([procedure](docs/dev.md#group-story-sending-live-check)); deferred until a phone session is arranged.
 - [ ] Story reception phone acceptance on disposable accounts and both backends
@@ -321,8 +328,9 @@ signalmeow doesn't cover it; build on `libsignalgo` + `web` if there is demand.
   projections. Story media downloads are currently CLI-only.
 - Attachments are held in memory (up to 100 MiB); failed downloads can't be retried later; no
   thumbnails, blurhash or voice-note flags on send or receive.
-- The storage service is always fetched in full; contact avatars, blocked groups and story
-  distribution lists aren't handled; group blocking isn't supported.
+- The storage service is always fetched in full; contact avatars and blocked groups aren't
+  handled; group blocking isn't supported. Private story audiences are fetched on demand,
+  without list creation/editing; PNI audience entries and custom exclusion lists are unsupported.
 - `groups list` fetches every group sequentially; "left on another device" and "removed" both look
   like a 403.
 - Polls and pins are reconstructed only from the retained inbox (`mcp serve`/`daemon serve`), with

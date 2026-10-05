@@ -78,7 +78,10 @@ type Fake struct {
 	SendErr    error
 	// StorySyncErr rejects only the own-device story transcript after peer submissions.
 	StorySyncErr error
-	DevicesErr   error
+	// StoryAudienceSnapshots holds complete audiences by selected account ACI.
+	StoryAudienceSnapshots map[string]signal.StoryAudiences
+	StoryAudiencesErr      error
+	DevicesErr             error
 	// UnlinkErr makes removing the device on the server fail; Unlink with LocalOnly ignores it.
 	UnlinkErr error
 	// ReceiptErr makes SendReceipt fail.

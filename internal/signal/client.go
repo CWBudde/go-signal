@@ -53,6 +53,10 @@ type Client interface { //nolint:interfacebloat // the one facade over signalmeo
 	// fails verification; nothing unverified is returned. The whole content is held in memory.
 	Download(ctx context.Context, att Attachment) ([]byte, error)
 
+	// StoryAudiences fetches and stores a fresh complete phone-defined private audience.
+	// It requires Connect and the storage master key; unavailable data never uses a cache.
+	StoryAudiences(ctx context.Context) (StoryAudiences, error)
+
 	// FetchSticker fetches and verifies a pack's selected image and metadata. It needs
 	// no Connect, respects ctx and fails with ErrClosed after Close.
 	FetchSticker(ctx context.Context, ref StickerReference) (StickerData, error)
@@ -79,7 +83,8 @@ type Client interface { //nolint:interfacebloat // the one facade over signalmeo
 	// because the group is unknown (ErrUnknownGroup), an attachment wasn't uploaded by this client
 	// (ErrUnknownAttachment), the quote author or a mentioned user has no ACI (ErrUnresolvable),
 	// or the connection is lost for good (such as ErrDeviceUnlinked).
-	// Story content is standalone and requires one canonical group ID and full ACI membership.
+	// Story content is standalone: a canonical group ID with full ACI membership, or a
+	// DistributionListID with explicit canonical ACI recipients (excluding the selected account).
 	// It uses a text card or Story.File uploaded by this client. Peer outcomes remain in Results
 	// when the own-device story transcript fails, with that failure reported separately as SyncErr.
 	Send(ctx context.Context, req SendRequest) (SendResult, error)
