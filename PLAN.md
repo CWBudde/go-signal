@@ -314,7 +314,16 @@ following the docs.
       observations. Poll evidence storage grows independently of general inbox retention.
 - [ ] Durable poll projection phone acceptance on disposable accounts and both backends
       ([procedure](docs/dev.md#poll-live-check)); deferred until a phone session is arranged.
-- [ ] Polls: MCP/daemon poll tools.
+- [x] Polls: MCP/daemon poll tools implementation. MCP `poll_create`/`poll_vote`/`poll_close`/
+      `poll_show` and daemon `/v1/polls` create/show, vote and close routes share app validation,
+      allowlist and durable counters. MCP confirmation precedes reservation; read-only omits
+      writes. Daemon authentication, strict inputs and read-only policy guard writes; counter
+      exhaustion returns HTTP 409. Partial delivery preserves member outcomes without retry.
+      Bounded/durable reads send no receipts and retain unknown completeness. API lifecycle,
+      policy, confirmation, counter, partial-delivery and pruning tests, unchanged CLI/output
+      goldens, docs and full cgo/pure-Go/no-cgo checks cover implementation.
+- [ ] MCP/daemon poll phone acceptance on disposable accounts and both backends
+      ([procedure](docs/dev.md#poll-live-check)); deferred until a phone session is arranged.
 - [ ] Facade/command/output tests, docs and live checks for each.
 
 **Done when:** a story sent from the phone appears in `receive`, and one sent with go-signal

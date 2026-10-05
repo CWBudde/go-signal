@@ -47,7 +47,8 @@ func pollIndexes(indexes []uint32) []uint32 {
 	return indexes
 }
 
-type pollSendJSON struct {
+// PollSendJSON is a poll operation and its delivery outcomes.
+type PollSendJSON struct {
 	SendJSON
 
 	Operation       string        `json:"operation"`
@@ -64,7 +65,19 @@ func (p *Printer) PollSend(res app.PollSendResult) error {
 		return p.sendTable(res.SendResult)
 	}
 
-	doc := pollSendJSON{
+	doc := NewPollSendJSON(res, p.names)
+
+	return p.writeJSON(struct {
+		Version int          `json:"version"`
+		Poll    PollSendJSON `json:"poll"`
+	}{SchemaVersion, doc})
+}
+
+// NewPollSendJSON converts res to the schema's poll object.
+func NewPollSendJSON(res app.PollSendResult, names app.Names) PollSendJSON {
+	p := &Printer{names: names}
+
+	doc := PollSendJSON{
 		SendJSON:        p.sendToJSON(res.SendResult),
 		Operation:       res.Operation,
 		TargetAuthor:    p.recipient(res.TargetAuthor),
@@ -77,10 +90,7 @@ func (p *Printer) PollSend(res app.PollSendResult) error {
 		doc.VoteCount = &res.VoteCount
 	}
 
-	return p.writeJSON(struct {
-		Version int          `json:"version"`
-		Poll    pollSendJSON `json:"poll"`
-	}{SchemaVersion, doc})
+	return doc
 }
 
 type pollStateVoteJSON struct {
@@ -90,7 +100,8 @@ type pollStateVoteJSON struct {
 	Timestamp     uint64        `json:"timestamp"`
 }
 
-type pollStateJSON struct {
+// PollStateJSON is the retained poll observation view.
+type PollStateJSON struct {
 	Source          string              `json:"source,omitempty"`
 	Observations    int                 `json:"observations,omitempty"`
 	Chat            ChatJSON            `json:"chat"`
@@ -118,7 +129,19 @@ func (p *Printer) PollState(state app.PollState) error {
 		return p.pollStatePlain(state)
 	}
 
-	doc := pollStateJSON{
+	doc := NewPollStateJSON(state, p.names)
+
+	return p.writeJSON(struct {
+		Version   int           `json:"version"`
+		PollState PollStateJSON `json:"pollState"`
+	}{SchemaVersion, doc})
+}
+
+// NewPollStateJSON converts state to the schema's pollState object.
+func NewPollStateJSON(state app.PollState, names app.Names) PollStateJSON {
+	p := &Printer{names: names}
+
+	doc := PollStateJSON{
 		Source: state.Source, Observations: state.Observations,
 		Chat:            NewChatJSON(state.Chat, p.names),
 		Author:          p.recipient(state.Author),
@@ -153,10 +176,7 @@ func (p *Printer) PollState(state app.PollState) error {
 		})
 	}
 
-	return p.writeJSON(struct {
-		Version   int           `json:"version"`
-		PollState pollStateJSON `json:"pollState"`
-	}{SchemaVersion, doc})
+	return doc
 }
 
 func (p *Printer) pollStatePlain(state app.PollState) error {

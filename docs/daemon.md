@@ -32,7 +32,7 @@ exit code 3.
 Sending is denied by default. Repeat `--allow-recipient` to allow numbers, ACIs,
 `@usernames`, `group:<id>` or `self`; `--allow-recipient '*'` allows every recipient.
 The whole recipient list is checked before sending. The allowlist restricts sends,
-not reading or read receipts. `--read-only` disables both sending and mark-read.
+not reading or read receipts. `--read-only` disables sending (including polls) and mark-read.
 
 Configuration follows flag > `GOSIGNAL_*` environment > config file. Daemon
 settings use their own `daemon` section:
@@ -62,12 +62,16 @@ base=http://127.0.0.1:8766
 token=$(cat "$token_file")
 ```
 
-| Request              | Result                                                                                                        |
-| -------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `GET /v1/health`     | `{version, account, connection}`: software version, account ACI and latest observed Signal connection status. |
-| `GET /v1/messages`   | `{messages, cursor, more}`: persistent inbox entries and the cursor for the next page.                        |
-| `POST /v1/messages`  | `{ok, send, error?}`: timestamp and outcomes for every recipient.                                             |
-| `POST /v1/mark-read` | `{ok, messages, senders, error?}`: stored messages marked read and successful receipt submissions per sender. |
+| Request                | Result                                                                                                        |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `GET /v1/health`       | `{version, account, connection}`: software version, account ACI and latest observed Signal connection status. |
+| `GET /v1/messages`     | `{messages, cursor, more}`: persistent inbox entries and the cursor for the next page.                        |
+| `POST /v1/messages`    | `{ok, send, error?}`: timestamp and outcomes for every recipient.                                             |
+| `GET /v1/polls`        | `{pollState}`: bounded inbox or durable poll observations.                                                    |
+| `POST /v1/polls`       | `{ok, poll, error?}`: create a poll and return identity/delivery outcomes.                                    |
+| `POST /v1/polls/vote`  | `{ok, poll, error?}`: replace or withdraw selections.                                                         |
+| `POST /v1/polls/close` | `{ok, poll, error?}`: close this account's poll.                                                              |
+| `POST /v1/mark-read`   | `{ok, messages, senders, error?}`: stored messages marked read and successful receipt submissions per sender. |
 
 ```sh
 curl --fail-with-body -H "Authorization: Bearer $token" "$base/v1/health"
@@ -188,3 +192,51 @@ the database write completes. A crash or storage failure in that interval can
 lose the event. This API does not promise exactly-once delivery or crash-proof
 acknowledgement. A terminal receiver failure stops the daemon; temporary Signal
 connection errors remain visible in health while the client reconnects.
+
+## Poll operations
+
+All poll routes require the same bearer token. Writes also require an allowed destination and
+are forbidden with `--read-only`; poll reads remain available without sending receipts.
+Supply exactly one `groupId` (canonical ID, without `group:`) or `recipient`.
+Write recipients accept numbers, ACIs, usernames and `self`; reads require a canonical chat ACI.
+
+```sh
+curl -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
+  -d '{"recipient":"self","question":"Lunch?","options":["Yes","No"],"singleChoice":true}' \
+  "$base/v1/polls"
+
+curl -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
+  -d '{"recipient":"self","target":"<creator-aci>:<timestamp>","optionIndexes":[0]}' \
+  "$base/v1/polls/vote"
+
+curl -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
+  -d '{"recipient":"self","timestamp":1790000000000}' "$base/v1/polls/close"
+
+curl -G -H "Authorization: Bearer $token" --data-urlencode 'recipient=<chat-aci>' \
+  --data-urlencode 'target=<creator-aci>:<timestamp>' --data-urlencode 'durable=true' \
+  "$base/v1/polls"
+```
+
+Creation takes `question`, two to ten `options` and optional `singleChoice` (default false).
+Vote takes `target` (`<creator>:<creation-timestamp>`) and distinct zero-based `optionIndexes`,
+or `clear:true` to withdraw. Omit `voteCount` (or use JSON `null`) for durable automatic allocation;
+a positive uint32 override is sent unchanged. Explicit zero is invalid. Failed submissions can
+consume a reserved counter; coordinate unseen other-device activity as described in [Polls](polls.md).
+Close takes the creation `timestamp` of our own poll, not another creator's identity.
+
+`GET /v1/polls` accepts `groupId` or canonical ACI `recipient`, canonical creator ACI/timestamp
+`target`, optional boolean `durable`, and optional `scanLimit` (1 through 10000, default 1000).
+Unknown/repeated query keys are rejected. `durable=true` cannot accompany `scanLimit`, and
+reads the account-local projection after inbox pruning. Bounded reads use retained inbox history.
+Both report completeness as `unknown`; outgoing submissions alone are not received observations.
+
+Responses reuse the [poll and pollState JSON objects](json.md#polls-create-polls-vote-and-polls-close).
+Preflight validation fails with HTTP 400, denied writes with 403, and exhausted automatic counters
+with 409 / `poll_vote_exhausted`. A partial delivery returns HTTP 200 with `ok:false`,
+`error.code:"send_failed"` and the complete poll delivery result, including per-member outcomes.
+Inspect these results before retrying to avoid duplicate operations for successful recipients.
+JSON request bodies retain the API's size limit, content-type requirement and unknown-field rejection.
+
+Poll evidence is persisted before the real client emits and acknowledges received poll events.
+This durable archive survives general inbox pruning. The general inbox still has the delivery
+limits described above; a durable projection never claims complete history or phone acceptance.

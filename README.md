@@ -512,7 +512,8 @@ See [the live-check procedure](docs/dev.md#own-profile-live-check) for phone and
 `polls create`, `polls vote` and `polls close` send standalone polls to one group or direct chat
 (`--group <id>` or `--recipient <ACI|+number|@username|self>`). Options use
 zero-based indexes; votes allocate durable local counters unless `--vote-count` overrides them, and `--clear`
-withdraws a selection. `polls show` reads retained daemon/MCP inbox observations offline;
+withdraws a selection. [MCP tools](docs/mcp.md#polls) and [daemon routes](docs/daemon.md#poll-operations)
+expose create/vote/close/show while receiving. `polls show` reads retained daemon/MCP inbox observations offline;
 `--durable` reads projections collected by all receiving modes that survive inbox pruning.
 Completeness remains unknown. See [poll commands and results](docs/polls.md).
 

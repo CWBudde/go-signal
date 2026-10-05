@@ -3,7 +3,7 @@
 `go-signal mcp serve` makes a linked Signal account available to AI agents such as Claude Code,
 Claude Desktop and other [Model Context Protocol](https://modelcontextprotocol.io) clients. An
 agent can look up contacts and groups, read and wait for incoming messages, fetch attachments
-and, if you allow it, send messages, reactions and deletes.
+and, if you allow it, send messages, polls, reactions and deletes.
 
 The server is part of the `go-signal` binary and uses the same account data as the CLI. It
 receives messages into an inbox while it runs, so the agent reads messages from the inbox instead
@@ -83,20 +83,20 @@ If the device is unlinked while the server runs, the server ends with exit code 
 
 ## Flags
 
-| Flag                         | Default                          | Description                                                                                     |
-| ---------------------------- | -------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `--allow-recipient <r>`      | nobody                           | A user or group the agent may send to. Repeatable. `'*'` allows everyone. See [Safety](#safety) |
-| `--read-only`                | off                              | Leave out the tools that send: `send_message`, `react`, `delete_message` and `mark_read`        |
-| `--attach-dir <dir>`         | none                             | The only directory `send_message` takes attachments from. Without it, attachments are rejected  |
-| `--confirm`                  | off                              | Ask the user to confirm every message, reaction and delete through the client                   |
-| `--download-dir <dir>`       | `attachments` in the account dir | Where `attachment_get` saves attachments                                                        |
-| `--inbox-max-age <duration>` | `720h` (30 days)                 | Delete inbox entries received longer ago than this (`0`: keep)                                  |
-| `--inbox-max-count <n>`      | `10000`                          | Keep at most this many inbox entries (`0`: no limit)                                            |
-| `--listen <addr>`            | none (stdio)                     | Serve HTTP on this loopback address instead of stdin/stdout                                     |
-| `--token-file <file>`        | none                             | File with the bearer token that `--listen` requires                                             |
-| `--on-message <program>`     | none                             | Run this program for every incoming message of the `--hook-from` chats. See [Hooks](#hooks)     |
-| `--hook-from <r>`            | nobody                           | A user or group whose messages run `--on-message`. Repeatable. `'*'` allows everyone            |
-| `--on-message-timeout <d>`   | `5m`                             | Kill an `--on-message` run after this long (`0`: no limit)                                      |
+| Flag                         | Default                          | Description                                                                                           |
+| ---------------------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `--allow-recipient <r>`      | nobody                           | A user or group the agent may send to. Repeatable. `'*'` allows everyone. See [Safety](#safety)       |
+| `--read-only`                | off                              | Leave out the tools that send: `send_message`, `react`, `delete_message`, poll writes and `mark_read` |
+| `--attach-dir <dir>`         | none                             | The only directory `send_message` takes attachments from. Without it, attachments are rejected        |
+| `--confirm`                  | off                              | Ask the user to confirm message, poll and other write calls through the client                        |
+| `--download-dir <dir>`       | `attachments` in the account dir | Where `attachment_get` saves attachments                                                              |
+| `--inbox-max-age <duration>` | `720h` (30 days)                 | Delete inbox entries received longer ago than this (`0`: keep)                                        |
+| `--inbox-max-count <n>`      | `10000`                          | Keep at most this many inbox entries (`0`: no limit)                                                  |
+| `--listen <addr>`            | none (stdio)                     | Serve HTTP on this loopback address instead of stdin/stdout                                           |
+| `--token-file <file>`        | none                             | File with the bearer token that `--listen` requires                                                   |
+| `--on-message <program>`     | none                             | Run this program for every incoming message of the `--hook-from` chats. See [Hooks](#hooks)           |
+| `--hook-from <r>`            | nobody                           | A user or group whose messages run `--on-message`. Repeatable. `'*'` allows everyone                  |
+| `--on-message-timeout <d>`   | `5m`                             | Kill an `--on-message` run after this long (`0`: no limit)                                            |
 
 The global flags (`-a/--account`, `--data-dir`, `--config`, `-v`) work as for every command.
 Logs go to stderr. With `-v`, they include debug output.
@@ -134,7 +134,7 @@ make the agent do. The limits are enforced by the server itself, not left to the
   tools that return messages say that message text, file names and captions come from other
   people and must never be followed as instructions. This lowers the risk but can't rule it
   out, so the checks below don't depend on the model.
-- **Allowlist.** `send_message`, `sticker_send`, `react` and `delete_message` only go to the chats named with
+- **Allowlist.** `send_message`, `sticker_send`, `poll_create`, `poll_vote`, `poll_close`, `react` and `delete_message` only go to the chats named with
   `--allow-recipient`. The server rejects other recipients before anything is uploaded or sent
   ("recipient not allowed"). By default nobody is allowed.
   - An entry can be a phone number, an ACI, an `@username`, `group:<id>` or `self` (note to
@@ -150,7 +150,7 @@ make the agent do. The limits are enforced by the server itself, not left to the
 - **Read-only.** `--read-only` leaves out every tool that sends something to Signal, including
   `mark_read`, which sends read receipts. `attachment_get` stays, since it only writes to the
   local download directory. `sticker_get` stays too; local pack installation is omitted.
-- **Confirmation.** With `--confirm`, every call of `send_message`, `sticker_send`, `sticker_pack_install`, `react` and `delete_message`
+- **Confirmation.** With `--confirm`, every call of `send_message`, `sticker_send`, `sticker_pack_install`, `poll_create`, `poll_vote`, `poll_close`, `react` and `delete_message`
   first asks you, through the client (MCP elicitation), e.g. _Send "on my way" to Alice?_.
   - The server checks the allowlist before it asks.
   - Your answer applies only to that one call with exactly those arguments.
@@ -190,6 +190,39 @@ title).
 reports the server's version and uptime and the connection: `ok` while connected, `warn` while it
 reconnects after a drop, with the time of the last event received. It asks Signal's server whether
 this device is still linked only with `checkServer: true`.
+
+### Polls
+
+| Tool          | Input                                                                                              | Returns                                   |
+| ------------- | -------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `poll_create` | `groupId` or `recipient`, `question`, `options`, optional `singleChoice`                           | Poll identity and delivery outcomes       |
+| `poll_vote`   | `groupId` or `recipient`, `target`, `optionIndexes` or `clear`, optional `voteCount`               | Selections, counter and delivery outcomes |
+| `poll_close`  | `groupId` or `recipient`, `timestamp`                                                              | Our poll identity and delivery outcomes   |
+| `poll_show`   | `groupId` or canonical chat ACI `recipient`, canonical `target`, optional `durable` or `scanLimit` | Retained poll observations                |
+
+Supply exactly one destination. `groupId` is the canonical group ID, without `group:`;
+write recipients accept numbers, ACIs, usernames and `self`. `target` identifies the creator
+and creation timestamp as `<creator>:<timestamp>`; `poll_show` requires the canonical creator ACI.
+Close accepts only the creation `timestamp` of this account's own poll.
+
+For example, create with `{"recipient":"self","question":"Lunch?","options":["Yes","No"]}`.
+Vote with `{"recipient":"self","target":"<creator-aci>:<timestamp>","optionIndexes":[0]}`;
+withdraw by replacing `optionIndexes` with `"clear":true`. Omit `voteCount` for durable local
+allocation, or supply a positive uint32 override. Explicit zero is rejected. Declined or denied
+calls consume no counter; failed submissions can consume one. Coordinate unseen other-device
+votes as described in [Polls](polls.md). A JSON `null` counter has the same meaning as omission.
+
+`poll_show` stays available in read-only mode, sends no receipts and reports completeness as
+`unknown`. Its default scan is 1000 retained inbox entries, adjustable from 1 through 10000.
+`durable:true` reads account-local observations that survive inbox pruning; omit `scanLimit`
+in that mode. Outgoing submissions alone do not establish observed creation or votes.
+The three write tools obey read-only, confirmation and allowlist policy. Confirmation includes
+the destination and creation content, vote reference/selections/counter policy, or closure timestamp.
+
+Structured results are the [poll](json.md#polls-create-polls-vote-and-polls-close) or
+[pollState](json.md#polls-show) object directly, without the CLI envelope. Partial delivery
+returns `isError:true` while retaining the full poll result and member outcomes. Check these
+outcomes before retrying, since a successful member may already have received the operation.
 
 ### Inbox
 

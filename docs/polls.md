@@ -48,8 +48,9 @@ explicit counters may be ignored by receivers. Explicit zero is rejected. Withdr
 `--clear` instead of `--option` and allocates a counter just like a selection change.
 JSON `voteCount` reports the reserved or explicit value even for partial delivery failures.
 
-Polls are standalone content and use their own command group. Poll write tools for MCP/daemon
-remain deferred.
+Polls are standalone content and use their own command group. The [MCP poll tools](mcp.md#polls)
+and [daemon poll routes](daemon.md#poll-operations) expose create, vote, close and show while
+the server keeps receiving. They share the same app validation, allowlist and counter policy.
 Incoming polls, votes and closures from any chat and your other devices appear in `receive`.
 Creation is a `message` with `poll`; controls are `pollVote` and `pollClose` events.
 Malformed poll content is reported as `unsupported` with `content:"invalidPoll"`.

@@ -43,6 +43,7 @@ func (s *server) handler(token string) http.Handler {
 	})
 }
 
+//nolint:cyclop // one explicit case per authenticated API route.
 func (s *server) route(writer http.ResponseWriter, requestHTTP *http.Request) {
 	var handler http.HandlerFunc
 
@@ -58,6 +59,17 @@ func (s *server) route(writer http.ResponseWriter, requestHTTP *http.Request) {
 		}
 
 		handler = s.messages
+	case "/v1/polls":
+		if requestHTTP.Method == http.MethodPost {
+			s.pollCreate(writer, requestHTTP)
+			return
+		}
+
+		handler = s.pollShow
+	case "/v1/polls/vote":
+		handler, method = s.pollVote, http.MethodPost
+	case "/v1/polls/close":
+		handler, method = s.pollClose, http.MethodPost
 	case "/v1/events":
 		handler = s.events
 	case "/v1/mark-read":
@@ -73,7 +85,7 @@ func (s *server) route(writer http.ResponseWriter, requestHTTP *http.Request) {
 	}
 
 	allowed := method
-	if requestHTTP.URL.Path == "/v1/messages" {
+	if requestHTTP.URL.Path == "/v1/messages" || requestHTTP.URL.Path == "/v1/polls" {
 		allowed = "GET, POST"
 	}
 
@@ -104,11 +116,14 @@ func (s *server) fail(writer http.ResponseWriter, requestHTTP *http.Request, err
 		status, code = http.StatusRequestEntityTooLarge, "request_too_large"
 	case errors.Is(err, errMediaType):
 		status, code = http.StatusUnsupportedMediaType, "unsupported_media_type"
-	case errors.Is(err, errInvalidRequest), errors.Is(err, app.ErrInvalidCursor),
+	case errors.Is(err, signal.ErrInvalidPoll), errors.Is(err, app.ErrInvalidTarget),
+		errors.Is(err, errInvalidRequest), errors.Is(err, app.ErrInvalidCursor),
 		errors.Is(err, app.ErrAmbiguousGroup), errors.Is(err, app.ErrInvalidRecipient),
 		errors.Is(err, app.ErrNoRecipients), errors.Is(err, app.ErrEmptyMessage),
 		errors.Is(err, signal.ErrNotOnSignal), errors.Is(err, signal.ErrUnknownGroup), errors.Is(err, signal.ErrUnresolvable):
 		status, code = http.StatusBadRequest, "invalid_request"
+	case errors.Is(err, signal.ErrPollVoteExhausted):
+		status, code = http.StatusConflict, "poll_vote_exhausted"
 	case errors.Is(err, app.ErrRecipientNotAllowed):
 		status, code = http.StatusForbidden, "forbidden"
 	case errors.Is(err, signal.ErrDeviceUnlinked), errors.Is(err, signal.ErrConnectionFailed),

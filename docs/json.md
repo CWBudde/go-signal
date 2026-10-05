@@ -614,6 +614,13 @@ observation fields are additive in schema 1. Missing creation or closure still p
 about unobserved activity. This flag cannot be combined with `--scan-limit`. See
 [durable results](polls.md#durable-results) for storage and bootstrap semantics.
 
+### Poll API envelopes
+
+MCP `poll_create`, `poll_vote` and `poll_close` return the `poll` object above directly as
+structured content; `poll_show` returns `pollState` directly. Daemon poll writes wrap it in
+`{ok, poll, error?}` and `GET /v1/polls` returns `{pollState}`. Fields have the same meaning
+as the CLI schema version 1, including delivery outcomes, counter and unknown completeness.
+
 ## `groups list`
 
 ```json
