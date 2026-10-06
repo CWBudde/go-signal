@@ -124,10 +124,13 @@ Setup: [test account](docs/dev.md#test-account-setup). Automated by the opt-in `
 `…Messaging`, `…RemoteUnlink`, `…LeaveGroup` and `./cmd/` `…ReceiveInterrupt`/`…ReceiveUnlinked`;
 the phone-side checks follow the [core messaging live check](docs/dev.md#core-messaging-live-check).
 
-- [ ] Automated `TestIntegrationLink` on cgo: QR provisioning, connect, device listing, note to
-      self and unlink cleanup (the 2026-09-29 attempt expired at the QR step without a scan).
-- [ ] The same full link lifecycle on pure Go (`GOSIGNAL_IT_LINK=1`).
-- [ ] `devices list` (names and creation times, also on pure Go) and server-side `account unlink`.
+- [x] Link lifecycle on cgo: QR provisioning, connect, device listing, note to self and unlink
+      cleanup. Confirmed by the project owner from an earlier manual run (2026-10-07).
+- [x] The same full link lifecycle on pure Go (`GOSIGNAL_IT_LINK=1`), 2026-10-07: device
+      names/creation times, initial sync, byte-identical attachment via sync transcript, unlink.
+      Each QR code lives 45 s and is single-use; have the phone's scanner open before starting.
+- [x] `devices list` (names and creation times) on both backends, 2026-10-07; server-side
+      unlink via the link test's cleanup.
 - [ ] Remote unlink from the phone gives exit 3 with the cleanup hint.
 - [ ] Ctrl-C during `receive --follow` exits within ~1 s without losing acks; a dropped network
       connection recovers.
