@@ -10,13 +10,24 @@
 //	GOSIGNAL_IT_CREATE_GROUP "1" to create a reusable two-member test group (one-time setup)
 //	GOSIGNAL_IT_RENAME_GROUP "1" to rename the test group and restore its original title
 //	GOSIGNAL_IT_EDIT "1" to send and edit fresh self/direct/group messages
-//	GOSIGNAL_IT_LINK      "1" to also link a new device by QR code and unlink it again
+//	GOSIGNAL_IT_LINK      "1" to also link a new device by QR code, check its devices and sync, and
+//	                      unlink it again; with GOSIGNAL_IT_DATA_DIR on the same account, the main
+//	                      client also sends it an image that it must download byte for byte
+//	GOSIGNAL_IT_MESSAGING "1" to send an image, a quoting reply with a mention, a reaction and a
+//	                      remote delete to the peer (and the test group), and to block and unblock
+//	                      the peer; check the phones for how they show up
+//	GOSIGNAL_IT_REMOTE_UNLINK "1" to link a temporary device and wait for its removal on the phone
+//	GOSIGNAL_IT_KEEP_UNLINKED "1" to keep the remotely unlinked data dir for CLI tests (its path is
+//	                      logged as GOSIGNAL_IT_UNLINKED_DIR=<dir>; delete it yourself)
+//	GOSIGNAL_IT_LEAVE_GROUP group ID or master key of a disposable group (created on the phone,
+//	                      not the test group) to leave
 //	GOSIGNAL_IT_TIMEOUT   how long to wait for delivery receipts (default 2m)
 //	GOSIGNAL_IT_LOG       log level of the client's logs (default warn)
 
 package signal_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -26,6 +37,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/cwbudde/go-signal/internal/signal"
 	"github.com/mdp/qrterminal/v3"
@@ -171,6 +183,19 @@ func (env *liveEnv) stepCDSI(t *testing.T) { //nolint:thelper // a step of TestI
 	env.peer = resolved[0]
 }
 
+// resolvePeer looks the peer up (in the store, else by contact discovery) for the tests that
+// don't run stepCDSI.
+func (env *liveEnv) resolvePeer(t *testing.T) {
+	t.Helper()
+
+	peers, err := env.client.Resolve(t.Context(), []signal.Recipient{{Number: env.peerNumber}})
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+
+	env.peer = peers[0]
+}
+
 func (env *liveEnv) stepProfile(t *testing.T) { //nolint:thelper // a step of TestIntegration
 	t.Run("Own", func(t *testing.T) {
 		name, err := signal.FetchProfile(t.Context(), env.client, env.acc.ACI)
@@ -232,7 +257,8 @@ func (env *liveEnv) stepGroup(t *testing.T) { //nolint:thelper // a step of Test
 }
 
 // TestIntegrationLink links a new device into a temporary data dir (scan the QR code with the
-// test account's phone), checks that it can connect and send, and unlinks it again.
+// test account's phone), checks its device list, that it can connect, send and sync, and
+// unlinks it again.
 func TestIntegrationLink(t *testing.T) { //nolint:paralleltest // needs the phone
 	if os.Getenv("GOSIGNAL_IT_LINK") != "1" {
 		t.Skip("GOSIGNAL_IT_LINK not set to 1")
@@ -242,13 +268,48 @@ func TestIntegrationLink(t *testing.T) { //nolint:paralleltest // needs the phon
 	defer cancel()
 
 	dataDir := t.TempDir()
+	name := "go-signal integration " + backend()
+
+	client, acc := linkTemporary(ctx, t, dataDir, name)
+
+	defer cleanupLinkedDevice(t, client, dataDir)
+
+	// Receiving (not SendOnly) so that the attachment check sees the main client's transcript.
+	err := client.Connect(ctx)
+	if err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+
+	events := collect(client.Events())
+
+	t.Run("Devices", func(t *testing.T) { //nolint:paralleltest // one live device
+		checkLinkedDevices(t, client, acc, name)
+	})
+	t.Run("Send", func(t *testing.T) { //nolint:paralleltest // one live device
+		sendAndCheck(t, client, signal.SendRequest{
+			Recipients: []signal.Recipient{{ACI: acc.ACI}},
+			Body:       body("freshly linked"),
+		})
+	})
+	t.Run("Sync", func(t *testing.T) { //nolint:paralleltest // one live device
+		checkLinkedSync(t, client)
+	})
+	t.Run("Attachment", func(t *testing.T) { //nolint:paralleltest // one live device
+		checkLinkedAttachment(t, client, events, acc)
+	})
+}
+
+// linkTemporary opens dataDir and links a new device named name into it, showing the QR code
+// on stderr.
+func linkTemporary(ctx context.Context, t *testing.T, dataDir, name string) (signal.Client, signal.Account) {
+	t.Helper()
 
 	client, err := signal.Open(ctx, signal.Options{DataDir: dataDir, Logger: testLogger(t)})
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
 
-	acc, err := client.Link(ctx, "go-signal integration "+backend(), func(uri string) {
+	acc, err := client.Link(ctx, name, func(uri string) {
 		fmt.Fprintln(os.Stderr, "Scan with Signal on the phone (Settings > Linked devices):")
 		qrterminal.GenerateHalfBlock(uri, qrterminal.L, os.Stderr)
 	})
@@ -258,28 +319,207 @@ func TestIntegrationLink(t *testing.T) { //nolint:paralleltest // needs the phon
 		t.Fatalf("Link: %v", err)
 	}
 
-	t.Logf("linked %s (%s) as device %d", acc.Number, acc.ACI, acc.DeviceID)
+	t.Logf("linked %s (%s) as device %d %q", acc.Number, acc.ACI, acc.DeviceID, name)
 
-	defer cleanupLinkedDevice(t, client, dataDir)
+	return client, acc
+}
 
-	err = client.Connect(ctx, signal.SendOnly())
-	if err != nil {
-		t.Fatalf("Connect: %v", err)
-	}
+// primaryDeviceID is the phone's device ID; it usually has no name.
+const primaryDeviceID = 1
 
-	devices, err := client.Devices(ctx)
+func checkLinkedDevices(t *testing.T, client signal.Client, acc signal.Account, name string) {
+	t.Helper()
+
+	devices, err := client.Devices(t.Context())
 	if err != nil {
 		t.Fatalf("Devices: %v", err)
 	}
 
-	if !slices.ContainsFunc(devices, func(d signal.Device) bool { return d.ID == acc.DeviceID && d.Current }) {
-		t.Errorf("Devices = %+v, want device %d as current", devices, acc.DeviceID)
+	current := false
+
+	for _, dev := range devices {
+		t.Logf("device %d %q, created %s, last seen %s, current %t",
+			dev.ID, dev.Name, dev.Created, dev.LastSeen.Format(time.DateOnly), dev.Current)
+
+		if dev.Created.IsZero() {
+			t.Errorf("device %d: creation time missing or not decryptable", dev.ID)
+		}
+
+		// An undecryptable name comes back as its raw bytes.
+		if dev.ID != primaryDeviceID && (dev.Name == "" || !utf8.ValidString(dev.Name)) {
+			t.Errorf("device %d: name %q not decrypted", dev.ID, dev.Name)
+		}
+
+		if dev.Current {
+			current = dev.ID == acc.DeviceID && dev.Name == name
+		}
 	}
 
-	sendAndCheck(t, client, signal.SendRequest{
-		Recipients: []signal.Recipient{{ACI: acc.ACI}},
-		Body:       body("freshly linked"),
+	if !current {
+		t.Errorf("Devices = %+v, want device %d %q as current", devices, acc.DeviceID, name)
+	}
+}
+
+// checkLinkedSync syncs the fresh device and looks for the peer and the test group in what
+// arrived.
+func checkLinkedSync(t *testing.T, client signal.Client) {
+	t.Helper()
+
+	result, err := client.Sync(t.Context(), signal.SyncOptions{
+		Progress: func(stage signal.SyncStage) { t.Logf("sync: %s", stage) },
 	})
+	if err != nil {
+		t.Errorf("Sync: %v (missing %v)", err, result.Missing())
+	}
+
+	t.Logf("synced %d contacts, %d groups", result.Contacts, result.Groups)
+
+	if number := os.Getenv("GOSIGNAL_IT_PEER"); number != "" {
+		checkSyncedContact(t, client, number)
+	}
+
+	if ref := os.Getenv("GOSIGNAL_IT_GROUP"); ref != "" {
+		checkSyncedGroup(t, client, ref)
+	}
+}
+
+func checkSyncedContact(t *testing.T, client signal.Client, number string) {
+	t.Helper()
+
+	// Resolve finds the synced number in the store without contact discovery.
+	peers, err := client.Resolve(t.Context(), []signal.Recipient{{Number: number}})
+	if err != nil {
+		t.Errorf("Resolve: %v", err)
+
+		return
+	}
+
+	contacts, err := client.Contacts(t.Context())
+	if err != nil {
+		t.Errorf("Contacts: %v", err)
+
+		return
+	}
+
+	if !slices.ContainsFunc(contacts, func(c signal.Contact) bool { return c.ACI == peers[0].ACI || c.Number == number }) {
+		t.Errorf("peer %s (%s) not among the %d synced contacts", number, peers[0].ACI, len(contacts))
+	}
+}
+
+func checkSyncedGroup(t *testing.T, client signal.Client, ref string) {
+	t.Helper()
+
+	// Group fails with ErrUnknownGroup unless the sync stored the master key.
+	group, err := client.Group(t.Context(), ref)
+	if err != nil {
+		t.Errorf("Group: %v", err)
+
+		return
+	}
+
+	groups, err := client.Groups(t.Context())
+	if err != nil {
+		t.Errorf("Groups: %v", err)
+
+		return
+	}
+
+	if !slices.ContainsFunc(groups, func(g signal.Group) bool { return g.ID == group.ID && g.Err == nil }) {
+		t.Errorf("test group %s not among the %d listed groups", group.ID, len(groups))
+	}
+
+	titles, err := client.GroupTitles(t.Context())
+	if err != nil || titles[group.ID].Title != group.Title {
+		t.Errorf("cached title = %q, %v; want %q", titles[group.ID].Title, err, group.Title)
+	}
+}
+
+// checkLinkedAttachment sends an image as a note-to-self from the main test account
+// (GOSIGNAL_IT_DATA_DIR) and checks that the fresh device downloads the same bytes from the
+// sync transcript. The two data dirs have their own locks, so both clients can be connected.
+func checkLinkedAttachment(t *testing.T, linked signal.Client, events *eventLog, acc signal.Account) {
+	t.Helper()
+
+	dataDir := os.Getenv("GOSIGNAL_IT_DATA_DIR")
+	if dataDir == "" {
+		t.Skip("GOSIGNAL_IT_DATA_DIR not set")
+	}
+
+	mainClient := openMainSender(t, dataDir, acc.ACI)
+	data, width, height := testPNG(t)
+
+	uploaded, err := mainClient.Upload(t.Context(), []signal.OutgoingAttachment{{
+		Data: data, ContentType: pngType, Filename: "go-signal-link.png", Width: width, Height: height,
+	}})
+	if err != nil {
+		t.Fatalf("Upload: %v", err)
+	}
+
+	sent := sendAndCheck(t, mainClient, signal.SendRequest{
+		Recipients:  []signal.Recipient{{ACI: acc.ACI}},
+		Body:        body("attachment for the freshly linked device"),
+		Attachments: uploaded,
+	})
+
+	var transcript *signal.Message
+
+	waitFor(t, events, envDuration(t, "GOSIGNAL_IT_TIMEOUT", defaultReceiptTimeout),
+		fmt.Sprintf("sync transcript %d with an attachment", sent.Timestamp), func(evt signal.Event) bool {
+			msg, ok := evt.(*signal.Message)
+			if ok && msg.Sync && msg.Timestamp == sent.Timestamp && len(msg.Attachments) == 1 {
+				transcript = msg
+			}
+
+			return transcript != nil
+		})
+
+	got, err := linked.Download(t.Context(), transcript.Attachments[0])
+	if err != nil {
+		t.Fatalf("Download: %v", err)
+	}
+
+	if !bytes.Equal(got, data) || transcript.Attachments[0].ContentType != pngType {
+		t.Errorf("downloaded %d bytes of %s, want the %d bytes of image/png sent",
+			len(got), transcript.Attachments[0].ContentType, len(data))
+	}
+}
+
+// openMainSender opens the main test account, send-only, and skips unless it is the account
+// with the ACI aci.
+func openMainSender(t *testing.T, dataDir, aci string) signal.Client {
+	t.Helper()
+
+	main, err := signal.Open(t.Context(), signal.Options{
+		DataDir: dataDir,
+		Account: os.Getenv("GOSIGNAL_IT_ACCOUNT"),
+		Logger:  testLogger(t),
+	})
+	if err != nil {
+		t.Fatalf("Open %s: %v", dataDir, err)
+	}
+
+	t.Cleanup(func() {
+		err := main.Close()
+		if err != nil {
+			t.Errorf("Close main client: %v", err)
+		}
+	})
+
+	mainAcc, err := main.Account(t.Context())
+	if err != nil {
+		t.Fatalf("Account: %v", err)
+	}
+
+	if mainAcc.ACI != aci {
+		t.Skipf("GOSIGNAL_IT_DATA_DIR holds %s, not the freshly linked account %s", mainAcc.ACI, aci)
+	}
+
+	err = main.Connect(t.Context(), signal.SendOnly())
+	if err != nil {
+		t.Fatalf("Connect main client: %v", err)
+	}
+
+	return main
 }
 
 func cleanupLinkedDevice(t *testing.T, client signal.Client, dataDir string) {
@@ -360,12 +600,16 @@ func waitForReceipt(t *testing.T, events *eventLog, timeout time.Duration, sende
 	t.Helper()
 
 	waitFor(t, events, timeout, fmt.Sprintf("delivery receipt from %s for %d", sender, timestamp),
-		func(evt signal.Event) bool {
-			r, ok := evt.(*signal.Receipt)
+		isDeliveryReceipt(sender, timestamp))
+}
 
-			return ok && r.Sender.ACI == sender && r.Type == signal.ReceiptDelivery &&
-				slices.Contains(r.Timestamps, timestamp)
-		})
+func isDeliveryReceipt(sender string, timestamp uint64) func(signal.Event) bool {
+	return func(evt signal.Event) bool {
+		r, ok := evt.(*signal.Receipt)
+
+		return ok && r.Sender.ACI == sender && r.Type == signal.ReceiptDelivery &&
+			slices.Contains(r.Timestamps, timestamp)
+	}
 }
 
 func testLogger(t *testing.T) *slog.Logger {
@@ -438,6 +682,22 @@ func (l *eventLog) wait() {
 func waitFor(t *testing.T, events *eventLog, timeout time.Duration, what string, match func(signal.Event) bool) {
 	t.Helper()
 
+	err := awaitEvent(events, timeout, match)
+	if errors.Is(err, errEventsClosed) {
+		t.Fatalf("events closed while waiting for %s", what)
+	} else if err != nil {
+		t.Fatalf("no %s within %s", what, timeout)
+	}
+}
+
+var (
+	errEventsClosed = errors.New("events closed")
+	errNoEvent      = errors.New("no matching event")
+)
+
+// awaitEvent waits until events has one that matches, and fails with errNoEvent after timeout
+// or with errEventsClosed when the client closed its events first.
+func awaitEvent(events *eventLog, timeout time.Duration, match func(signal.Event) bool) error {
 	deadline := time.After(timeout)
 
 	for {
@@ -447,15 +707,15 @@ func waitFor(t *testing.T, events *eventLog, timeout time.Duration, what string,
 		events.mu.Unlock()
 
 		if found {
-			return
+			return nil
 		}
 
 		select {
 		case <-changed:
 		case <-events.done:
-			t.Fatalf("events closed while waiting for %s", what)
+			return errEventsClosed
 		case <-deadline:
-			t.Fatalf("no %s within %s", what, timeout)
+			return errNoEvent
 		}
 	}
 }

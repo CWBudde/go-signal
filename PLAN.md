@@ -120,6 +120,10 @@ sticker, poll and pin checks are in `docs/dev.md`.
 
 #### 11.1 Link, account and core messaging
 
+Setup: [test account](docs/dev.md#test-account-setup). Automated by the opt-in `TestIntegrationLink`,
+`…Messaging`, `…RemoteUnlink`, `…LeaveGroup` and `./cmd/` `…ReceiveInterrupt`/`…ReceiveUnlinked`;
+the phone-side checks follow the [core messaging live check](docs/dev.md#core-messaging-live-check).
+
 - [ ] Automated `TestIntegrationLink` on cgo: QR provisioning, connect, device listing, note to
       self and unlink cleanup (the 2026-09-29 attempt expired at the QR step without a scan).
 - [ ] The same full link lifecycle on pure Go (`GOSIGNAL_IT_LINK=1`).

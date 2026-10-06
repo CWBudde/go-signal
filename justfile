@@ -109,7 +109,9 @@ test-diff:
 # account (docs/dev.md, "Integration tests"). Needs GOSIGNAL_IT_DATA_DIR and GOSIGNAL_IT_PEER.
 test-integration:
     go test -count=1 -v -timeout 20m -tags integration -run '^TestIntegration' ./internal/signal/
+    go test -count=1 -v -timeout 20m -tags integration -run '^TestIntegration' ./cmd/
     CGO_ENABLED=0 go test -count=1 -v -timeout 20m -tags integration,libsignal_go -run '^TestIntegration' ./internal/signal/
+    CGO_ENABLED=0 go test -count=1 -v -timeout 20m -tags integration,libsignal_go -run '^TestIntegration' ./cmd/
 
 # Build the binary without version info (faster for development)
 build-dev:

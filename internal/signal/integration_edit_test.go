@@ -19,12 +19,7 @@ func TestIntegrationEdit(t *testing.T) { //nolint:paralleltest // one live accou
 	env := connectLive(t)
 	env.stepReceive(t)
 
-	peers, err := env.client.Resolve(t.Context(), []signal.Recipient{{Number: env.peerNumber}})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	env.peer = peers[0]
+	env.resolvePeer(t)
 
 	t.Run("Self", func(t *testing.T) { //nolint:paralleltest // one live account
 		editAndCheck(t, env, signal.SendRequest{Recipients: []signal.Recipient{{ACI: env.acc.ACI}}}, false)

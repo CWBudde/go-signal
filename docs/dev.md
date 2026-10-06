@@ -198,8 +198,11 @@ parameters, CDSI enclave), so there is no staging variant.
 | `Group`      | the test group is fetched, a group message is sent to all members, and the peer's delivery receipt arrives        |
 
 A decryption failure for a message sent during the run fails it too. `TestIntegrationLink` links
-a new device into a temporary data dir (scan the QR code it prints), connects, lists the devices,
-sends a note to self and unlinks it again.
+a new device into a temporary data dir (scan the QR code it prints), connects, lists the devices
+(checking the new device's name and creation time), runs the initial sync and checks that the
+peer's contact and the test group (`GOSIGNAL_IT_GROUP`) arrive, sends a note to self and unlinks
+it again. When `GOSIGNAL_IT_DATA_DIR` holds the same account, it also sends a note to self with an
+attachment from that device and checks that the freshly linked device downloads it byte-identical.
 
 Setup:
 
@@ -210,21 +213,33 @@ Setup:
   It must be discoverable by number. For `Profile/Peer`, message the test account from it once.
 - Optionally a group with the test account and the peer in it.
 
-| Variable                   | Meaning                                                             |
-| -------------------------- | ------------------------------------------------------------------- |
-| `GOSIGNAL_IT_DATA_DIR`     | data dir of the test account (the suite skips without it)           |
-| `GOSIGNAL_IT_ACCOUNT`      | the account in it, by number or ACI; empty selects the first        |
-| `GOSIGNAL_IT_PEER`         | the peer's number (required)                                        |
-| `GOSIGNAL_IT_GROUP`        | the test group's ID or master key (`go-signal groups list`)         |
-| `GOSIGNAL_IT_CREATE_GROUP` | `1` to create a reusable test group (one-time setup only)           |
-| `GOSIGNAL_IT_RENAME_GROUP` | `1` to rename the dedicated test group and restore its title        |
-| `GOSIGNAL_IT_EDIT`         | `1` to send and edit fresh self, direct and optional group messages |
-| `GOSIGNAL_IT_LINK`         | `1` to run `TestIntegrationLink` too                                |
-| `GOSIGNAL_IT_TIMEOUT`      | how long to wait for the queue and delivery receipts (default 2m)   |
-| `GOSIGNAL_IT_LOG`          | log level of the client (default `warn`)                            |
+[Test account setup](#test-account-setup) describes these fixtures step by step.
+
+| Variable                    | Meaning                                                                              |
+| --------------------------- | ------------------------------------------------------------------------------------ |
+| `GOSIGNAL_IT_DATA_DIR`      | data dir of the test account (the suite skips without it)                            |
+| `GOSIGNAL_IT_ACCOUNT`       | the account in it, by number or ACI; empty selects the first                         |
+| `GOSIGNAL_IT_PEER`          | the peer's number (required)                                                         |
+| `GOSIGNAL_IT_GROUP`         | the test group's ID or master key (`go-signal groups list`)                          |
+| `GOSIGNAL_IT_CREATE_GROUP`  | `1` to create a reusable test group (one-time setup only)                            |
+| `GOSIGNAL_IT_RENAME_GROUP`  | `1` to rename the dedicated test group and restore its title                         |
+| `GOSIGNAL_IT_EDIT`          | `1` to send and edit fresh self, direct and optional group messages                  |
+| `GOSIGNAL_IT_LINK`          | `1` to run `TestIntegrationLink` too                                                 |
+| `GOSIGNAL_IT_MESSAGING`     | `1` to run `TestIntegrationMessaging`                                                |
+| `GOSIGNAL_IT_REMOTE_UNLINK` | `1` to run `TestIntegrationRemoteUnlink` (remove a device on the phone)              |
+| `GOSIGNAL_IT_KEEP_UNLINKED` | `1` to keep the remotely unlinked data dir for `TestIntegrationReceiveUnlinked`      |
+| `GOSIGNAL_IT_LEAVE_GROUP`   | a disposable group to leave in `TestIntegrationLeaveGroup` (ID, master key or title) |
+| `GOSIGNAL_IT_RECEIVE`       | `1` to run `TestIntegrationReceiveInterrupt` (`./cmd/`)                              |
+| `GOSIGNAL_IT_UNLINKED_DIR`  | an unlinked data dir for `TestIntegrationReceiveUnlinked` (`./cmd/`)                 |
+| `GOSIGNAL_IT_PEER_DATA_DIR` | data dir of a linked peer account that sends the receive test's message (optional)   |
+| `GOSIGNAL_IT_PEER_ACCOUNT`  | the account in `GOSIGNAL_IT_PEER_DATA_DIR`; empty selects the only one               |
+| `GOSIGNAL_IT_TIMEOUT`       | how long to wait for the queue and delivery receipts (default 2m)                    |
+| `GOSIGNAL_IT_LOG`           | log level of the client (default `warn`)                                             |
 
 `just test-integration` runs the suite with the cgo backend and then with `libsignal_go` on the
-same account, which also checks that each backend picks up the other's sessions. The peer gets
+same account, which also checks that each backend picks up the other's sessions. For each backend
+it runs `^TestIntegration` in `./internal/signal/` and then in `./cmd/`, one package at a time,
+so that only one connection uses the account; the environment variables pass through. The peer gets
 one set of messages from each run. With `GOSIGNAL_IT_LINK=1` there are two QR codes to scan.
 Have the test account's phone ready: the provisioning connection can expire after about
 60 seconds without a scan, even though the test's overall timeout is longer.
@@ -283,6 +298,255 @@ peer and optional group settings. Run it with `-run '^TestIntegrationEdit$'` and
 integration tags. It sends an original text and one edit per chat, checks self sync sending,
 and waits for the peer's delivery receipts for the direct/group originals and edits. Receipts
 verify transport; inspect the peer's phone separately to confirm the corrected text renders.
+
+The following tests cover PLAN.md §11.1 and are each opt-in on top of `GOSIGNAL_IT_DATA_DIR`
+(and `GOSIGNAL_IT_PEER` where they message the peer). The commands show the pure-Go backend
+first and the cgo backend second; run both. `-run` accepts several tests as `'^(TestA|TestB)$'`.
+
+`TestIntegrationMessaging` (`GOSIGNAL_IT_MESSAGING=1`) sends to the peer and, with
+`GOSIGNAL_IT_GROUP`, to the test group: a PNG attachment, a reply that quotes it and mentions the
+peer, a reaction to it and a remote delete of a fresh message. Every send must succeed; the
+attachment, the reply and the deleted message must also come back with the peer's delivery
+receipt. For the reaction and the delete the test only logs whether a receipt arrived within 15 s.
+It logs every sent timestamp so that you can find the messages on the phone
+([Core messaging live check](#core-messaging-live-check)). It also blocks the peer (this needs the
+storage service key: run `account sync` first if it is unknown), checks that `Contacts` reports
+the block, unblocks again (also in cleanup if the test fails) and checks that the peer is a full
+member of the test group.
+
+```sh
+GOSIGNAL_IT_MESSAGING=1 CGO_ENABLED=0 go test -count=1 -v -timeout 20m \
+  -tags integration,libsignal_go -run '^TestIntegrationMessaging$' ./internal/signal/
+GOSIGNAL_IT_MESSAGING=1 CGO_LDFLAGS="-L $PWD/third_party/lib" go test -count=1 -v -timeout 20m \
+  -tags integration -run '^TestIntegrationMessaging$' ./internal/signal/
+```
+
+`TestIntegrationLink` (`GOSIGNAL_IT_LINK=1`, see above) prints a QR code to scan with the test
+account's phone; keep it at hand:
+
+```sh
+GOSIGNAL_IT_LINK=1 CGO_ENABLED=0 go test -count=1 -v -timeout 20m \
+  -tags integration,libsignal_go -run '^TestIntegrationLink$' ./internal/signal/
+GOSIGNAL_IT_LINK=1 CGO_LDFLAGS="-L $PWD/third_party/lib" go test -count=1 -v -timeout 20m \
+  -tags integration -run '^TestIntegrationLink$' ./internal/signal/
+```
+
+`TestIntegrationRemoteUnlink` (`GOSIGNAL_IT_REMOTE_UNLINK=1`) links a temporary device (scan the
+QR code), then asks you to remove that device on the phone (Settings > Linked devices). It expects
+the client to notice the logged-out state and `Devices` and `Connect` to fail with
+`ErrDeviceUnlinked`. With `GOSIGNAL_IT_KEEP_UNLINKED=1` the temporary data dir is kept and logged
+as `GOSIGNAL_IT_UNLINKED_DIR=<dir>` for `TestIntegrationReceiveUnlinked` below; delete it afterwards.
+
+```sh
+GOSIGNAL_IT_REMOTE_UNLINK=1 GOSIGNAL_IT_KEEP_UNLINKED=1 CGO_ENABLED=0 go test -count=1 -v \
+  -timeout 20m -tags integration,libsignal_go -run '^TestIntegrationRemoteUnlink$' ./internal/signal/
+GOSIGNAL_IT_REMOTE_UNLINK=1 GOSIGNAL_IT_KEEP_UNLINKED=1 CGO_LDFLAGS="-L $PWD/third_party/lib" \
+  go test -count=1 -v -timeout 20m -tags integration -run '^TestIntegrationRemoteUnlink$' ./internal/signal/
+```
+
+`TestIntegrationLeaveGroup` (`GOSIGNAL_IT_LEAVE_GROUP=<group>`) leaves a disposable group that was
+created on the peer's phone and checks from fresh server state that the test account is no longer
+a member. Like the other `connectLive` tests it needs `GOSIGNAL_IT_PEER`. Each run consumes the group: create a new one on the phone for the other backend. Never
+point it at the `GOSIGNAL_IT_GROUP` fixture.
+
+```sh
+GOSIGNAL_IT_LEAVE_GROUP='<id-or-title>' CGO_ENABLED=0 go test -count=1 -v -timeout 20m \
+  -tags integration,libsignal_go -run '^TestIntegrationLeaveGroup$' ./internal/signal/
+GOSIGNAL_IT_LEAVE_GROUP='<id-or-title>' CGO_LDFLAGS="-L $PWD/third_party/lib" go test -count=1 -v \
+  -timeout 20m -tags integration -run '^TestIntegrationLeaveGroup$' ./internal/signal/
+```
+
+The `./cmd/` integration tests (package `cmd_test`, same tags) build the go-signal binary and run
+it as a process. `TestIntegrationReceiveInterrupt` (`GOSIGNAL_IT_RECEIVE=1`) starts
+`receive --follow` on the test account, waits for a message to arrive, sends SIGINT and expects
+the process to exit normally (code 0; 130 is only for a second, forcing signal) within 1.5 s; a
+following one-shot `receive` must not deliver that message again (its ack was flushed). The
+message comes from a second linked account in `GOSIGNAL_IT_PEER_DATA_DIR` (sent with the same
+binary); without it, the test prints a token to stderr and waits for you to send a message
+containing it to the test account from another phone (or to Note to Self from its phone). `TestIntegrationReceiveUnlinked` (`GOSIGNAL_IT_UNLINKED_DIR=<dir>`,
+from `TestIntegrationRemoteUnlink` above) runs `receive` on the unlinked data dir and expects exit
+code 3 and the `account unlink --yes --local-only` cleanup hint.
+
+```sh
+GOSIGNAL_IT_RECEIVE=1 GOSIGNAL_IT_UNLINKED_DIR=<dir> CGO_ENABLED=0 go test -count=1 -v \
+  -timeout 20m -tags integration,libsignal_go -run '^TestIntegration' ./cmd/
+GOSIGNAL_IT_RECEIVE=1 GOSIGNAL_IT_UNLINKED_DIR=<dir> CGO_LDFLAGS="-L $PWD/third_party/lib" \
+  go test -count=1 -v -timeout 20m -tags integration -run '^TestIntegration' ./cmd/
+```
+
+Remote unlinking and `receive` on the unlinked dir are two runs: keep the dir from the first, then
+pass it to the second. Use the dir from the same backend's run.
+
+### Test account setup
+
+The integration tests and live checks act on a real Signal account and acknowledge, send, block
+and leave on its behalf. **Never use your personal account** or a personal peer: use a dedicated,
+disposable number and a peer that has agreed to receive test messages.
+
+1. Register a disposable number (prepaid SIM or a second number) with Signal on a spare phone.
+   This is the test account's primary device. Set a profile name.
+2. Build go-signal (`just build` for pure Go; `just build-cgo` writes the same `bin/go-signal`
+   with the cgo backend) and link it into its own data dir. Scan the QR code with the spare
+   phone (Settings > Linked devices):
+
+   ```sh
+   bin/go-signal --data-dir ~/signal-it link --name go-signal-it
+   bin/go-signal --data-dir ~/signal-it account show
+   ```
+
+3. From the peer's phone, send the test account a message and accept the message request on the
+   spare phone, so that both sides have each other's profile keys. Then run
+   `bin/go-signal --data-dir ~/signal-it receive` once.
+4. Export the fixture variables (the account is the test number or ACI from `account show`):
+
+   ```sh
+   export GOSIGNAL_IT_DATA_DIR=~/signal-it GOSIGNAL_IT_ACCOUNT=+49... GOSIGNAL_IT_PEER=+49...
+   ```
+
+5. Create the two-member test group with `TestIntegrationCreateGroup` (above) and export the
+   `GOSIGNAL_IT_GROUP` it prints. Confirm with `bin/go-signal --data-dir ~/signal-it groups list`.
+6. For `TestIntegrationLeaveGroup` and the group checks below, create disposable groups on the
+   peer's phone that include the test account, one per backend run. Receive their group updates
+   (`receive`) or run `account sync` before use, and pass the ID from `groups list`.
+
+Stop every other process that uses `~/signal-it` (`mcp serve`, `daemon`, `receive --follow`) before
+running tests, and remove leftover linked devices on the spare phone after failed link tests.
+
+### Core messaging live check
+
+This procedure for PLAN.md §11.1 remains **unrun**. It covers what needs eyes on a phone. Use
+the [test account setup](#test-account-setup) and run it once with `just build` (pure Go) and
+once with `just build-cgo`, recording `bin/go-signal version` for each run. The commands below
+abbreviate the fixture as a shell function:
+
+```sh
+gs() { bin/go-signal --data-dir "$GOSIGNAL_IT_DATA_DIR" -a "$GOSIGNAL_IT_ACCOUNT" "$@"; }
+```
+
+1. **Attachments, quotes and mentions.** Run `TestIntegrationMessaging` (above) and copy the
+   logged timestamps. On the peer's phone, find each message by its time: the PNG renders as an
+   image (open it, not just the thumbnail), the reply shows the quoted image and highlights the
+   mention as the peer's name, the reaction sits on the right message and the deleted message
+   shows "This message was deleted". Check the same in the test group.
+2. **Received images.** Send a photo from the peer's phone (as a file/document as well, since
+   photo sends are recompressed) and export the sent originals from the phone. Then:
+
+   ```sh
+   gs receive --download-attachments /tmp/it-dl
+   sha256sum /tmp/it-dl/* <exported-originals>
+   ```
+
+   The document copy must match byte for byte; the photo must match the file as the phone
+   sent it (compare it with the copy saved from the chat on the phone, not the camera original).
+
+3. **Timestamps from plain output.** Have the peer send three short messages. In plain `gs receive`
+   output, take the middle one's `timestamp=` and reply and react to it, using the peer's number
+   (or ACI from `gs contacts list`) as the author:
+
+   ```sh
+   gs send "$GOSIGNAL_IT_PEER" --quote "$GOSIGNAL_IT_PEER:<timestamp>" -m "reply to the middle one"
+   gs react "$GOSIGNAL_IT_PEER" --target "$GOSIGNAL_IT_PEER:<timestamp>" --emoji 👍
+   ```
+
+   The phone must attach both to the middle message, not its neighbours. Repeat with a message
+   the peer sent in the test group (`-g "$GOSIGNAL_IT_GROUP"`, same `--quote`/`--target`).
+
+4. **Edits.** Run `TestIntegrationEdit` and confirm the corrected texts on the phone. Then edit a
+   media and a quote message by hand; `--edit` takes the original's sent timestamp from `send`'s
+   output, and the replacement must supply the attachment and quote again:
+
+   ```sh
+   gs send "$GOSIGNAL_IT_PEER" --attach pic.png -m "caption v1"
+   gs send "$GOSIGNAL_IT_PEER" --edit <ts> --attach pic.png -m "caption v2"
+   gs send "$GOSIGNAL_IT_PEER" --quote "$GOSIGNAL_IT_PEER:<peer-ts>" -m "reply v1"
+   gs send "$GOSIGNAL_IT_PEER" --edit <ts> --quote "$GOSIGNAL_IT_PEER:<peer-ts>" -m "reply v2"
+   ```
+
+   The phone must show "Edited", the new caption with the image still present, and the quote
+   still attached. Also try an edit without `--attach` and record how the phone renders it.
+
+5. **Reactions and remote deletes.** In the 1:1 chat and in the test group, send a fresh message,
+   react to it with `gs react ... --target self:<ts> --emoji ❤️`, take it back with
+   `--remove`, and delete another fresh message with `gs delete "$GOSIGNAL_IT_PEER" --target <ts>`
+   (group: `gs delete -g "$GOSIGNAL_IT_GROUP" --target <ts>`). Check each on the peer's phone and
+   on the spare phone (sync transcripts).
+6. **Initial sync after linking.** `TestIntegrationLink` asserts it; also check by hand. Link a
+   fresh data dir, then list what arrived:
+
+   ```sh
+   bin/go-signal --data-dir /tmp/it-link link --name sync-check
+   bin/go-signal --data-dir /tmp/it-link contacts list
+   bin/go-signal --data-dir /tmp/it-link groups list
+   bin/go-signal --data-dir /tmp/it-link account show
+   ```
+
+   The phone's contacts (with names) and groups must be there and `account show` must report the
+   last sync. `account sync` repeats it. Remove the device with `account unlink --yes` (step 12).
+
+7. **Blocking.** First block an unrelated disposable number on the spare phone
+   (Settings > Privacy > Blocked) as a canary. Then run `gs contacts block "$GOSIGNAL_IT_PEER"`:
+   the spare phone's blocked list must show the peer **and still show the canary** (the official
+   apps replace their whole list with the one go-signal sends). Messages from the peer must no
+   longer arrive on the spare phone. Run `gs contacts unblock "$GOSIGNAL_IT_PEER"`: the peer is
+   removed, the canary stays, and `gs contacts list --blocked` agrees after `gs account sync`.
+8. **Groups created on the phone.** On the peer's phone, create a disposable group with the test
+   account. Run `gs receive`, then `gs groups list` and `gs groups show <id>`: title, members,
+   roles and revision must match the phone. Leave with `gs groups leave <id> --yes` and confirm
+   the phone shows the test account as having left; `gs groups list` no longer lists it as a
+   member. `TestIntegrationLeaveGroup` automates the leave part.
+9. **Identity change.** Use a disposable peer; reinstalling loses its history. Have the peer
+   delete and reinstall Signal (or re-register the number) and send the test account a message.
+   `gs receive` must report `[safety number changed; sending to them is blocked ...]`,
+   `gs identities list` must show the peer as `untrusted`, and `gs send "$GOSIGNAL_IT_PEER" -m hi`
+   must fail. Compare `gs identities show "$GOSIGNAL_IT_PEER"` with the safety number on the
+   spare phone, then run
+   `gs identities trust "$GOSIGNAL_IT_PEER" --safety-number <60 digits>`; the send now succeeds.
+   Trust state lives in the shared data dir, so the second backend needs another re-registration.
+10. **Network drop.** Start `gs receive --follow`. Run `nmcli networking off`, have the peer
+    send two messages, wait about a minute, then `nmcli networking on`. receive must reconnect
+    on its own (connection events in `-o json`, log warnings) and print both messages exactly
+    once; a following one-shot `gs receive` must not print them again.
+11. **Ctrl-C and remote unlink.** These are automated: `TestIntegrationReceiveInterrupt` and
+    `TestIntegrationRemoteUnlink` plus `TestIntegrationReceiveUnlinked` (above). By hand, press
+    Ctrl-C during `gs receive --follow` and check it exits within about a second.
+12. **Devices and server-side unlink.** `gs devices list` must show the spare phone as device 1
+    and the linked devices with the names given at `link` and plausible creation times (the
+    `/tmp/it-link` device from step 6 included). Then run
+    `bin/go-signal --data-dir /tmp/it-link account unlink --yes`: the device must disappear from
+    the spare phone's Linked devices and from `gs devices list`, and the data dir is emptied.
+
+Restore and clean up: unblock the peer and the canary on the spare phone, take back test
+reactions, leave or delete the disposable groups (keep the `GOSIGNAL_IT_GROUP` fixture), remove
+stale linked devices on the spare phone, delete `/tmp/it-dl` and `/tmp/it-link`, and re-trust the
+peer if a step left it untrusted. Record results below; keep PLAN.md §11.1 open until every row
+passes on both backends.
+
+| Item                                      | Backend | Date | Result |
+| ----------------------------------------- | ------- | ---- | ------ |
+| 1. Attachments, quotes, mentions          | pure Go |      |        |
+| 1. Attachments, quotes, mentions          | cgo     |      |        |
+| 2. Received images byte-identical         | pure Go |      |        |
+| 2. Received images byte-identical         | cgo     |      |        |
+| 3. Replies/reactions via plain timestamps | pure Go |      |        |
+| 3. Replies/reactions via plain timestamps | cgo     |      |        |
+| 4. Edits incl. media and quote            | pure Go |      |        |
+| 4. Edits incl. media and quote            | cgo     |      |        |
+| 5. Reactions and remote deletes           | pure Go |      |        |
+| 5. Reactions and remote deletes           | cgo     |      |        |
+| 6. Initial sync after linking             | pure Go |      |        |
+| 6. Initial sync after linking             | cgo     |      |        |
+| 7. Block/unblock on the phone             | pure Go |      |        |
+| 7. Block/unblock on the phone             | cgo     |      |        |
+| 8. Groups list/show/leave                 | pure Go |      |        |
+| 8. Groups list/show/leave                 | cgo     |      |        |
+| 9. Identity change                        | pure Go |      |        |
+| 9. Identity change                        | cgo     |      |        |
+| 10. Network drop recovery                 | pure Go |      |        |
+| 10. Network drop recovery                 | cgo     |      |        |
+| 11. Ctrl-C and remote unlink (automated)  | pure Go |      |        |
+| 11. Ctrl-C and remote unlink (automated)  | cgo     |      |        |
+| 12. Devices list and `account unlink`     | pure Go |      |        |
+| 12. Devices list and `account unlink`     | cgo     |      |        |
 
 ### Link QR refresh live check
 
