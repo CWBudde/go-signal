@@ -342,9 +342,18 @@ appears on the phone.
       `just test-diff` now runs zkgroup integration with `-race`; both backend race integrations,
       ordinary profile/reconnect shutdown without fixture barriers, affected fork suites and
       full cgo/pure-Go/no-cgo checks pass. Published Origin/source match the reviewed commit.
-- [ ] Investigate remaining websocket lifecycle hazards: immediate-cancellation `Connect`
+- [x] Investigate remaining websocket lifecycle hazards: immediate-cancellation `Connect`
       status-channel access, handler completion, incoming-queue cancellation and pending-response
-      cleanup. The captured-channel fix and passing race checks do not certify all lifecycle paths.
+      cleanup. [Offline report and opt-in probes](docs/websocket-lifecycle.md) reproduce a status
+      race and three contract failures on both backends with `-race`. Late response registration
+      after cleanup is a source-level finding that still needs a deterministic regression.
+- [ ] Fix `Connect` status-channel lifetime and make websocket completion wait for handler and
+      channel cleanup. Define queued-request shutdown semantics and verify facade resource release.
+- [ ] Make incoming-request enqueue cancellation-aware, including a full queue and stalled handler;
+      verify reconnect and shutdown complete without losing channel ownership.
+- [ ] Join websocket workers before draining pending responses and honor caller cancellation after
+      enqueue. Add a deterministic late-registration regression and preserve response-channel ownership.
+      Publish/re-pin the reviewed fork and verify all repaired contracts on both backends with `-race`.
 - [ ] Group sends: sender-key encryption doesn't check identity trust, so members whose key changed
       but who hold our sender key still receive group messages.
 - [ ] Identities: PNI identities can't be listed or trusted; verification state doesn't sync with

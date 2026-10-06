@@ -150,6 +150,12 @@ CGO_ENABLED=1 scripts/test-zkgroup-integration.sh -tags libsignal_go -race
 These checks cover the observed race and the exercised paths, without establishing
 that every websocket shutdown and reconnect path is race-free.
 
+The [websocket lifecycle investigation](websocket-lifecycle.md) records additional
+failures and repair criteria. `scripts/test-websocket-lifecycle.sh` retains opt-in
+offline contract probes in a temporary copy of the pinned fork. These probes
+intentionally fail on the current pin and are excluded from normal CI. See the
+report for cgo and pure-Go race commands and fixture limitations.
+
 The offline tests don't substitute for live group, profile and send checks; those are in the
 integration suite (see "Integration tests").
 

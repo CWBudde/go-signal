@@ -160,9 +160,12 @@ The broad Go CI runs failed pre-commit formatting
 on the same six libsignalgo files, all byte-identical to `.21`. Neither failed log
 reports a changed websocket file.
 This fixes the observed captured-channel race; it does not certify every websocket
-lifecycle path. Immediate cancellation at `Connect`, handler completion, bounded
-incoming queue cancellation and pending-response cleanup remain follow-up review
-areas. The [external security review decision](security-review.md) is a separate
+lifecycle path. The [remaining lifecycle investigation](websocket-lifecycle.md)
+reproduces a `Connect` status-channel race, early handler completion signaling,
+blocked incoming-queue cancellation and ignored request cancellation. It also
+identifies a pending-response registration window by source analysis. Repairs
+remain open in `PLAN.md`; the opt-in contract probes intentionally fail on `.22`.
+The [external security review decision](security-review.md) is a separate
 deferral, not an audit result.
 
 ### 1. Rebase the mautrix fork
