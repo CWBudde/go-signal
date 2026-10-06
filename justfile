@@ -88,6 +88,7 @@ test-fork:
     CGO_ENABLED=0 go test -tags libsignal_go -count=1 github.com/cwbudde/mautrix-signal/pkg/libsignalgo/...
     CGO_ENABLED=0 scripts/test-cdsi-integration.sh
     CGO_ENABLED=0 scripts/test-zkgroup-integration.sh -tags libsignal_go
+    CGO_ENABLED=0 scripts/test-websocket-lifecycle.sh -tags libsignal_go
 
 # Differential tests (cgo): purego vs libsignal in go-signal, the shim's cgo side, signalmeow's zkgroup paths.
 
@@ -97,6 +98,8 @@ test-diff:
     scripts/test-backend-switch.sh
     scripts/test-cdsi-integration.sh -race
     scripts/test-zkgroup-integration.sh -race
+    scripts/test-websocket-lifecycle.sh -race
+    scripts/test-websocket-lifecycle.sh -tags libsignal_go -race
 
 # Opt-in integration suite against Signal's production servers, cgo then libsignal_go on the same
 

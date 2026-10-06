@@ -426,7 +426,7 @@ func (c *meowClient) flushAcks() {
 	ctx, cancel := context.WithTimeout(c.zlog.WithContext(context.Background()), ackFlushTimeout)
 	defer cancel()
 
-	// SendRequest doesn't give up when ctx ends while it waits for the response.
+	// Keep the acknowledgement-flush deadline explicit at the facade boundary.
 	ws := cli.AuthedWS
 	flushed := make(chan error, 1)
 

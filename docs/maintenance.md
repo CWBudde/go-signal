@@ -35,6 +35,10 @@ go-signal depends on three pinned pieces that have to move together:
   My Story, with explicit audiences and intended-recipient manifests in own-device sync.
   `v0.2609.0-purego.22` fixes the captured incoming-request-channel shutdown race
   in `SignalWebsocket.connectLoop`, allowing zkgroup integration with `-race`.
+  `v0.2609.0-purego.23` stabilizes status-channel lifetime, joins active request handlers
+  before completion, makes incoming enqueue and caller response waiting cancellation-aware,
+  and joins connection workers before draining pending responses. Queued incoming requests
+  are discarded without acknowledgment on final shutdown; handlers survive reconnect.
 - [`cwbudde/libsignal-go`](https://github.com/cwbudde/libsignal-go) (tags `vX.Y.Z-cw.N`), the
   pure-Go libsignal that the default backend runs on. Its Rust compat harness is pinned to the
   libsignal tag libsignalgo was generated against (its `decisions/0007-cwbudde-fork-policy.md`).
@@ -163,10 +167,27 @@ This fixes the observed captured-channel race; it does not certify every websock
 lifecycle path. The [remaining lifecycle investigation](websocket-lifecycle.md)
 reproduces a `Connect` status-channel race, early handler completion signaling,
 blocked incoming-queue cancellation and ignored request cancellation. It also
-identifies a pending-response registration window by source analysis. Repairs
-remain open in `PLAN.md`; the opt-in contract probes intentionally fail on `.22`.
+identified a pending-response registration window by source analysis; a subsequent
+barrier regression reproduces the orphan on `.22`. The `.23` release below repairs
+these contracts and promotes the offline regressions into required dependency checks.
 The [external security review decision](security-review.md) is a separate
 deferral, not an audit result.
+
+The current lifecycle release is the immutable
+[`v0.2609.0-purego.23`](https://github.com/cwbudde/mautrix-signal/tree/v0.2609.0-purego.23)
+tag at [commit `24dd760`](https://github.com/cwbudde/mautrix-signal/commit/24dd7608b6c39a5c64ce3260265329566f8a80c6).
+The downloaded module's Origin and all four changed fork files match that commit.
+Affected signalmeow/libsignalgo suites, the promoted websocket contracts and the
+parent's deterministic late-registration probe pass with `-race` on both backends.
+Pure-Go vet and changed-file `goimports -local` formatting passed. The parent
+facade's real websocket-handler regression verifies the database remains open for
+processing after the event callback, then closes when the handler completes.
+`just test-fork` and `just test-diff` require the repaired lifecycle probes; the
+script injects scheduling barriers only into a disposable source copy, never the
+published fork. Queued-request shutdown semantics and handler restrictions are
+recorded in the [lifecycle report](websocket-lifecycle.md). Local checks cover
+these paths; phone acceptance and the separate key-check self-join remain open.
+The inherited broad fork CI limitations above are separate from these local checks.
 
 ### 1. Rebase the mautrix fork
 
