@@ -157,6 +157,11 @@ a temporary source copy. It requires Python 3 for test-only barrier injection an
 passes on the current pin. `just test-fork` runs it on pure Go; `just test-diff` runs
 both backends with `-race`. See the report for commands and fixture limitations.
 
+The pinned fork's `TestKeyCheckLifecyclePNI422` exercises actual receive startup and
+PNI prekey rejection with local websocket peers. It verifies logout and worker lifetime
+through cleanup failures. `just test-fork` runs it without cgo, and `just test-diff`
+runs both backends with `-race`; see the [lifecycle report](websocket-lifecycle.md).
+
 The offline tests don't substitute for live group, profile and send checks; those are in the
 integration suite (see "Integration tests").
 

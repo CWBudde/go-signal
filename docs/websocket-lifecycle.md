@@ -72,8 +72,40 @@ is needed because `StopReceiveLoops` already calls websocket `Close` before rele
 Affected fork suites and lifecycle probes passed with the race detector on both backends;
 parent cgo and pure-Go checks are the required integration gates. These tests verify the
 exercised shutdown and resource-lifetime paths, not live service delivery. Existing
-acknowledgment-flush ordering and the key-check loop's separate self-join remain outside
-this repair; the latter is recorded as an open follow-up in `PLAN.md`.
+acknowledgment-flush ordering remains outside this repair. The key-check loop's separate
+self-join is repaired by `.24`, as described below.
+
+## Receive key-check repair
+
+The `.23` key checker belonged to the receive wait group but called
+`ClearKeysAndDisconnect`, which called `StopReceiveLoops` and waited on that same
+group. The worker could never finish or deliver `LoggedOut`. The real startup regression
+reproduced this after a PNI prekey upload returned HTTP 422: credentials and transports
+were cleared, but logout delivery hit its ten-second watchdog.
+
+[`v0.2609.0-purego.24`](https://github.com/cwbudde/mautrix-signal/tree/v0.2609.0-purego.24)
+separates transport disconnection from external joining and reference release. The key
+worker clears keys/password, disconnects and delivers logout synchronously while still
+tracked. External `StopReceiveLoops` waits until its callback returns. Public
+`ClearKeysAndDisconnect` retains its synchronous join. Repeated gRPC close succeeds,
+allowing external shutdown after internal disconnection. The regression also exposed
+a race between clearing the initial-connect channel and the startup worker reading it;
+the channel now stays immutable, with a close guard owned by the status loop.
+
+`TestKeyCheckLifecyclePNI422` uses actual `StartReceiveLoops`, capability registration,
+key-count requests, serialized prekey upload and 422 recognition over local websocket
+peers. Controlled prekey/session/device stores avoid generating full key batches and
+exercise deletion, session-removal and password-persistence failures. The tests verify
+transport closure before logout, eventual status closure, the original rejection cause,
+and callback completion before external shutdown resets references. A 150 ms watchdog
+observes noncompletion while the callback is held; it is not a latency guarantee.
+The failing-old-code teardown leaves the self-joined worker until the test process exits;
+successful teardown joins workers and fixture readers before restoring the transport.
+
+Both backend race suites and the no-cgo regression pass. Required gates are
+`just test-fork` (no cgo) and `just test-diff` (both backends with `-race`). These tests
+verify receive-loop ownership with controlled stores, without proving live PNI rejection,
+database failure recovery, facade restart policy, or acknowledgment-flush ordering.
 
 ## Findings on the old pin
 

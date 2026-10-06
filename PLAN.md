@@ -359,9 +359,19 @@ appears on the phone.
       Shutdown waits for active handlers and discards queued requests without acknowledgment;
       full-queue reconnect proceeds while a handler is stalled. `just test-fork` / `just test-diff`
       now require the repaired offline contracts; details are in the lifecycle report.
-- [ ] Fix the receive key-check loop self-join: `keyCheckLoop` calls `ClearKeysAndDisconnect`,
-      which waits on its own receive-loop wait group. Add a deterministic regression; this
-      existing hazard is separate from websocket handler completion.
+- [x] Fix the receive key-check loop self-join: fork `v0.2609.0-purego.24` (`65ae5e4`)
+      separates transport disconnection from external worker joining and reference release.
+      The tracked key checker delivers logout after PNI prekey rejection, including cleanup
+      failures; external shutdown waits for its callback. A real-startup regression reproduced
+      the `.23` deadlock and the initial-connect channel race, both repaired on `.24`.
+      Published Origin/source match the reviewed commit. Affected fork suites pass with
+      `-race` on both backends; required `just test-fork` / `just test-diff` gates include
+      the regression. Full cgo/pure-Go/no-cgo parent checks pass; fixture limits are recorded
+      in [docs/websocket-lifecycle.md](docs/websocket-lifecycle.md).
+- [ ] Prevent facade restart after key-check logout: the callback marks the account unlinked,
+      but raw status-channel closure can advance the supervisor's existing restart path.
+      Add a deterministic facade regression; the `.24` repair verifies receive-worker
+      lifetime, not terminal supervisor behavior.
 - [ ] Group sends: sender-key encryption doesn't check identity trust, so members whose key changed
       but who hold our sender key still receive group messages.
 - [ ] Identities: PNI identities can't be listed or trusted; verification state doesn't sync with

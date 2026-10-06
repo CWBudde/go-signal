@@ -39,6 +39,9 @@ go-signal depends on three pinned pieces that have to move together:
   before completion, makes incoming enqueue and caller response waiting cancellation-aware,
   and joins connection workers before draining pending responses. Queued incoming requests
   are discarded without acknowledgment on final shutdown; handlers survive reconnect.
+  `v0.2609.0-purego.24` separates receive transport shutdown from worker joining,
+  allowing the tracked key checker to deliver logout after a rejected PNI upload.
+  It also keeps the initial-connect channel immutable and makes repeated gRPC close succeed.
 - [`cwbudde/libsignal-go`](https://github.com/cwbudde/libsignal-go) (tags `vX.Y.Z-cw.N`), the
   pure-Go libsignal that the default backend runs on. Its Rust compat harness is pinned to the
   libsignal tag libsignalgo was generated against (its `decisions/0007-cwbudde-fork-policy.md`).
@@ -173,7 +176,7 @@ these contracts and promotes the offline regressions into required dependency ch
 The [external security review decision](security-review.md) is a separate
 deferral, not an audit result.
 
-The current lifecycle release is the immutable
+The websocket lifecycle repair release is the immutable
 [`v0.2609.0-purego.23`](https://github.com/cwbudde/mautrix-signal/tree/v0.2609.0-purego.23)
 tag at [commit `24dd760`](https://github.com/cwbudde/mautrix-signal/commit/24dd7608b6c39a5c64ce3260265329566f8a80c6).
 The downloaded module's Origin and all four changed fork files match that commit.
@@ -186,8 +189,23 @@ processing after the event callback, then closes when the handler completes.
 script injects scheduling barriers only into a disposable source copy, never the
 published fork. Queued-request shutdown semantics and handler restrictions are
 recorded in the [lifecycle report](websocket-lifecycle.md). Local checks cover
-these paths; phone acceptance and the separate key-check self-join remain open.
+these paths; phone acceptance remains open. The separate key-check repair follows below.
 The inherited broad fork CI limitations above are separate from these local checks.
+
+The current receive lifecycle release is the immutable
+[`v0.2609.0-purego.24`](https://github.com/cwbudde/mautrix-signal/tree/v0.2609.0-purego.24)
+tag at [commit `65ae5e4`](https://github.com/cwbudde/mautrix-signal/commit/65ae5e412b09582deb356c9fc77d6136a7977e3b).
+The downloaded module's Origin and all four changed files match that commit.
+The real initial key-check regression reproduces the `.23` self-join after a PNI
+prekey upload returns HTTP 422. On `.24`, it verifies key/password clearing attempts,
+transport termination, logout delivery despite cleanup failures, and external shutdown
+waiting for a gated logout callback before releasing references. The same startup path
+exposed an initial-connect channel race, repaired by keeping the channel immutable.
+Affected signalmeow/libsignalgo suites pass with `-race` on both backends; pure-Go vet,
+the no-cgo regression and changed-file `goimports -local` formatting pass.
+`just test-fork` runs the key-check regression without cgo; `just test-diff` runs it
+with both backends and `-race`. The fixture uses controlled store interfaces and local
+websocket peers; it does not verify live service behavior or facade restart policy.
 
 ### 1. Rebase the mautrix fork
 
