@@ -85,6 +85,12 @@ func (s *supervisor) run(ctx context.Context, statuses <-chan loopStatus) {
 			return
 		case status.Stopped:
 			s.stopLoops()
+			// A receive worker may have canceled supervision while stop joined its
+			// synchronous logout callback. Do not restart or emit a stale disconnect.
+			if ctx.Err() != nil {
+				return
+			}
+
 			s.transition(ctx, &Connection{State: StateDisconnected, Err: status.Err})
 
 			statuses, attempts = s.restart(ctx, attempts, status.Err)

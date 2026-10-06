@@ -107,6 +107,26 @@ Both backend race suites and the no-cgo regression pass. Required gates are
 verify receive-loop ownership with controlled stores, without proving live PNI rejection,
 database failure recovery, facade restart policy, or acknowledgment-flush ordering.
 
+## Facade logout termination
+
+The facade now prepares its supervisor cancellation before starting receive workers.
+A key-check `LoggedOut` callback cancels supervision before recording the unlink or
+delivering its unbuffered event. Cancellation does not join workers or close the event
+channel. If supervision is already joining stopped workers, it finishes joining the callback,
+then checks cancellation before emitting disconnected or attempting a restart.
+Logout before supervisor startup retains the same cancellation. `Close` continues to
+own final worker joining and account resource release.
+
+`TestKeyCheckLogoutStopsFacadeSupervisor` exercises the real facade callback, registry,
+event delivery and supervisor wiring with controlled transport start/join operations.
+It closes status before logout, holds the join until the callback returns, and verifies
+supervisor termination without restart or subsequent connection events while the client
+remains open. Receive and send-only cases cover logout during joining and before
+supervision starts; unread receive logout still blocks the callback. All four cases
+reproduced a restart before the repair. This facade boundary regression complements
+the fork's real-startup PNI 422 regression; it does not simulate a live server or verify
+acknowledgment-flush ordering.
+
 ## Findings on the old pin
 
 ### Connect races with immediate cleanup

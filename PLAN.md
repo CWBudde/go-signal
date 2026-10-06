@@ -375,10 +375,15 @@ appears on the phone.
       `-race` on both backends; required `just test-fork` / `just test-diff` gates include
       the regression. Full cgo/pure-Go/no-cgo parent checks pass; fixture limits are recorded
       in [docs/websocket-lifecycle.md](docs/websocket-lifecycle.md).
-- [ ] Prevent facade restart after key-check logout: the callback marks the account unlinked,
-      but raw status-channel closure can advance the supervisor's existing restart path.
-      Add a deterministic facade regression; the `.24` repair verifies receive-worker
-      lifetime, not terminal supervisor behavior.
+- [x] Prevent facade restart after key-check logout: supervision cancellation is prepared
+      before receive workers start, and logout cancels it before registry writes or event
+      delivery. The supervisor checks cancellation after joining stopped workers.
+      Deterministic facade regressions reproduce the previous restart and cover receive /
+      send-only logout before supervision and during worker joining, with unbuffered
+      delivery, persisted unlink and final Close preserved. Full cgo/pure-Go/no-cgo checks
+      and both backend race regressions pass in an isolated checkout of this change;
+      concurrent ACK-flush work is preserved separately. Fixture boundaries are documented
+      in [docs/websocket-lifecycle.md](docs/websocket-lifecycle.md).
 - [ ] Group sends: sender-key encryption doesn't check identity trust, so members whose key changed
       but who hold our sender key still receive group messages.
 - [ ] Identities: PNI identities can't be listed or trusted; verification state doesn't sync with

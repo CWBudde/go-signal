@@ -251,16 +251,18 @@ func (c *meowClient) Connect(ctx context.Context, opts ...ConnectOption) error {
 	// The loops outlive ctx: cancelling the command must not cut the websockets before Close
 	// has drained them.
 	loopCtx, cancelLoops := context.WithCancel(context.WithoutCancel(ctx))
+	supervisorCtx, sup := c.prepareSupervisor(loopCtx)
 
 	statuses, err := c.startLoops(loopCtx)
 	if err != nil {
+		c.stopSupervisor()
 		cancelLoops()
 
 		return fmt.Errorf("connect: %w", err)
 	}
 
 	c.cancelLoops = cancelLoops
-	c.supervise(loopCtx, statuses)
+	c.supervise(supervisorCtx, statuses, sup)
 
 	return nil
 }
@@ -365,8 +367,8 @@ func (c *meowClient) stopLoops() error {
 	return nil
 }
 
-// supervise starts the supervisor of the receive loops (see supervisor).
-func (c *meowClient) supervise(loopCtx context.Context, statuses <-chan loopStatus) {
+// prepareSupervisor establishes cancellation before receive workers can deliver logout.
+func (c *meowClient) prepareSupervisor(loopCtx context.Context) (context.Context, *supervisor) {
 	ctx, stop := context.WithCancel(loopCtx)
 	c.stopSupervisor = stop
 	c.supervised = make(chan struct{})
@@ -388,6 +390,11 @@ func (c *meowClient) supervise(loopCtx context.Context, statuses <-chan loopStat
 		},
 	}
 
+	return ctx, sup
+}
+
+// supervise starts the prepared supervisor without replacing an early logout's cancellation.
+func (c *meowClient) supervise(ctx context.Context, statuses <-chan loopStatus, sup *supervisor) {
 	go func() {
 		defer close(c.supervised)
 
@@ -651,6 +658,12 @@ func (c *meowClient) checkLoggedOut(evt Event) Event {
 	conn, ok := evt.(*Connection)
 	if !ok || conn.State != StateLoggedOut {
 		return evt
+	}
+
+	// The key checker is still a receive worker. Cancel without joining it, before
+	// registry writes or unbuffered delivery can block; the external owner joins it.
+	if c.stopSupervisor != nil {
+		c.stopSupervisor()
 	}
 
 	return &Connection{State: StateLoggedOut, Err: c.markUnlinked(c.account, conn.Err)}
