@@ -384,6 +384,21 @@ appears on the phone.
       and both backend race regressions pass in an isolated checkout of this change;
       concurrent ACK-flush work is preserved separately. Fixture boundaries are documented
       in [docs/websocket-lifecycle.md](docs/websocket-lifecycle.md).
+- [ ] Keep the ack of a read event when receive is interrupted: live, `receive --follow`
+      lost the ack of a message read ~400 ms before SIGINT because `Close`'s keepalive flush
+      overtook signalmeow's handler (delivery receipt, buffer clear) and shutdown then canceled
+      its response.
+  - [x] Publish and pin the repair: fork `v0.2609.0-purego.25` (`f06b75b`) moves delivery
+        receipts to `SimpleResponse.AfterQueued`; `WaitResponseQueued` / `WaitRequestDone`
+        let `flushAcks` wait for the ack before the keepalive and the receipt afterward,
+        within `ackFlushTimeout`. Downloaded Origin and all five changed fork files match
+        the reviewed commit. The facade regression reproduces the lost ordering on `.24`
+        and passes ten race runs on each backend. Full cgo/pure-Go/no-cgo checks and
+        `just test-fork` / `just test-diff` pass; required gates include the fork contracts
+        ([details](docs/websocket-lifecycle.md#acknowledgement-flush-ordering)).
+  - [ ] Rerun `TestIntegrationReceiveInterrupt` on disposable accounts with both backends.
+        No test-account directory is configured; the opt-in test skipped on 2026-10-07.
+        Pending an arranged account/peer session; offline checks do not prove live acceptance.
 - [ ] Group sends: sender-key encryption doesn't check identity trust, so members whose key changed
       but who hold our sender key still receive group messages.
 - [ ] Identities: PNI identities can't be listed or trusted; verification state doesn't sync with

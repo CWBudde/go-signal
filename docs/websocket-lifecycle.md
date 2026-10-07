@@ -127,6 +127,68 @@ reproduced a restart before the repair. This facade boundary regression compleme
 the fork's real-startup PNI 422 regression; it does not simulate a live server or verify
 acknowledgment-flush ordering.
 
+## Acknowledgement flush ordering
+
+Found live on 2026-10-07 by `TestIntegrationReceiveInterrupt` (pure-Go backend):
+`receive --follow` printed a message, got SIGINT about 400 ms after its server timestamp,
+exited 0 in 313 ms, and the next one-shot `receive` got the same message again. Stderr showed
+`sendDeliveryReceipts error`, `Failed to clear buffered event plaintext` and
+`Error queuing response message`, all with `context canceled`.
+
+Cause, on `.24`: signalmeow's request handler keeps working after the facade callback
+has handed the event out. `handleDecryptedResult` sends the delivery receipt (a network
+send) and, in its deferred function, clears the decryption buffer; only then does
+`incomingAPIMessageHandler` return the response, which `connectLoop`'s handler goroutine
+queues with `pushOutgoing(ctx)`. `meowClient.Close` joined only the facade callback
+(`handling`) before `flushAcks` sent its keepalive. The keepalive answer could arrive
+while the handler was still sending the receipt; `stopLoops` then ran
+`StopReceiveLoops` → `AuthedWS.Close`, which closes the socket and cancels the
+connection context the handler runs under. The receipt, the buffer clear and the
+response enqueue all failed with that cancellation, so the ack was never written. The
+command's SIGINT context is not involved: `Connect` detaches the loops from it with
+`context.WithoutCancel`, and the facade's own handler work uses background contexts.
+
+Repair: fork `v0.2609.0-purego.25`, commit
+`f06b75b68eac54db97cc6e2d12182f2de675d566`. The downloaded module's Origin and all
+five changed fork files match that commit.
+
+- `web.SimpleResponse.AfterQueued` runs on the handler goroutine after the response was
+  queued, with the handler context, and is skipped when it could not be queued.
+  signalmeow now returns the delivery receipt there, so the acknowledgement neither waits
+  for nor depends on it. A receipt canceled by shutdown is logged as a warning.
+- `SignalWebsocket.WaitResponseQueued` waits until the request being handled has queued
+  its response (or failed to, or ended without one); `WaitRequestDone` additionally waits
+  for its `AfterQueued` work. Both return the context error when it ends first.
+  Requests are handled one at a time, so a request taken from the queue later is not
+  waited for.
+
+`meowClient.flushAcks` uses them within one `ackFlushTimeout` (2 s): wait for the response
+of the request whose event was handed out to be queued, send the keepalive (the single
+writer puts it behind the ack), then give the delivery receipt the remaining time before
+`stopLoops` cancels it. Close still refuses events once it has started, so a request taken
+afterwards cannot hand out an event; signalmeow returns `ErrHandlerFailed` for it and no
+response is queued, and requests still queued are discarded without acknowledgement.
+In the normal case the wait adds the buffer clear plus at most one receipt round trip,
+which overlaps the keepalive round trip.
+
+Regressions: `TestCloseFlushesAckOfReadEventAfterUpstreamHandler` (facade) runs the real
+`meowClient.Close` over local websockets. The handler hands out a read event, then holds
+its response as signalmeow's post-callback work does; a second request's event is never
+read. On `.24` the server saw the keepalive before the ack in 30 of 30 runs and in 4 of
+them never received the ack at all; with the repair it sees `ack 7`, then the keepalive,
+and never a response to the unread request. The fork's `TestLifecycleAckFlushWaitsForHandler`,
+`TestLifecycleAfterQueuedFollowsAck` and `TestLifecycleAfterQueuedSkippedOnShutdown`
+cover the websocket contract with the full `Connect` lifecycle, and
+`TestDeliveryReceiptAfterAck` checks that an accepted data message defers its receipt
+and a refused one defers nothing. These fixtures do not prove live delivery timing.
+
+Release verification: `just check`, `just check-purego`, `just test-fork` and
+`just test-diff` pass with `.25`, as does the untagged no-cgo suite. The facade ACK
+regression passes ten race runs on each backend; an isolated `.24` rerun reproduced
+the keepalive-before-ACK order. The post-repair live `TestIntegrationReceiveInterrupt`
+rerun skipped because `GOSIGNAL_IT_DATA_DIR` was unset. Live acceptance remains open
+until disposable account and peer directories are available, for both backends.
+
 ## Findings on the old pin
 
 ### Connect races with immediate cleanup

@@ -192,7 +192,7 @@ recorded in the [lifecycle report](websocket-lifecycle.md). Local checks cover
 these paths; phone acceptance remains open. The separate key-check repair follows below.
 The inherited broad fork CI limitations above are separate from these local checks.
 
-The current receive lifecycle release is the immutable
+The receive key-check repair release is the immutable
 [`v0.2609.0-purego.24`](https://github.com/cwbudde/mautrix-signal/tree/v0.2609.0-purego.24)
 tag at [commit `65ae5e4`](https://github.com/cwbudde/mautrix-signal/commit/65ae5e412b09582deb356c9fc77d6136a7977e3b).
 The downloaded module's Origin and all four changed files match that commit.
@@ -206,6 +206,19 @@ the no-cgo regression and changed-file `goimports -local` formatting pass.
 `just test-fork` runs the key-check regression without cgo; `just test-diff` runs it
 with both backends and `-race`. The fixture uses controlled store interfaces and local
 websocket peers; it does not verify live service behavior or facade restart policy.
+
+The acknowledgement flush release is the immutable
+[`v0.2609.0-purego.25`](https://github.com/cwbudde/mautrix-signal/tree/v0.2609.0-purego.25)
+tag at [commit `f06b75b`](https://github.com/cwbudde/mautrix-signal/commit/f06b75b68eac54db97cc6e2d12182f2de675d566).
+The downloaded module's Origin and all five changed fork files match that commit.
+Delivery receipts run after the envelope response is queued; websocket progress waits
+let the facade flush that response before its keepalive, then finish the receipt within
+the same two-second deadline. The affected fork suites pass on pure Go and on cgo
+with the race detector; pure-Go vet and changed-file formatting also pass. ACK ordering
+regressions pass ten race runs on both backends, and the facade regression reproduces
+the keepalive-before-ACK failure on `.24`. The pinned dependency checks require the
+new websocket and receipt contracts. Fixture boundaries and the pending live interrupt
+check are recorded in [docs/websocket-lifecycle.md](websocket-lifecycle.md).
 
 ### 1. Rebase the mautrix fork
 

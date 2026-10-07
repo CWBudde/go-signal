@@ -417,10 +417,15 @@ func (c *meowClient) begin(group *sync.WaitGroup) bool {
 	return true
 }
 
-// flushAcks waits until the acks of delivered events have been written. signalmeow queues an
-// ack right after the handler returned (and after clearing the event from its decryption
-// buffer); requests share the websocket's single writer, so by the time the response to a
-// keepalive request sent now arrives, those acks are on the wire.
+// flushAcks waits until the acks of delivered events have been written, all within
+// ackFlushTimeout. signalmeow keeps processing a request after our handler returned: it clears
+// the event from its decryption buffer and only then queues the ack, followed by the delivery
+// receipt (see web.SimpleResponse.AfterQueued). So flushAcks first waits for the request being
+// handled to queue its ack; requests are handled one at a time, and a later one cannot hand
+// out an event once Close has started (see handle). Requests share the websocket's single
+// writer, so by the time the response to a keepalive request sent next arrives, those acks are
+// on the wire. Finally it gives the delivery receipt the rest of the time, since stopLoops
+// cancels it.
 func (c *meowClient) flushAcks() {
 	c.cliMu.Lock()
 	cli := c.cli
@@ -433,22 +438,40 @@ func (c *meowClient) flushAcks() {
 	ctx, cancel := context.WithTimeout(c.zlog.WithContext(context.Background()), ackFlushTimeout)
 	defer cancel()
 
-	// Keep the acknowledgement-flush deadline explicit at the facade boundary.
-	ws := cli.AuthedWS
+	socket := cli.AuthedWS
 	flushed := make(chan error, 1)
 
 	go func() {
-		_, err := ws.SendRequest(ctx, http.MethodGet, keepalivePath, nil, nil)
+		err := socket.WaitResponseQueued(ctx)
+		if err != nil {
+			flushed <- fmt.Errorf("wait for the ack: %w", err)
+
+			return
+		}
+
+		_, err = socket.SendRequest(ctx, http.MethodGet, keepalivePath, nil, nil)
+		if err != nil {
+			flushed <- fmt.Errorf("keepalive: %w", err)
+
+			return
+		}
+
+		err = socket.WaitRequestDone(ctx)
+		if err != nil {
+			err = fmt.Errorf("wait for the delivery receipt: %w", err)
+		}
+
 		flushed <- err
 	}()
 
+	// Keep the acknowledgement-flush deadline explicit at the facade boundary.
 	select {
 	case err := <-flushed:
 		if err != nil {
 			c.log.Debug("flush acks", "error", err)
 		}
 	case <-ctx.Done():
-		c.log.Debug("flush acks: no keepalive response", "timeout", ackFlushTimeout)
+		c.log.Debug("flush acks: timed out", "timeout", ackFlushTimeout)
 	}
 }
 
