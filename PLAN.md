@@ -132,8 +132,10 @@ the phone-side checks follow the [core messaging live check](docs/dev.md#core-me
 - [x] `devices list` (names and creation times) on both backends, 2026-10-07; server-side
       unlink via the link test's cleanup.
 - [ ] Remote unlink from the phone gives exit 3 with the cleanup hint.
-- [ ] Ctrl-C during `receive --follow` exits within ~1 s without losing acks; a dropped network
-      connection recovers.
+- [x] Ctrl-C during `receive --follow` exits within ~1 s without losing acks
+      (`TestIntegrationReceiveInterrupt`, 2026-10-07 on `.26`: cgo 458 ms, pure Go 489 ms, exit 0,
+      no redelivery). The first run on `.24` lost the ack; fixed in Phase 15.
+- [ ] A dropped network connection during `receive --follow` recovers.
 - [ ] Attachments, quotes and mentions render on the phone; received images land byte-identical.
       Replies and reactions using timestamps copied from plain `receive` target the right messages.
 - [ ] Edit rendering on the peer's phone, including media and quote edits.
@@ -396,8 +398,8 @@ appears on the phone.
         and passes ten race runs on each backend. Full cgo/pure-Go/no-cgo checks and
         `just test-fork` / `just test-diff` pass; required gates include the fork contracts
         ([details](docs/websocket-lifecycle.md#acknowledgement-flush-ordering)).
-  - [ ] Rerun `TestIntegrationReceiveInterrupt` on disposable accounts with both backends.
-        No test-account directory is configured; the opt-in test skipped on 2026-10-07.
+  - [x] Rerun `TestIntegrationReceiveInterrupt` on disposable accounts with both backends:
+        passes on 2026-10-07 with `.26` (exit within 0.5 s, no redelivery).
         Pending an arranged account/peer session; offline checks do not prove live acceptance.
 - [x] Group sends enforce ACI identity trust even for members who already hold our sender key:
       fork `v0.2609.0-purego.26` (`ac8f355`) checks recipient eligibility and the exact key
