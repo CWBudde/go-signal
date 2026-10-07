@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/cwbudde/go-signal/internal/signal"
 )
@@ -86,9 +87,27 @@ func (a *App) IdentitiesTrust(ctx context.Context, req IdentitiesTrustRequest) (
 	return id, nil
 }
 
-// identityUser resolves arg to another user with ACI; groups and our own account have no
+// identityUser resolves arg to another user with ACI or explicit PNI; groups and our own account have no
 // identity key to trust.
 func (a *App) identityUser(ctx context.Context, arg string) (signal.Recipient, error) {
+	if strings.HasPrefix(strings.ToUpper(strings.TrimSpace(arg)), "PNI:") {
+		target, err := parseRemovalMember(arg)
+		if err != nil {
+			return signal.Recipient{}, err
+		}
+
+		own, err := a.client.Account(ctx)
+		if err != nil {
+			return signal.Recipient{}, err //nolint:wrapcheck // wrapped by the use case
+		}
+
+		if target.Recipient.PNI == own.PNI {
+			return signal.Recipient{}, fmt.Errorf("%w %q: that is this account", ErrInvalidRecipient, arg)
+		}
+
+		return target.Recipient, nil
+	}
+
 	targets, err := a.ResolveRecipients(ctx, []string{arg})
 	if errors.Is(err, signal.ErrNotConnected) {
 		return signal.Recipient{}, fmt.Errorf("%w (numbers are looked up only when sending; use the ACI)", err)

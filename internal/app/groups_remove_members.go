@@ -96,7 +96,8 @@ func (a *App) GroupsRemoveMembers(ctx context.Context, req RemoveGroupMembersReq
 	return group, nil
 }
 
-// Explicit PNI input is limited to invitation revocation, not ordinary recipient sending.
+// Explicit PNI input is supported by invitation revocation and identity commands,
+// while ordinary recipient sending continues to require an ACI.
 func parseRemovalMember(arg string) (Target, error) {
 	arg = strings.TrimSpace(arg)
 	if !strings.HasPrefix(strings.ToUpper(arg), "PNI:") {

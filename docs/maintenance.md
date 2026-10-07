@@ -244,6 +244,22 @@ The rotation fixture copies stored metadata and stops before distribution transp
 it also checks metadata/deletion failures. These checks do not establish live service
 delivery, successful remote redistribution or phone rendering.
 
+PNI identity management uses the existing typed service-ID storage without a migration.
+Identity list/show/trust accept explicit `PNI:<uuid>` offline; number and username resolution
+continue to select ACI identities. Safety numbers use our ACI identity key and the peer's typed
+service ID (version 2, 5200 iterations), following signal-cli's `IdentityHelper` / `Utils`.
+Both local identity-store wrappers enforce TOFU, changed-key sending refusal, pending change
+events and stale-session removal for peer PNIs independently of ACIs with the same UUID.
+`TestPNIIdentity` covers both wrappers, typed lookup, real prekey session replacement and
+recovery, and numeric/QR verification. CLI golden tests and MCP tests cover typed PNI output.
+These are offline checks; phone comparison and live PNI delivery have not been exercised.
+
+Phone verification-state synchronization remains open: `SyncMessage.Verified` handling and
+`ContactRecord` identity reconciliation require separate authenticated, exact-key updates
+and storage conflict handling. The fork's sent-sync PNI key writes, PNI signature validation
+and provisioning still use its underlying store directly and bypass facade trust callbacks.
+Do not interpret a locally verified PNI as an ACI verification or phone-synchronized state.
+
 ### 1. Rebase the mautrix fork
 
 In a `cwbudde/mautrix-signal` checkout:

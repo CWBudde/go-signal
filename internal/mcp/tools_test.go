@@ -226,3 +226,23 @@ func TestIdentitiesList(t *testing.T) {
 		t.Errorf("no key stored: identities %+v, want an empty list", got.Identities)
 	}
 }
+
+func TestIdentitiesListPNI(t *testing.T) {
+	t.Parallel()
+
+	fake := toolsFake()
+	fake.Identities = append(fake.Identities, signal.Identity{
+		Recipient: signal.Recipient{PNI: aliceACI}, Fingerprint: "05bbbb", Trust: signal.TrustUntrusted,
+	})
+	session := connect(t, fake)
+
+	var got struct {
+		Identities []output.IdentityJSON `json:"identities"`
+	}
+	call(t, session, "identities_list", map[string]any{recipient: "PNI:" + aliceACI}, &got)
+
+	if len(got.Identities) != 1 || got.Identities[0].PNI != aliceACI || got.Identities[0].ACI != "" ||
+		got.Identities[0].Trust != "untrusted" {
+		t.Errorf("PNI identities = %+v", got.Identities)
+	}
+}

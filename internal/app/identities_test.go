@@ -222,3 +222,34 @@ func TestIdentitiesClientError(t *testing.T) {
 		t.Errorf("got %v, want the client error prefixed with the command", err)
 	}
 }
+
+func TestIdentitiesPNIInput(t *testing.T) {
+	t.Parallel()
+
+	fake := identityFake()
+	fake.Linked[0].PNI = carolACI
+	pni := signal.Recipient{PNI: aliceACI}
+	fake.Identities = append(fake.Identities, signal.Identity{
+		Recipient: pni, Fingerprint: aliceNewKey, Trust: signal.TrustUntrusted,
+	})
+	a := open(t, fake)
+
+	ids, err := a.IdentitiesList(t.Context(), app.IdentitiesListRequest{
+		Recipient: " pni:" + strings.ToUpper(aliceACI) + " ",
+	})
+	if err != nil || len(ids) != 1 || ids[0].Recipient != pni {
+		t.Errorf("PNI list = %+v, %v", ids, err)
+	}
+
+	for _, arg := range []string{"PNI:bad", "PNI:00000000-0000-0000-0000-000000000000", "PNI:" + carolACI} {
+		_, err := a.IdentitiesTrust(t.Context(), app.IdentitiesTrustRequest{Recipient: arg})
+		if !errors.Is(err, app.ErrInvalidRecipient) {
+			t.Errorf("invalid/own PNI %s: %v", arg, err)
+		}
+	}
+
+	_, err = app.ParseRecipient(pni.String())
+	if !errors.Is(err, app.ErrInvalidRecipient) {
+		t.Errorf("PNI enabled for ordinary sends: %v", err)
+	}
+}

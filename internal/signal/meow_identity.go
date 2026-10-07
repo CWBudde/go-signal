@@ -22,7 +22,7 @@ import (
 )
 
 // fingerprintIterations and fingerprintVersion are what the Signal apps use for safety numbers
-// (NumericFingerprintGenerator(5200), version 2 with ACIs as identifiers).
+// (NumericFingerprintGenerator(5200), version 2 with typed service IDs as identifiers).
 const (
 	fingerprintIterations = libsignalgo.FingerprintVersion(5200)
 	fingerprintVersion    = libsignalgo.FingerprintVersionV2
@@ -48,12 +48,11 @@ const (
 // event); where its content hint allows, signalmeow asks the sender to resend it (a retry
 // receipt), which sets up a new session.
 //
-// Only ACIs are checked: PNI identity keys can't be listed or trusted, so they are left to
-// signalmeow, which trusts every key. Not covered either, because signalmeow uses its store
-// directly there: the PNI identity key that a sync message reports (saveSyncPNIIdentityKey), the
-// PNI signature checks and provisioning. The fork explicitly checks ACI sending trust before
-// selecting sender-key recipients and when loading the exact identity for the encrypted
-// envelope; excluded peers take the pairwise path, which also enforces this policy.
+// ACI and PNI identities are checked independently. Not covered, because signalmeow uses
+// its store directly there: the PNI key reported by sent sync (saveSyncPNIIdentityKey),
+// PNI signature checks and provisioning. Phone verification-state sync is not implemented.
+// The fork checks ACI sending trust before selecting sender-key recipients and when loading
+// the exact key for the encrypted envelope; excluded peers use the pairwise path.
 type identityTrust struct {
 	data *store.Store
 	log  *slog.Logger
@@ -109,14 +108,10 @@ func (s *trustStore) GetIdentityKey(
 }
 
 // SaveIdentityKey stores the key in signalmeow's store as before, and records a change of an
-// ACI's key. libsignal calls it after decrypting a message and after encrypting one.
+// service identity's key. libsignal calls it after decrypting a message and after encrypting one.
 func (s *trustStore) SaveIdentityKey(
 	ctx context.Context, theirServiceID libsignalgo.ServiceID, identityKey *libsignalgo.IdentityKey,
 ) (bool, error) {
-	if theirServiceID.Type != libsignalgo.ServiceIDTypeACI {
-		return s.inner.SaveIdentityKey(ctx, theirServiceID, identityKey) //nolint:wrapcheck // a transparent wrapper
-	}
-
 	key, err := identityKey.Serialize()
 	if err != nil {
 		return false, fmt.Errorf("serialize identity key: %w", err)
@@ -137,18 +132,13 @@ func (s *trustStore) SaveIdentityKey(
 	return replaced, err
 }
 
-// IsTrustedIdentity trusts every key for receiving. For sending to an ACI it trusts only the
+// IsTrustedIdentity trusts every key for receiving. For sending it trusts only the
 // current key, and only if the user trusted it (or it was the first one); any other key is
-// recorded as a change and refused. PNIs are left to signalmeow.
+// recorded as a change and refused. ACI and PNI identities have separate records.
 func (s *trustStore) IsTrustedIdentity(
 	ctx context.Context, theirServiceID libsignalgo.ServiceID, identityKey *libsignalgo.IdentityKey,
 	direction libsignalgo.SignalDirection,
 ) (bool, error) {
-	if theirServiceID.Type != libsignalgo.ServiceIDTypeACI {
-		//nolint:wrapcheck // a transparent wrapper
-		return s.inner.IsTrustedIdentity(ctx, theirServiceID, identityKey, direction)
-	}
-
 	if direction == libsignalgo.SignalDirectionReceiving {
 		return true, nil
 	}
@@ -223,8 +213,8 @@ func (t *identityTrust) observe(ctx context.Context, serviceID libsignalgo.Servi
 
 	t.pending.Store(true)
 	t.log.Warn("the safety number with a contact changed; sending to them is blocked until you trust the new key",
-		"recipient", serviceID.UUID.String(), "fingerprint", fingerprint(key),
-		"hint", "go-signal identities trust "+serviceID.UUID.String())
+		"recipient", serviceID.String(), "fingerprint", fingerprint(key),
+		"hint", "go-signal identities trust "+serviceID.String())
 
 	return false, nil
 }
@@ -360,15 +350,15 @@ func (t *identityTrust) report(ctx context.Context, emit func(Event) bool) bool 
 	return true
 }
 
-// identityChangedEvent converts a pending change; nil for service IDs that aren't ACIs.
+// identityChangedEvent converts a pending change; nil for malformed service IDs.
 func identityChangedEvent(rec store.IdentityRecord) *IdentityChanged {
-	aci, ok := aciOf(rec.ServiceID)
-	if !ok {
+	serviceID, err := libsignalgo.ServiceIDFromString(rec.ServiceID)
+	if err != nil {
 		return nil
 	}
 
 	return &IdentityChanged{
-		Recipient:      Recipient{ACI: aci},
+		Recipient:      serviceRecipient(serviceID),
 		OldFingerprint: fingerprint(rec.PreviousKey),
 		NewFingerprint: fingerprint(rec.Key),
 		Time:           rec.ChangedAt,
@@ -399,11 +389,14 @@ func (c *meowClient) Identities(ctx context.Context, rcpt *Recipient) ([]Identit
 	}
 
 	filter := ""
+
 	if rcpt != nil {
-		filter, err = requireACI(*rcpt)
-		if err != nil {
-			return nil, err
+		id, parseErr := identityServiceID(*rcpt)
+		if parseErr != nil {
+			return nil, parseErr
 		}
+
+		filter = id.String()
 	}
 
 	all, err := c.identities(ctx, device)
@@ -417,7 +410,7 @@ func (c *meowClient) Identities(ctx context.Context, rcpt *Recipient) ([]Identit
 		switch {
 		case filter == "":
 			out = append(out, stored.Identity)
-		case stored.Recipient.ACI == filter:
+		case stored.Recipient.String() == filter:
 			stored.Recipient = mergeRecipient(stored.Recipient, *rcpt)
 			out = append(out, stored.Identity)
 		}
@@ -444,7 +437,7 @@ func (c *meowClient) SafetyNumber(ctx context.Context, rcpt Recipient) (SafetyNu
 		return SafetyNumber{}, err
 	}
 
-	number, scannable, err := safetyNumber(device, identity.Recipient.ACI, identity.key)
+	number, scannable, err := safetyNumberFor(device, identity.Recipient, identity.key)
 	if err != nil {
 		return SafetyNumber{}, err
 	}
@@ -477,7 +470,7 @@ func (c *meowClient) TrustIdentity(ctx context.Context, rcpt Recipient, number s
 
 	// Sessions set up with another key (e.g. by an older go-signal, which kept them on a change)
 	// must not get the trust given to this one.
-	theirID, err := aciServiceID(identity.Recipient)
+	theirID, err := identityServiceID(identity.Recipient)
 	if err != nil {
 		return Identity{}, err
 	}
@@ -513,7 +506,7 @@ func trustLevelFor(device *mstore.Device, identity storedIdentity, number string
 		return 0, err
 	}
 
-	got, _, err := safetyNumber(device, identity.Recipient.ACI, identity.key)
+	got, _, err := safetyNumberFor(device, identity.Recipient, identity.key)
 	if err != nil {
 		return 0, err
 	}
@@ -545,7 +538,7 @@ type storedIdentity struct {
 }
 
 // identities merges go-signal's records with the keys signalmeow stored: a key without a record
-// counts as trusted on first use. Only other users' ACIs are listed, ordered by ACI.
+// counts as trusted on first use. Other users' typed identities are ordered by service ID.
 func (c *meowClient) identities(ctx context.Context, device *mstore.Device) ([]storedIdentity, error) {
 	records, err := c.data.Identities(ctx)
 	if err != nil {
@@ -566,18 +559,18 @@ func (c *meowClient) identities(ctx context.Context, device *mstore.Device) ([]s
 		byID[rec.ServiceID] = rec
 	}
 
-	own := device.ACI.String()
+	ownACI, ownPNI := device.ACI.String(), libsignalgo.NewPNIServiceID(device.PNI).String()
 	out := make([]storedIdentity, 0, len(byID))
 
 	for serviceID, rec := range byID {
-		aci, ok := aciOf(serviceID)
-		if !ok || aci == own {
+		parsedID, parseErr := libsignalgo.ServiceIDFromString(serviceID)
+		if parseErr != nil || serviceID == ownACI || serviceID == ownPNI {
 			continue
 		}
 
 		out = append(out, storedIdentity{
 			Identity: Identity{
-				Recipient:   Recipient{ACI: aci},
+				Recipient:   serviceRecipient(parsedID),
 				Fingerprint: fingerprint(rec.Key),
 				Trust:       ParseTrustLevel(rec.Trust),
 				FirstSeen:   rec.FirstSeen,
@@ -588,14 +581,16 @@ func (c *meowClient) identities(ctx context.Context, device *mstore.Device) ([]s
 		})
 	}
 
-	slices.SortFunc(out, func(a, b storedIdentity) int { return strings.Compare(a.Recipient.ACI, b.Recipient.ACI) })
+	slices.SortFunc(out, func(a, b storedIdentity) int {
+		return strings.Compare(a.Recipient.String(), b.Recipient.String())
+	})
 
 	return out, nil
 }
 
 // identityOf returns rcpt's current identity; ErrUnknownIdentity if there is none.
 func (c *meowClient) identityOf(ctx context.Context, device *mstore.Device, rcpt Recipient) (storedIdentity, error) {
-	aci, err := requireACI(rcpt)
+	serviceID, err := identityServiceID(rcpt)
 	if err != nil {
 		return storedIdentity{}, err
 	}
@@ -605,7 +600,7 @@ func (c *meowClient) identityOf(ctx context.Context, device *mstore.Device, rcpt
 		return storedIdentity{}, err
 	}
 
-	i := slices.IndexFunc(all, func(id storedIdentity) bool { return id.Recipient.ACI == aci })
+	i := slices.IndexFunc(all, func(id storedIdentity) bool { return id.Recipient.String() == serviceID.String() })
 	if i < 0 {
 		return storedIdentity{}, fmt.Errorf("%w for %s: go-signal learns it when it receives from or sends to them",
 			ErrUnknownIdentity, rcpt)
@@ -617,20 +612,24 @@ func (c *meowClient) identityOf(ctx context.Context, device *mstore.Device, rcpt
 	return id, nil
 }
 
-// safetyNumber computes the safety number of device's account and the user theirACI with the
-// identity key theirKey (serialized), as the Signal apps do: numeric fingerprint version 2 over
-// both ACIs, 5200 iterations. Both sides get the same number.
-func safetyNumber(device *mstore.Device, theirACI string, theirKey []byte) (string, []byte, error) {
-	their, err := uuid.Parse(theirACI)
+// safetyNumberFor uses our ACI identity and the peer's typed service ID, as signal-cli does.
+func safetyNumberFor(device *mstore.Device, rcpt Recipient, key []byte) (string, []byte, error) {
+	their, err := identityServiceID(rcpt)
 	if err != nil {
-		return "", nil, fmt.Errorf("%w: invalid ACI %q: %w", ErrUnresolvable, theirACI, err)
+		return "", nil, err
 	}
 
-	return computeSafetyNumber(device.ACI, device.ACIIdentityKeyPair.GetPublicKey(), their, theirKey)
+	return computeServiceSafetyNumber(device.ACI, device.ACIIdentityKeyPair.GetPublicKey(), their, key)
 }
 
 func computeSafetyNumber(
 	ownACI uuid.UUID, ownKey *libsignalgo.PublicKey, theirACI uuid.UUID, theirKey []byte,
+) (string, []byte, error) {
+	return computeServiceSafetyNumber(ownACI, ownKey, libsignalgo.NewACIServiceID(theirACI), theirKey)
+}
+
+func computeServiceSafetyNumber(
+	ownACI uuid.UUID, ownKey *libsignalgo.PublicKey, theirID libsignalgo.ServiceID, theirKey []byte,
 ) (string, []byte, error) {
 	remote, err := libsignalgo.DeserializePublicKey(theirKey)
 	if err != nil {
@@ -639,7 +638,7 @@ func computeSafetyNumber(
 
 	generated, err := libsignalgo.NewFingerprint(fingerprintIterations, fingerprintVersion,
 		libsignalgo.NewACIServiceID(ownACI).Bytes(), ownKey,
-		libsignalgo.NewACIServiceID(theirACI).Bytes(), remote)
+		theirID.Bytes(), remote)
 	if err != nil {
 		return "", nil, fmt.Errorf("safety number: %w", err)
 	}
@@ -657,14 +656,19 @@ func computeSafetyNumber(
 	return number, scannable, nil
 }
 
-// requireACI returns rcpt's ACI, or ErrUnresolvable.
-func requireACI(rcpt Recipient) (string, error) {
-	id, err := aciServiceID(rcpt)
-	if err != nil {
-		return "", err
+// identityServiceID selects ACI when both identifiers are present; an explicit PNI
+// must be passed without an ACI. Sending still uses aciServiceID.
+func identityServiceID(rcpt Recipient) (libsignalgo.ServiceID, error) {
+	if rcpt.ACI != "" {
+		return aciServiceID(rcpt)
 	}
 
-	return id.UUID.String(), nil
+	pni, err := uuid.Parse(rcpt.PNI)
+	if err != nil || pni == uuid.Nil {
+		return libsignalgo.ServiceID{}, fmt.Errorf("%w: invalid PNI %q", ErrUnresolvable, rcpt.PNI)
+	}
+
+	return libsignalgo.NewPNIServiceID(pni), nil
 }
 
 // mergeRecipient adds what the caller knows about rcpt (number, username) to stored.
@@ -678,16 +682,6 @@ func mergeRecipient(stored, rcpt Recipient) Recipient {
 	}
 
 	return stored
-}
-
-// aciOf returns the ACI of a service ID as signalmeow stores it; false for PNIs.
-func aciOf(serviceID string) (string, bool) {
-	id, err := libsignalgo.ServiceIDFromString(serviceID)
-	if err != nil || id.Type != libsignalgo.ServiceIDTypeACI {
-		return "", false
-	}
-
-	return id.UUID.String(), true
 }
 
 // fingerprint hex-encodes a serialized identity key; "" for none.

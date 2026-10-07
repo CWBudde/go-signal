@@ -14,6 +14,7 @@ import (
 // structured content.
 type IdentityJSON struct {
 	ACI         string    `json:"aci"`
+	PNI         string    `json:"pni,omitempty"`
 	Number      string    `json:"number,omitempty"`
 	Username    string    `json:"username,omitempty"`
 	Fingerprint string    `json:"fingerprint"`
@@ -29,6 +30,7 @@ type IdentityJSON struct {
 func NewIdentityJSON(identity signal.Identity) IdentityJSON {
 	return IdentityJSON{
 		ACI:         identity.Recipient.ACI,
+		PNI:         identity.Recipient.PNI,
 		Number:      identity.Recipient.Number,
 		Username:    identity.Recipient.Username,
 		Fingerprint: identity.Fingerprint,
@@ -110,11 +112,11 @@ func (p *Printer) SafetyNumber(number signal.SafetyNumber) error {
 		qrterminal.GenerateHalfBlock(string(number.Scannable), qrterminal.L, p.w)
 	}
 
-	aci := number.Identity.Recipient.ACI
+	recipient := number.Identity.Recipient.String()
 
 	_, err = fmt.Fprintf(p.w, "Compare this with the safety number in Signal on your phone (open the chat, tap the "+
 		"name, View safety number), or scan the code there. If they match, run:\n"+
-		"  go-signal identities trust %s --safety-number %s\n", aci, number.Number)
+		"  go-signal identities trust %s --safety-number %s\n", recipient, number.Number)
 	if err != nil {
 		return fmt.Errorf("write output: %w", err)
 	}
@@ -130,7 +132,7 @@ func (p *Printer) TrustedIdentity(identity signal.Identity) error {
 
 	how := "verified by its safety number"
 	if identity.Trust != signal.TrustVerified {
-		how = "not verified; compare the safety number with `go-signal identities show " + identity.Recipient.ACI + "`"
+		how = "not verified; compare the safety number with `go-signal identities show " + identity.Recipient.String() + "`"
 	}
 
 	_, err := fmt.Fprintf(p.w, "Trusted the identity key of %s (%s).\n", p.who(identity.Recipient), how)
@@ -144,11 +146,16 @@ func (p *Printer) TrustedIdentity(identity signal.Identity) error {
 // identityTable prints the details of identity as "Key: value" lines.
 func (p *Printer) identityTable(identity signal.Identity) error {
 	table := tabwriter.NewWriter(p.w, 0, 0, 1, ' ', 0)
-	if name := p.who(identity.Recipient); name != identity.Recipient.ACI {
+	if name := p.who(identity.Recipient); name != identity.Recipient.String() {
 		fmt.Fprintf(table, "Recipient:\t%s\n", name)
 	}
 
-	fmt.Fprintf(table, "ACI:\t%s\n", orDash(identity.Recipient.ACI))
+	if identity.Recipient.ACI != "" {
+		fmt.Fprintf(table, "ACI:\t%s\n", identity.Recipient.ACI)
+	} else {
+		fmt.Fprintf(table, "PNI:\t%s\n", identity.Recipient.String())
+	}
+
 	fmt.Fprintf(table, "Fingerprint:\t%s\n", orDash(identity.Fingerprint))
 	fmt.Fprintf(table, "Trust:\t%s\n", identity.Trust)
 	fmt.Fprintf(table, "First seen:\t%s\n", p.dateTime(identity.FirstSeen))

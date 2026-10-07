@@ -362,38 +362,6 @@ func TestTrustIdentityRemovesStaleSessions(t *testing.T) {
 	}
 }
 
-// TestPNIIdentityLeftToSignalmeow checks that PNI keys, which can't be listed or trusted, are
-// neither enforced nor reported.
-func TestPNIIdentityLeftToSignalmeow(t *testing.T) {
-	t.Parallel()
-
-	env := newTrustEnv(t)
-	pni := libsignalgo.NewPNIServiceID(uuid.MustParse(aliceACI))
-
-	for range 2 {
-		key := newIdentityKey(t)
-
-		_, err := env.device.ACIIdentityStore.SaveIdentityKey(t.Context(), pni, key)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		ok, err := env.device.ACIIdentityStore.IsTrustedIdentity(t.Context(), pni, key, sending)
-		if err != nil || !ok {
-			t.Errorf("PNI key refused: %v", err)
-		}
-	}
-
-	ok, err := env.device.ACIIdentityStore.IsTrustedIdentity(t.Context(), pni, newIdentityKey(t), sending)
-	if err != nil || !ok {
-		t.Errorf("new PNI key refused: %v", err)
-	}
-
-	if events := env.report(t); len(events) != 0 {
-		t.Errorf("PNI change reported: %+v", events)
-	}
-}
-
 func TestIdentityChangeOnSend(t *testing.T) {
 	t.Parallel()
 

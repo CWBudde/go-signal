@@ -37,7 +37,7 @@ type groupsShowInput struct {
 }
 
 type identitiesListInput struct {
-	Recipient string `json:"recipient,omitempty" jsonschema:"list only this user's key: E.164 number, ACI or @username"`
+	Recipient string `json:"recipient,omitempty" jsonschema:"filter identity: E.164, ACI, @username or PNI:<uuid>"`
 }
 
 type identitiesListOutput struct {

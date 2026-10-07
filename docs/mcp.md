@@ -186,6 +186,9 @@ title).
 | `identities_list` | `recipient`           | `{"identities": [...]}` ([`identities list`](json.md#identities-list))    |
 | `doctor`          | `checkServer`         | The server's health ([`mcp doctor`](json.md#mcp-doctor))                  |
 
+`identities_list` accepts explicit `PNI:<uuid>` to select a PNI key. Numbers and usernames
+select the ACI key; ACI and PNI trust are independent. Identity output includes optional `pni`.
+
 `doctor` is there in `--read-only` mode, too. Besides the checks of `mcp doctor` (below), it
 reports the server's version and uptime and the connection: `ok` while connected, `warn` while it
 reconnects after a drop, with the time of the last event received. It asks Signal's server whether

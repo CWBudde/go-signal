@@ -414,8 +414,25 @@ appears on the phone.
       gates include the trust regressions and the updated encrypted endorsement fixture.
       Offline fixture boundaries and unrun live delivery are recorded in
       [docs/maintenance.md](docs/maintenance.md).
-- [ ] Identities: PNI identities can't be listed or trusted; verification state doesn't sync with
-      the phone (`ContactRecord` identity state, `SyncMessage.Verified`).
+- [x] List, show and trust PNI identities offline with explicit `PNI:<uuid>` input.
+      ACI and PNI identities retain separate trust records, including equal UUIDs; numbers
+      and usernames still select ACI identities. Both identity-store wrappers enforce
+      changed-key refusal, report typed change events and remove stale sessions. Safety
+      numbers use our ACI key and the peer's typed service ID. JSON adds optional `pni`,
+      preserving ACI output; CLI golden and MCP listing tests cover PNI selection/output.
+      Real session replacement, trust-time cleanup and recovery, both local stores,
+      numeric/QR fingerprints and invalid/self/unknown inputs pass offline regressions,
+      including ten race runs per backend. Full cgo/pure-Go/no-cgo checks pass.
+      Live phone comparison/delivery remains unrun; direct fork PNI sync writes,
+      provisioning and signature paths remain outside facade
+      callbacks ([details](docs/maintenance.md)).
+- [ ] Sync identity verification state with the phone.
+  - [ ] Apply authenticated incoming `SyncMessage.Verified` updates only to the exact known
+        ACI identity key; preserve acknowledgement/redelivery on persistence failure.
+  - [ ] Send local ACI trust decisions to linked devices, defining partial sync failure
+        and retry behavior without echoing incoming updates.
+  - [ ] Reconcile `ContactRecord` identity key/state with a freshness/conflict policy and
+        transactional key, trust and session updates. ACI verification must not imply PNI trust.
 - [ ] Port `attest_svr2_bad_config` if SVR2 is ever needed.
 
 **Done when:** the review decision is recorded and the upstream issues are filed or fixed.

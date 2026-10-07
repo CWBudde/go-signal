@@ -16,8 +16,10 @@ identity-changed event in receive, and refuses to send to them until you trust t
 "identities trust". Compare the safety number ("identities show") with the one in the Signal app
 on your phone to verify it.
 
-Recipients are E.164 numbers, ACIs or @usernames. These commands don't connect, so a number only
-works once go-signal has looked it up (e.g. by sending to it); the ACI always works.`,
+Recipients are E.164 numbers, ACIs, @usernames or explicit PNI:<uuid> identities. These commands
+don't connect, so a number only works once go-signal has looked it up (e.g. by sending to it).
+Numbers and usernames select the ACI identity; PNI:<uuid> selects the separate PNI key.
+Trust changes are local; verification state is not yet synchronized with the phone.`,
 		Args: cobra.NoArgs,
 	}
 

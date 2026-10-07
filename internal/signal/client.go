@@ -184,8 +184,8 @@ type Client interface { //nolint:interfacebloat // the one facade over signalmeo
 	// out (it says so) leaves the store behind the phone.
 	SetBlocked(ctx context.Context, recipients []Recipient, blocked bool) error
 
-	// Identities lists the identity keys stored for other users, by ACI, with their trust level
-	// (see TrustLevel). With rcpt (which needs its ACI, see Resolve) only that user's key is
+	// Identities lists the identity keys stored for other users, by typed service ID, with their trust level
+	// (see TrustLevel). With rcpt (ACI preferred, otherwise explicit PNI) only that identity is
 	// listed, or none. It works on the local store, without Connect or the account lock.
 	//
 	// Trust is on first use: the first key seen for a user is trusted without verification. A
@@ -194,7 +194,7 @@ type Client interface { //nolint:interfacebloat // the one facade over signalmeo
 	// with ErrUntrustedIdentity (see UntrustedError) until TrustIdentity. Receiving keeps working.
 	Identities(ctx context.Context, rcpt *Recipient) ([]Identity, error)
 
-	// SafetyNumber returns the safety number of our account and rcpt (which needs its ACI) for
+	// SafetyNumber returns the safety number of our account and rcpt (ACI or explicit PNI) for
 	// their current identity key, as the Signal apps show it, with the key's Identity. It fails
 	// with ErrUnknownIdentity when no key is stored for them. Like Identities it only reads the
 	// local store.

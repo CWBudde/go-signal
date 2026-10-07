@@ -980,12 +980,15 @@ The existing `left.membership` values remain compatible with older output.
 }
 ```
 
-One **identity** object per user whose identity key go-signal has stored, ordered by ACI (with a
-recipient argument, only theirs; `[]` if none is known):
+One **identity** object per typed identity whose key go-signal has stored, ordered by service ID
+(ACI UUID or `PNI:<uuid>`). A recipient argument selects only that identity; `[]` if none is known.
+Numbers and usernames select the ACI key; explicit `PNI:<uuid>` selects the separate PNI key.
+The account's own ACI and PNI are excluded.
 
 | Field         | Type   | Description                                                                                                                                         |
 | ------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `aci`         | string | The user's ACI                                                                                                                                      |
+| `aci`         | string | The user's ACI; empty for a PNI identity                                                                                                            |
+| `pni`         | string | The PNI UUID, only for an explicit PNI identity; _optional_                                                                                         |
 | `number`      | string | Phone number, if given as the recipient argument; _optional_                                                                                        |
 | `username`    | string | Username, if given as the recipient argument; _optional_                                                                                            |
 | `fingerprint` | string | The identity (public) key in hex: 33 bytes, starting with the key type `05`                                                                         |
@@ -1031,7 +1034,8 @@ The **identity** object as in `identities list`, plus:
 }
 ```
 
-The **identity** object (as in `identities list`) after trusting it.
+The **identity** object (as in `identities list`) after trusting it. Trust and verification are
+local and independent for ACI and PNI keys. Phone verification-state sync is not yet implemented.
 
 ## `mcp doctor`
 

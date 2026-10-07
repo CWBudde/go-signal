@@ -12,9 +12,9 @@ import (
 )
 
 // SafetyNumberOf is the safety number the fake reports for the account ownACI and id: 60 digits
-// derived from both ACIs and id's fingerprint, the same for both sides.
+// derived from both typed service IDs and id's fingerprint.
 func SafetyNumberOf(ownACI string, id signal.Identity) string {
-	sides := []string{ownACI, id.Recipient.ACI}
+	sides := []string{ownACI, id.Recipient.String()}
 	slices.Sort(sides)
 
 	sum := sha256.Sum256([]byte(strings.Join(sides, "/") + "/" + id.Fingerprint))
@@ -41,19 +41,21 @@ func (c *client) Identities(_ context.Context, rcpt *signal.Recipient) ([]signal
 		return nil, err
 	}
 
-	if rcpt != nil && rcpt.ACI == "" {
+	if rcpt != nil && rcpt.ACI == "" && rcpt.PNI == "" {
 		return nil, fmt.Errorf("%s: %w (fake)", rcpt, signal.ErrUnresolvable)
 	}
 
 	out := make([]signal.Identity, 0, len(c.fake.Identities))
 
 	for _, id := range c.fake.Identities {
-		if rcpt == nil || id.Recipient.ACI == rcpt.ACI {
+		if rcpt == nil || id.Recipient.String() == rcpt.String() {
 			out = append(out, id)
 		}
 	}
 
-	slices.SortFunc(out, func(a, b signal.Identity) int { return strings.Compare(a.Recipient.ACI, b.Recipient.ACI) })
+	slices.SortFunc(out, func(a, b signal.Identity) int {
+		return strings.Compare(a.Recipient.String(), b.Recipient.String())
+	})
 
 	return out, nil
 }
@@ -135,11 +137,11 @@ func (c *client) checkIdentities() (signal.Account, error) {
 
 // identity returns the index of rcpt's identity in f.Identities; the caller holds f.mu.
 func (f *Fake) identity(rcpt signal.Recipient) (int, error) {
-	if rcpt.ACI == "" {
+	if rcpt.ACI == "" && rcpt.PNI == "" {
 		return 0, fmt.Errorf("%s: %w (fake)", rcpt, signal.ErrUnresolvable)
 	}
 
-	i := slices.IndexFunc(f.Identities, func(id signal.Identity) bool { return id.Recipient.ACI == rcpt.ACI })
+	i := slices.IndexFunc(f.Identities, func(id signal.Identity) bool { return id.Recipient.String() == rcpt.String() })
 	if i < 0 {
 		return 0, fmt.Errorf("%w for %s (fake)", signal.ErrUnknownIdentity, rcpt)
 	}
@@ -154,7 +156,9 @@ func (f *Fake) changeIdentity(evt *signal.IdentityChanged) {
 		Recipient: evt.Recipient, Fingerprint: evt.NewFingerprint, Trust: signal.TrustUntrusted, ChangedAt: evt.Time,
 	}
 
-	i := slices.IndexFunc(f.Identities, func(id signal.Identity) bool { return id.Recipient.ACI == evt.Recipient.ACI })
+	i := slices.IndexFunc(f.Identities, func(id signal.Identity) bool {
+		return id.Recipient.String() == evt.Recipient.String()
+	})
 	if i < 0 {
 		f.Identities = append(f.Identities, changed)
 
@@ -168,6 +172,6 @@ func (f *Fake) changeIdentity(evt *signal.IdentityChanged) {
 // untrusted reports whether sending to aci is blocked; the caller holds f.mu.
 func (f *Fake) untrusted(aci string) bool {
 	return slices.ContainsFunc(f.Identities, func(id signal.Identity) bool {
-		return id.Recipient.ACI == aci && id.Trust == signal.TrustUntrusted
+		return id.Recipient.String() == aci && id.Trust == signal.TrustUntrusted
 	})
 }

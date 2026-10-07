@@ -190,3 +190,36 @@ func TestIdentityChangeBlocksSend(t *testing.T) {
 		t.Errorf("send after trust: %v", err)
 	}
 }
+
+func TestIdentitiesPNI(t *testing.T) {
+	t.Parallel()
+
+	for _, format := range []string{formatPlain, formatJSON} {
+		for _, verb := range []string{listCmd, showCmd, trustCmd} {
+			t.Run(verb+"/"+format, func(t *testing.T) {
+				t.Parallel()
+
+				fake := identityFake()
+				rcpt := signal.Recipient{PNI: aliceACI}
+				fake.Identities = append(fake.Identities, signal.Identity{
+					Recipient: rcpt, Fingerprint: aliceNewKey, Trust: signal.TrustUntrusted,
+				})
+
+				out, err := run(t, fake, "-o", format, identitiesCmd, verb, rcpt.String())
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				golden(t, "identities_pni_"+verb+"_"+format, out)
+
+				if fake.Identities[0].Trust != signal.TrustUnverified {
+					t.Error("changed same-UUID ACI trust")
+				}
+
+				if len(fake.Connects()) != 0 {
+					t.Error("identity command connected")
+				}
+			})
+		}
+	}
+}
