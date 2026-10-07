@@ -220,6 +220,30 @@ the keepalive-before-ACK failure on `.24`. The pinned dependency checks require 
 new websocket and receipt contracts. Fixture boundaries and the pending live interrupt
 check are recorded in [docs/websocket-lifecycle.md](websocket-lifecycle.md).
 
+The group identity-trust repair is the immutable
+[`v0.2609.0-purego.26`](https://github.com/cwbudde/mautrix-signal/tree/v0.2609.0-purego.26)
+tag at [commit `ac8f355`](https://github.com/cwbudde/mautrix-signal/commit/ac8f355609ac025c362f4797d73c1d6a0706d077).
+The downloaded module's Origin and all three changed fork files match that commit.
+Sender-key recipient selection checks ACI sending trust; missing, unreadable or
+untrusted identities stay on the pairwise path. Envelope encryption checks the exact
+identity it returns to crypto, covering replacement after selection. A late refusal
+falls back before submitting ciphertext, with ordinary per-recipient trust enforcement.
+Unlocking restores the caller's context so pairwise ratchets retain mutex protection.
+Removing a previous key holder persists a fresh distribution ID with an empty sharing
+list before retiring the old key, then rebuilds the audience from successful key
+distributions. Metadata-write failure preserves the old key; generation or old-key
+deletion failure leaves the new distribution unshared, preventing stale retry authorization.
+
+Affected signalmeow/libsignalgo suites pass on pure Go and on cgo with the race detector;
+pure-Go vet and changed-file formatting pass. Trust regressions pass ten race runs on
+each backend and are required by `just test-fork` / `just test-diff`. They reproduce unsafe
+selection and replacement-key envelope encryption on `.25`; review regressions reproduce
+unlocked fallback session access and stale persisted sharing after failed redistribution.
+The encryption fixture uses real local sessions, sender keys and a sender certificate.
+The rotation fixture copies stored metadata and stops before distribution transport;
+it also checks metadata/deletion failures. These checks do not establish live service
+delivery, successful remote redistribution or phone rendering.
+
 ### 1. Rebase the mautrix fork
 
 In a `cwbudde/mautrix-signal` checkout:
@@ -274,6 +298,12 @@ including failed peer submissions. Keep own-device sync separate from peer outco
 parent must require fresh complete storage and never use cached audiences after fetch failure;
 My Story exclusions expand only from eligible connections, and list reply settings can only
 be restricted by the sender. Verify these paths on both backends.
+Preserve sender-key identity trust at recipient selection and the exact-key encryption
+lookup. Trust refusals fall back before submitting a multi-recipient message; pairwise
+fallback must reacquire the encryption mutex. Rotating away a previous holder installs
+a fresh unshared distribution ID durably before deleting the old key, so failed
+redistribution cannot retain stale sharing authorization. Keep `TestSenderKeyTrust`
+in both pinned-fork backend gates.
 Preserve scan-only QR renewal: fresh socket/address/key, caller cancellation, no retries
 after a submitted envelope (including acknowledgement failures), and one-shot registration. Keep
 the fork's fixes that upstream doesn't have yet (the cgo clock fix in `message.go`,

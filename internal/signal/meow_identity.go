@@ -51,9 +51,9 @@ const (
 // Only ACIs are checked: PNI identity keys can't be listed or trusted, so they are left to
 // signalmeow, which trusts every key. Not covered either, because signalmeow uses its store
 // directly there: the PNI identity key that a sync message reports (saveSyncPNIIdentityKey), the
-// PNI signature checks and provisioning. And libsignal's multi-recipient (sender key) encryption
-// only looks the key up without asking whether it is trusted, so a group member who already has
-// our sender key still gets group messages after an identity change.
+// PNI signature checks and provisioning. The fork explicitly checks ACI sending trust before
+// selecting sender-key recipients and when loading the exact identity for the encrypted
+// envelope; excluded peers take the pairwise path, which also enforces this policy.
 type identityTrust struct {
 	data *store.Store
 	log  *slog.Logger

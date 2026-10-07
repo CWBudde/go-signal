@@ -399,8 +399,19 @@ appears on the phone.
   - [ ] Rerun `TestIntegrationReceiveInterrupt` on disposable accounts with both backends.
         No test-account directory is configured; the opt-in test skipped on 2026-10-07.
         Pending an arranged account/peer session; offline checks do not prove live acceptance.
-- [ ] Group sends: sender-key encryption doesn't check identity trust, so members whose key changed
-      but who hold our sender key still receive group messages.
+- [x] Group sends enforce ACI identity trust even for members who already hold our sender key:
+      fork `v0.2609.0-purego.26` (`ac8f355`) checks recipient eligibility and the exact key
+      returned to envelope encryption. Untrusted peers use the pairwise path; a late
+      identity refusal falls back before ciphertext submission. Fallback retains encryption
+      mutex protection. Key rotation durably installs a fresh unshared distribution ID
+      before retiring the old key, preventing stale retry authorization after failures.
+      Downloaded Origin and all three changed fork files match the reviewed commit.
+      Selection, real encrypted-envelope replacement/restoration, durable rotation/write
+      failures and fallback locking regressions pass, including ten race runs per backend.
+      Full cgo/pure-Go/no-cgo checks and `just test-fork` / `just test-diff` pass; required
+      gates include the trust regressions and the updated encrypted endorsement fixture.
+      Offline fixture boundaries and unrun live delivery are recorded in
+      [docs/maintenance.md](docs/maintenance.md).
 - [ ] Identities: PNI identities can't be listed or trusted; verification state doesn't sync with
       the phone (`ContactRecord` identity state, `SyncMessage.Verified`).
 - [ ] Port `attest_svr2_bad_config` if SVR2 is ever needed.

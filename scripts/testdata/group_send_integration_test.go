@@ -50,6 +50,17 @@ func (s *groupSendStore) GetIdentityKey(_ context.Context, id libsignalgo.Servic
 	return libsignalgo.DeserializeIdentityKey(b)
 }
 
+func (s *groupSendStore) IsTrustedIdentity(_ context.Context, id libsignalgo.ServiceID, key *libsignalgo.IdentityKey, direction libsignalgo.SignalDirection) (bool, error) {
+	if direction == libsignalgo.SignalDirectionReceiving {
+		return true, nil
+	}
+	known := s.identities[id]
+	if known == nil {
+		return false, nil
+	}
+	return known.Equal(key)
+}
+
 func (s *groupSendStore) AllSessionsForServiceID(_ context.Context, id libsignalgo.ServiceID) ([]store.SessionAddressTuple, error) {
 	return s.sessions[id], nil
 }
