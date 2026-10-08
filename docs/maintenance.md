@@ -254,11 +254,41 @@ events and stale-session removal for peer PNIs independently of ACIs with the sa
 recovery, and numeric/QR verification. CLI golden tests and MCP tests cover typed PNI output.
 These are offline checks; phone comparison and live PNI delivery have not been exercised.
 
-Phone verification-state synchronization remains open: `SyncMessage.Verified` handling and
-`ContactRecord` identity reconciliation require separate authenticated, exact-key updates
-and storage conflict handling. The fork's sent-sync PNI key writes, PNI signature validation
-and provisioning still use its underlying store directly and bypass facade trust callbacks.
-Do not interpret a locally verified PNI as an ACI verification or phone-synchronized state.
+The incoming verification release is the immutable
+[`v0.2609.0-purego.27`](https://github.com/cwbudde/mautrix-signal/tree/v0.2609.0-purego.27)
+tag at [commit `060ced3`](https://github.com/cwbudde/mautrix-signal/commit/060ced3ab4360d53c97975814eb3f1f70afd073a).
+The downloaded module's cached Origin and all four changed fork files match the reviewed commit.
+Authenticated own-ACI `SyncMessage.Verified` updates produce a validated internal event.
+Malformed destinations, conflicting text/binary ACIs, PNI destinations, malformed keys and
+missing/unknown states are ignored. The facade atomically checks the selected account's
+protocol key and its current trust key; a legacy protocol-only key can acquire a trust record,
+but an unknown or different key is never imported. DEFAULT means trusted-unverified, VERIFIED
+means trusted-verified, and UNVERIFIED means untrusted. Matching updates clear the pending warning
+while preserving key history and timestamps. ACI verification never changes PNI trust.
+
+Trust application and old-key session removal share one transaction. A persistence or session
+cleanup failure rolls back and refuses acknowledgement; redelivery can retry. Successful internal
+updates participate in Close's ACK flush, including send-only mode, without public output or
+outgoing sync. Fork authentication/buffer-retention tests and parent real-database tests cover
+these contracts, duplicates, state mapping, account isolation, stale keys, history, legacy keys,
+transaction rollback, real stale-session recovery and restart durability. Both backend fork
+suites, pure-Go vet and API parity pass; the verification regressions pass ten fork race runs
+per backend. Full parent `just check`, `just check-purego`, `just test-fork` and
+`just test-diff`, the no-cgo suite and ten parent verification race runs per backend pass.
+Both fork pure-Go CI runs passed
+([37860515963](https://github.com/CWBudde/mautrix-signal/actions/runs/37860515963),
+[37860515528](https://github.com/CWBudde/mautrix-signal/actions/runs/37860515528)).
+The broader Go CI runs
+([37860515950](https://github.com/CWBudde/mautrix-signal/actions/runs/37860515950),
+[37860515552](https://github.com/CWBudde/mautrix-signal/actions/runs/37860515552))
+failed pre-commit formatting on six files byte-identical to `.26`; none is a changed
+verification file. These are offline fixtures, not live phone interoperability evidence.
+
+Outgoing verification-state synchronization and `ContactRecord` identity reconciliation remain
+open. Storage reconciliation needs freshness/conflict handling rather than blindly importing
+keys or trust. The fork's sent-sync PNI key writes, PNI signature validation and provisioning
+still use its underlying store directly and bypass facade trust callbacks. Do not interpret a
+locally verified PNI as an ACI verification or phone-synchronized state.
 
 ### 1. Rebase the mautrix fork
 
@@ -319,7 +349,9 @@ lookup. Trust refusals fall back before submitting a multi-recipient message; pa
 fallback must reacquire the encryption mutex. Rotating away a previous holder installs
 a fresh unshared distribution ID durably before deleting the old key, so failed
 redistribution cannot retain stale sharing authorization. Keep `TestSenderKeyTrust`
-in both pinned-fork backend gates.
+in both pinned-fork backend gates. Preserve the authenticated Verified dispatch, validated
+ACI/key/state event, and handler-failure acknowledgement behavior; keep `TestVerifiedSync`
+in both gates too.
 Preserve scan-only QR renewal: fresh socket/address/key, caller cancellation, no retries
 after a submitted envelope (including acknowledgement failures), and one-shot registration. Keep
 the fork's fixes that upstream doesn't have yet (the cgo clock fix in `message.go`,

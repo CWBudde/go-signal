@@ -165,3 +165,26 @@ func fromUnixMilli(ms int64) time.Time {
 
 	return time.UnixMilli(ms).UTC()
 }
+
+// ApplyIdentityTrust changes trust only when both stored identity copies match key.
+// A protocol key without a facade record is known and can acquire a trust record.
+func (s *Store) ApplyIdentityTrust(
+	ctx context.Context, accountID, serviceID string, key []byte, trust string,
+) (bool, error) {
+	result, err := s.own.Exec(ctx, `
+ INSERT INTO gosignal_identities (`+identityColumns+`)
+ SELECT $2, $3, $4, 0, 0, NULL, false FROM signalmeow_identity_keys
+ WHERE account_id=$1 AND their_service_id=$2 AND key=$3
+ ON CONFLICT(service_id) DO UPDATE SET trust=excluded.trust, pending_event=false
+ WHERE gosignal_identities.identity_key=excluded.identity_key`, accountID, serviceID, key, trust)
+	if err != nil {
+		return false, fmt.Errorf("apply identity trust %s: %w", serviceID, err)
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("count identity trust updates: %w", err)
+	}
+
+	return affected > 0, nil
+}

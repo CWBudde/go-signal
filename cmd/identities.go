@@ -19,7 +19,8 @@ on your phone to verify it.
 Recipients are E.164 numbers, ACIs, @usernames or explicit PNI:<uuid> identities. These commands
 don't connect, so a number only works once go-signal has looked it up (e.g. by sending to it).
 Numbers and usernames select the ACI identity; PNI:<uuid> selects the separate PNI key.
-Trust changes are local; verification state is not yet synchronized with the phone.`,
+Local trust changes stay on this device. Incoming phone verification updates apply only to a
+matching known ACI key; ACI verification does not change PNI trust.`,
 		Args: cobra.NoArgs,
 	}
 

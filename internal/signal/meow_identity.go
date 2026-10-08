@@ -50,7 +50,9 @@ const (
 //
 // ACI and PNI identities are checked independently. Not covered, because signalmeow uses
 // its store directly there: the PNI key reported by sent sync (saveSyncPNIIdentityKey),
-// PNI signature checks and provisioning. Phone verification-state sync is not implemented.
+// PNI signature checks and provisioning. Incoming Verified sync updates ACI trust only
+// for the exact known key; outgoing
+// verification and contact-storage identity reconciliation remain unimplemented.
 // The fork checks ACI sending trust before selecting sender-key recipients and when loading
 // the exact key for the encrypted envelope; excluded peers use the pairwise path.
 type identityTrust struct {

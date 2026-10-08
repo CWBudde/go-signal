@@ -983,18 +983,20 @@ The existing `left.membership` values remain compatible with older output.
 One **identity** object per typed identity whose key go-signal has stored, ordered by service ID
 (ACI UUID or `PNI:<uuid>`). A recipient argument selects only that identity; `[]` if none is known.
 Numbers and usernames select the ACI key; explicit `PNI:<uuid>` selects the separate PNI key.
-The account's own ACI and PNI are excluded.
+The account's own ACI and PNI are excluded. While connected, authenticated phone verification
+updates can change a known ACI key's trust. Unknown or changed keys are ignored; PNI trust is
+independent. Local trust decisions are not yet sent to the phone.
 
-| Field         | Type   | Description                                                                                                                                         |
-| ------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `aci`         | string | The user's ACI; empty for a PNI identity                                                                                                            |
-| `pni`         | string | The PNI UUID, only for an explicit PNI identity; _optional_                                                                                         |
-| `number`      | string | Phone number, if given as the recipient argument; _optional_                                                                                        |
-| `username`    | string | Username, if given as the recipient argument; _optional_                                                                                            |
-| `fingerprint` | string | The identity (public) key in hex: 33 bytes, starting with the key type `05`                                                                         |
-| `trust`       | string | `trusted-unverified` (first key seen, or trusted by hand), `trusted-verified` (safety number compared) or `untrusted` (changed; sending is blocked) |
-| `firstSeen`   | string | When go-signal first stored a key of this user; _optional_ (unknown for keys stored before go-signal tracked them)                                  |
-| `changedAt`   | string | When the key last changed; _optional_                                                                                                               |
+| Field         | Type   | Description                                                                                                                                                                                                           |
+| ------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `aci`         | string | The user's ACI; empty for a PNI identity                                                                                                                                                                              |
+| `pni`         | string | The PNI UUID, only for an explicit PNI identity; _optional_                                                                                                                                                           |
+| `number`      | string | Phone number, if given as the recipient argument; _optional_                                                                                                                                                          |
+| `username`    | string | Username, if given as the recipient argument; _optional_                                                                                                                                                              |
+| `fingerprint` | string | The identity (public) key in hex: 33 bytes, starting with the key type `05`                                                                                                                                           |
+| `trust`       | string | `trusted-unverified` (first key seen, or trusted by hand), `trusted-verified` (safety number compared locally or verified on the phone) or `untrusted` (changed or marked untrusted by the phone; sending is blocked) |
+| `firstSeen`   | string | When go-signal first stored a key of this user; _optional_ (unknown for keys stored before go-signal tracked them)                                                                                                    |
+| `changedAt`   | string | When the key last changed; _optional_                                                                                                                                                                                 |
 
 ## `identities show`
 
@@ -1035,7 +1037,8 @@ The **identity** object as in `identities list`, plus:
 ```
 
 The **identity** object (as in `identities list`) after trusting it. Trust and verification are
-local and independent for ACI and PNI keys. Phone verification-state sync is not yet implemented.
+local and independent for ACI and PNI keys. Incoming phone verification can update only a matching
+known ACI key; local decisions are not yet synchronized back to the phone.
 
 ## `mcp doctor`
 

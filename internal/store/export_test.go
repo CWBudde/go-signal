@@ -30,3 +30,13 @@ func (s *Store) FailChatTimerWrite(ctx context.Context, aci string) error {
 
 	return nil
 }
+
+// IdentityTestSQL executes controlled identity fixtures and failure triggers.
+func (s *Store) IdentityTestSQL(ctx context.Context, query string, args ...any) error {
+	_, err := s.db.Exec(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("identity test SQL: %w", err)
+	}
+
+	return nil
+}

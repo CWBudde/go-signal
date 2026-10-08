@@ -602,14 +602,23 @@ func (c *meowClient) selectAccount() (Account, error) {
 
 // handle is signalmeow's event handler. Its return value decides whether the envelope is acked,
 // so it only returns true once the event has been handed to the consumer. Once Close has
-// started, and always in send-only mode, it leaves every envelope for the next run. Identity
-// changes are reported before the event (see reportIdentityChanges).
+// started it leaves envelopes for the next run. Send-only mode still consumes internal
+// store updates, including verification, while leaving public events unread. Identity
+// changes are reported before public events (see reportIdentityChanges).
 func (c *meowClient) handle(raw events.SignalEvent) bool {
 	if !c.begin(&c.handling) {
 		return false
 	}
 	defer c.handling.Done()
 
+	if update, ok := raw.(*events.IdentityVerification); ok {
+		return c.handleIdentityVerification(update)
+	}
+
+	return c.handleReceivedEvent(raw)
+}
+
+func (c *meowClient) handleReceivedEvent(raw events.SignalEvent) bool {
 	ctx, cancel := context.WithTimeout(c.zlog.WithContext(context.Background()), overrideSettleTimeout)
 	err := c.learnChatTimers(ctx, raw)
 

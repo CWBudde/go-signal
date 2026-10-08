@@ -427,8 +427,19 @@ appears on the phone.
       provisioning and signature paths remain outside facade
       callbacks ([details](docs/maintenance.md)).
 - [ ] Sync identity verification state with the phone.
-  - [ ] Apply authenticated incoming `SyncMessage.Verified` updates only to the exact known
+  - [x] Apply authenticated incoming `SyncMessage.Verified` updates only to the exact known
         ACI identity key; preserve acknowledgement/redelivery on persistence failure.
+        Fork `v0.2609.0-purego.27` (`060ced3`) authenticates own-ACI dispatch and validates
+        destination representations, identity keys and explicit states. The facade atomically
+        checks both selected-account key copies; trust and stale-session cleanup share a
+        transaction. Failures roll back and refuse acknowledgement; successful internal
+        updates participate in Close's ACK flush, including send-only mode, without echo or
+        public output. Unknown/stale keys are ignored and PNI trust stays independent.
+        Cached Origin/source match the reviewed release. Both backend fork suites, vet/API
+        parity, full cgo/pure-Go/no-cgo parent checks and `just test-fork` / `just test-diff`
+        pass; fork and parent verification regressions pass ten race runs per backend,
+        including real stale-session rollback/recovery and restart durability. Live phone
+        interoperability remains unrun ([details](docs/maintenance.md)).
   - [ ] Send local ACI trust decisions to linked devices, defining partial sync failure
         and retry behavior without echoing incoming updates.
   - [ ] Reconcile `ContactRecord` identity key/state with a freshness/conflict policy and

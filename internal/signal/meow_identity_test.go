@@ -31,11 +31,12 @@ var errRollback = errors.New("rollback")
 // trustEnv is a seeded account whose device has the trust wrapper installed, plus a client on
 // the same data dir for the facade methods.
 type trustEnv struct {
-	device *mstore.Device
-	data   *store.Store
-	trust  *signal.IdentityTrust
-	client signal.Client
-	now    time.Time
+	dataDir string
+	device  *mstore.Device
+	data    *store.Store
+	trust   *signal.IdentityTrust
+	client  signal.Client
+	now     time.Time
 }
 
 func newTrustEnv(t *testing.T) *trustEnv {
@@ -60,7 +61,7 @@ func newTrustEnv(t *testing.T) *trustEnv {
 		t.Fatalf("load device: %v", err)
 	}
 
-	env := &trustEnv{device: device, data: data, now: time.Date(2026, 9, 20, 12, 30, 0, 0, time.UTC)}
+	env := &trustEnv{dataDir: dataDir, device: device, data: data, now: time.Date(2026, 9, 20, 12, 30, 0, 0, time.UTC)}
 	env.trust = signal.InstallTrust(device, data, slog.New(slog.DiscardHandler), func() time.Time { return env.now })
 
 	env.client, err = signal.Open(t.Context(), signal.Options{DataDir: dataDir})

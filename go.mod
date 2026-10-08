@@ -5,7 +5,7 @@ go 1.26.0
 require (
 	github.com/coder/websocket v1.8.15
 	github.com/cwbudde/libsignal-go v0.7.1-cw.5
-	github.com/cwbudde/mautrix-signal v0.2609.0-purego.26
+	github.com/cwbudde/mautrix-signal v0.2609.0-purego.27
 	github.com/google/uuid v1.6.0
 	github.com/mattn/go-sqlite3 v1.14.52
 	github.com/mdp/qrterminal/v3 v3.2.1

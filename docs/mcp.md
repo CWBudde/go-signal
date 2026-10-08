@@ -188,6 +188,7 @@ title).
 
 `identities_list` accepts explicit `PNI:<uuid>` to select a PNI key. Numbers and usernames
 select the ACI key; ACI and PNI trust are independent. Identity output includes optional `pni`.
+While connected, authenticated phone verification updates apply only to matching known ACI keys.
 
 `doctor` is there in `--read-only` mode, too. Besides the checks of `mcp doctor` (below), it
 reports the server's version and uptime and the connection: `ok` while connected, `warn` while it
