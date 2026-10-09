@@ -427,6 +427,7 @@ appears on the phone.
       provisioning and signature paths remain outside facade
       callbacks ([details](docs/maintenance.md)).
 - [ ] Sync identity verification state with the phone.
+      Implementation tasks below are complete; live linked-phone validation remains pending.
   - [x] Apply authenticated incoming `SyncMessage.Verified` updates only to the exact known
         ACI identity key; preserve acknowledgement/redelivery on persistence failure.
         Fork `v0.2609.0-purego.27` (`060ced3`) authenticates own-ACI dispatch and validates
@@ -457,8 +458,23 @@ appears on the phone.
         Server acceptance is distinct from phone application; live interoperability remains
         unrun and competing in-flight decisions have no total ordering
         ([details](docs/maintenance.md#outgoing-identity-verification)).
-  - [ ] Reconcile `ContactRecord` identity key/state with a freshness/conflict policy and
+  - [x] Reconcile `ContactRecord` identity key/state with a freshness/conflict policy and
         transactional key, trust and session updates. ACI verification must not imply PNI trust.
+        Fork `v0.2609.0-purego.29` (`7f2481f`) applies the exact fetched snapshot once and
+        invokes identity reconciliation inside its contact transaction. Migration 12 stores
+        remote/local identity observations and durable conflict protection; manifest versions
+        reject older or repeated snapshots. Known local identities survive first conflicts,
+        and local or incoming decisions remain protected after outbox delivery and restart.
+        Remote alignment clears protection before a later changed remote tuple may apply.
+        Accepted keys, trust, history, stale sessions, outbox supersession and progress commit
+        atomically; duplicate conflicts and incomplete downloads fail without partial updates.
+        Incoming storage does not echo verification or change peer PNI trust. Rejected updates
+        preserve blocked-contact caches and account settings; concurrent application serializes
+        transaction and settings publication. Cached Origin and all five changed fork files
+        match the reviewed release. `just check`, `just check-purego`, `just test-fork`,
+        `just test-diff` and untagged no-cgo tests pass, along with ten identity/storage race
+        runs per backend. Live phone interoperability remains unrun
+        ([policy, tests and fork CI limitations](docs/maintenance.md#contact-storage-identity-reconciliation)).
 - [ ] Port `attest_svr2_bad_config` if SVR2 is ever needed.
 
 **Done when:** the review decision is recorded and the upstream issues are filed or fixed.

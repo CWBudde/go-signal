@@ -284,8 +284,7 @@ The broader Go CI runs
 failed pre-commit formatting on six files byte-identical to `.26`; none is a changed
 verification file. These are offline fixtures, not live phone interoperability evidence.
 
-`ContactRecord` identity reconciliation remains open. Storage reconciliation needs freshness/conflict
-handling rather than blindly importing keys or trust. The fork's sent-sync PNI key writes, PNI signature validation and provisioning
+`ContactRecord` identity reconciliation uses the durable conflict policy described below. The fork's sent-sync PNI key writes, PNI signature validation and provisioning
 still use its underlying store directly and bypass facade trust callbacks. Do not interpret a
 locally verified PNI as an ACI verification or phone-synchronized state.
 
@@ -314,8 +313,7 @@ Each flush rechecks the selected account's protocol key and the facade key/trust
 obsolete decisions. Authenticated incoming updates discard the superseded pending decision in
 their trust/session transaction; unknown or mismatched-key updates leave it alone. Receiving an
 update never queues a reply. Decisions already in flight cannot be recalled; verification sync
-has no per-decision timestamp, so competing devices have no total ordering. Contact storage
-reconciliation remains a separate freshness/conflict task.
+has no per-decision timestamp, so competing devices have no total ordering. Contact storage reconciliation uses a separate durable freshness/conflict ledger (below).
 
 The existing `.27` fork is unchanged. Its `WrapSyncMessage` supplies random outer padding and
 sends the exact serialized key with DEFAULT for trusted-unverified or VERIFIED for verified to
@@ -336,6 +334,81 @@ successful contact/storage stages with failed verification and a concurrent phon
 `just check`, `just check-purego`, the no-cgo suite and ten identity/verification race runs on each
 backend pass. The existing `.27` dependency and libsignal tag are unchanged. Live phone
 interoperability is unrun; these fixtures prove durable retry and transport behavior only.
+
+### Contact storage identity reconciliation
+
+The immutable pin is
+[`v0.2609.0-purego.29`](https://github.com/cwbudde/mautrix-signal/tree/v0.2609.0-purego.29)
+at [commit `7f2481f`](https://github.com/cwbudde/mautrix-signal/commit/7f2481fad0c11ad2b3917a4979bd70f70d3ed04b).
+Cached Origin and all five changed fork files match that commit. `.29` retains `.28`'s
+transaction callback and prevents concurrent storage transactions racing with post-commit
+account-settings publication. The `.28` tag remains immutable and is superseded by `.29`.
+
+Contact storage now participates in identity verification through the fork's
+`StorageUpdateHandler`, called inside `ApplyStorage`'s contact transaction on the exact
+fetched snapshot. Explicit account sync downloads once and receives persistence errors;
+background storage sync uses the same handler, including identity-only changes. Contact
+notifications and live account settings publish after commit. A per-client lock serializes
+the transaction and subsequent publication together. Block-cache writes within
+contact transactions stay unpublished; the cache is invalidated at transaction completion,
+so a rejected update cannot unblock a contact or change live privacy settings.
+
+Migration 12 records the last remote identity tuple and the corresponding local state in
+`gosignal_storage_identities`, plus an account-wide manifest high-water mark. Manifest
+versions use decimal text to retain the full uint64 range. Contact identity fields have no
+individual timestamp: a newer manifest can carry an old decision unchanged.
+
+The policy is deliberately conservative:
+
+- A valid unknown ACI identity can be imported with its remote DEFAULT, VERIFIED or
+  UNVERIFIED state. DEFAULT means trusted-unverified; UNVERIFIED means untrusted.
+- A first conflicting snapshot preserves any known local key/trust, including legacy
+  protocol-only identities. Older or repeated manifests and unchanged remote tuples do not
+  overwrite local decisions.
+- After a baseline, a changed remote tuple in a newer manifest applies only while local
+  state remains unchanged. A remote tuple agreeing with current local state clears protection;
+  a later changed remote decision can then apply.
+- Local trust, an observed local key change and authenticated incoming Verified updates
+  durably protect local state, even after outgoing delivery or restart. Divergent facade and
+  protocol keys also retain protection. Ignoring a conflict leaves its pending local outbox
+  intact. No storage upload or forced profile repair is added; a conflicting first snapshot
+  can require local comparison/trust or later remote alignment.
+- Canonical 33-byte keys, valid consistent ACI representations and known states are required.
+  Missing or malformed identity fields, self identities and PNI-only contacts do not change
+  identity state. Conflicting valid tuples for one ACI and incomplete record downloads fail
+  the transaction; identical duplicates are idempotent.
+
+Protocol key, facade trust/history, stale peer-ACI sessions in both local session stores,
+remote observation, outbox supersession and manifest progress commit together. Peer PNI
+identity trust and sessions remain separate, even when the ACI and PNI UUIDs match.
+Remote decisions do not enqueue verification echoes. Existing local identity-change
+warnings survive ignored stale storage; accepted explicit remote decisions clear them.
+Competing decisions have no total ordering, and storage manifest reset/recovery is not
+inferred automatically.
+
+Offline regressions cover imports and all states, matching and differing keys, durable
+local/incoming decision protection, manifest replay, protocol divergence, duplicate conflict
+ordering and no echo. Real SQLite fixtures exercise key/trust/session rollback and rejected
+unblock/privacy settings, including observations made outside the transaction. The fork's
+controlled pure-Go commit-failure fixture confirms that settings publish only on successful
+commit; concurrent storage application passes the race detector on both backends.
+
+Both fork pure-Go CI runs passed
+([37869159791](https://github.com/CWBudde/mautrix-signal/actions/runs/37869159791),
+[37869159975](https://github.com/CWBudde/mautrix-signal/actions/runs/37869159975)).
+Broad Go CI
+([37869159807](https://github.com/CWBudde/mautrix-signal/actions/runs/37869159807),
+[37869160046](https://github.com/CWBudde/mautrix-signal/actions/runs/37869160046))
+still fails pre-commit formatting on six files, all byte-identical to `.27`. Changed files pass
+the exact fork goimports check; local backend suites, vet and API parity pass. These inherited
+failures do not constitute passing broad Go CI. Required parent fork/backend gates include
+`TestStorageUpdateHandler`, covering failed application, identity-only callbacks, commit
+failure and concurrent publication.
+The downloaded `.29` pin passes `just check`, `just check-purego`, `just test-fork`,
+`just test-diff` and untagged no-cgo tests. Identity/storage regressions pass ten race runs
+per backend, including the fork publication tests.
+Live phone application remains unverified; authenticated local fixtures establish the
+persistence/conflict contract, not server or phone acceptance.
 
 ### 1. Rebase the mautrix fork
 
@@ -376,6 +449,10 @@ lists or acknowledgements. Preserve sent-message/edit handler failure propagatio
 ordinary and edit content must use one retrieved revision for context and seconds, including
 zero, and clear the direct timer version. Exercise all these boundaries on both backends;
 retain the real cgo rollback test and record the controlled pure-Go fixture limitation.
+Keep the error-returning single-snapshot `ApplyStorage` boundary and its transactional
+`StorageUpdateHandler`. Preserve post-commit settings/contact publication, transaction-aware
+block-cache invalidation and the lock spanning storage transactions and settings publication;
+run the storage handler and facade identity regressions on both backends after rebasing.
 Preserve story reception: go-signal opts into `X-Signal-Receive-Stories` before connecting;
 private blocked stories are omitted, group stories retain typed group keys and revisions,
 private sent transcripts use the own-account stream, and failed handlers/storage retain

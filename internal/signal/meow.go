@@ -330,11 +330,19 @@ func (c *meowClient) Close() error {
 	return err
 }
 
+// protocolClient installs internal handlers before any protocol work can start.
+func (c *meowClient) protocolClient(device *mstore.Device) *signalmeow.Client {
+	cli := signalmeow.NewClient(device, c.zlog, c.handle)
+	cli.ReceiveStories = true
+	cli.StorageUpdateHandler = c.reconcileStorageIdentities
+
+	return cli
+}
+
 // startLoops starts receive loops on a new signalmeow client. A fresh client is needed for a
 // restart: signalmeow only reports a status that differs from the last one it reported.
 func (c *meowClient) startLoops(ctx context.Context) (<-chan loopStatus, error) {
-	cli := signalmeow.NewClient(c.connDevice, c.zlog, c.handle)
-	cli.ReceiveStories = true
+	cli := c.protocolClient(c.connDevice)
 
 	raw, err := cli.StartReceiveLoops(ctx)
 	if err != nil {

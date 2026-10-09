@@ -13,7 +13,7 @@ import (
 var ErrUntrustedIdentity = errors.New("identity key not trusted")
 
 // ErrUnknownIdentity means that no identity key is stored for a user: go-signal learns it the
-// first time it receives from or sends to them.
+// first time it receives from or sends to them, or through authenticated contact storage.
 var ErrUnknownIdentity = errors.New("no identity key known")
 
 // ErrSafetyNumberMismatch means that a safety number given to verify an identity key is not the

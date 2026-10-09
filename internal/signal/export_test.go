@@ -215,3 +215,18 @@ func TrustIdentityAfterSnapshot(
 
 	return meow.trustIdentityLocally(ctx, device, identity, theirID, level, "")
 }
+
+// ApplyContactIdentityStorage exercises identity reconciliation in the real store transaction.
+func ApplyContactIdentityStorage(ctx context.Context, client Client, update *signalmeow.StorageUpdate) error {
+	meow, device := meowOf(ctx, client)
+	cli := meow.protocolClient(device)
+	cli.EventHandler = func(events.SignalEvent) bool { return true }
+
+	return cli.ApplyStorage(ctx, update) //nolint:wrapcheck // transparent test boundary
+}
+
+// StorageProtocolClient exposes the production handler registration for real-store fixtures.
+func StorageProtocolClient(ctx context.Context, client Client) *signalmeow.Client {
+	meow, device := meowOf(ctx, client)
+	return meow.protocolClient(device)
+}

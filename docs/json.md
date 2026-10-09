@@ -983,7 +983,9 @@ The existing `left.membership` values remain compatible with older output.
 One **identity** object per typed identity whose key go-signal has stored, ordered by service ID
 (ACI UUID or `PNI:<uuid>`). A recipient argument selects only that identity; `[]` if none is known.
 Numbers and usernames select the ACI key; explicit `PNI:<uuid>` selects the separate PNI key.
-The account's own ACI and PNI are excluded. While connected, authenticated phone verification
+The account's own ACI and PNI are excluded. Authenticated contact storage can also import ACI
+keys and verification state, subject to durable conflict protection; PNI trust stays independent.
+While connected, authenticated phone verification
 updates can change a known ACI key's trust. Unknown or changed keys are ignored; PNI trust is
 independent. Local ACI trust decisions are queued for linked-device synchronization; PNI decisions
 stay on this device.

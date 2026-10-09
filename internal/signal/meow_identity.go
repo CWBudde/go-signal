@@ -55,7 +55,7 @@ const (
 // its store directly there: the PNI key reported by sent sync (saveSyncPNIIdentityKey),
 // PNI signature checks and provisioning. Incoming Verified sync updates ACI trust only
 // for the exact known key. Local ACI decisions are queued for linked-device sync;
-// contact-storage identity reconciliation remains unimplemented.
+// contact storage reconciles remote decisions against durable local protection.
 // The fork checks ACI sending trust before selecting sender-key recipients and when loading
 // the exact key for the encrypted envelope; excluded peers use the pairwise path.
 type identityTrust struct {
@@ -194,12 +194,22 @@ func (t *identityTrust) observe(ctx context.Context, serviceID libsignalgo.Servi
 			// First key of this user: trust on first use.
 			rec.Key, rec.FirstSeen = key, t.now().UTC()
 
+			err = t.data.ProtectStorageIdentity(ctx, name)
+			if err != nil {
+				return false, err //nolint:wrapcheck // store names the operation
+			}
+
 			return true, t.data.PutIdentity(ctx, *rec) //nolint:wrapcheck // the store names the operation
 		}
 	}
 
 	if bytes.Equal(rec.Key, key) {
 		return ParseTrustLevel(rec.Trust).Trusted(), nil
+	}
+
+	err = t.data.ProtectStorageIdentity(ctx, name)
+	if err != nil {
+		return false, err //nolint:wrapcheck // store names the operation
 	}
 
 	// A change, even back to the key trusted before (see identityTrust).
@@ -543,9 +553,7 @@ func (c *meowClient) trustIdentityLocally(ctx context.Context, device *mstore.De
 			return nil
 		}
 
-		return c.data.QueueIdentitySync(ctx, store.IdentitySync{
-			ServiceID: theirID.String(), Key: identity.key, Trust: level.String(), Token: uuid.NewString(),
-		})
+		return c.queueLocalIdentitySync(ctx, theirID, identity.key, level)
 	})
 	if err != nil {
 		return level, fmt.Errorf("trust identity: %w", err)
@@ -747,4 +755,18 @@ func mergeRecipient(stored, rcpt Recipient) Recipient {
 // fingerprint hex-encodes a serialized identity key; "" for none.
 func fingerprint(key []byte) string {
 	return hex.EncodeToString(key)
+}
+
+// queueLocalIdentitySync also protects the decision after its pending send has completed.
+func (c *meowClient) queueLocalIdentitySync(ctx context.Context, theirID libsignalgo.ServiceID,
+	key []byte, level TrustLevel,
+) error {
+	err := c.data.ProtectStorageIdentity(ctx, theirID.String())
+	if err != nil {
+		return err //nolint:wrapcheck // store names the operation
+	}
+
+	return c.data.QueueIdentitySync(ctx, store.IdentitySync{ //nolint:wrapcheck // store names the operation
+		ServiceID: theirID.String(), Key: key, Trust: level.String(), Token: uuid.NewString(),
+	})
 }

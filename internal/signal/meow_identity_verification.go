@@ -61,6 +61,11 @@ func (c *meowClient) applyIdentityVerification(
 			return nil
 		}
 
+		err = c.data.ProtectStorageIdentity(ctx, update.ACI.String())
+		if err != nil {
+			return err //nolint:wrapcheck // store names the operation
+		}
+
 		err = c.data.DeleteIdentitySync(ctx, update.ACI.String())
 		if err != nil {
 			return fmt.Errorf("supersede local verification: %w", err)

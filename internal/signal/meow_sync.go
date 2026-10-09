@@ -33,11 +33,8 @@ const (
 // stored before signalmeow returns from the envelope, and nothing reaches our handler, so Sync
 // polls the device table for it.
 //
-// signalmeow's SyncStorage returns no error, so Sync first fetches the storage service itself
-// with FetchStorage only to see whether that works, and then lets SyncStorage fetch and store
-// it again: the manifest and records are downloaded twice, which is cheap next to not knowing.
-// Since SyncStorage's own fetch or database update can still fail silently, Sync then checks that
-// the store holds the contacts and groups of the first fetch.
+// FetchStorage downloads one authenticated snapshot. ApplyStorage commits that exact update,
+// including the facade's identity reconciliation callback, or returns its persistence error.
 func (c *meowClient) Sync(ctx context.Context, opts SyncOptions) (SyncResult, error) {
 	if c.cancelLoops == nil {
 		return SyncResult{}, ErrNotConnected
@@ -229,25 +226,19 @@ func (c *meowClient) storedMasterKey(ctx context.Context) ([]byte, error) {
 	return device.MasterKey, nil
 }
 
-// syncStorage fetches the storage service once to find out whether that works, and then has
-// signalmeow fetch and store it (see Sync). SyncStorage only logs its failures, so the store is
-// checked afterwards for what the first fetch got (see verifyStorageStored). It returns what the
-// first fetch got; nil, without syncing, if the storage service has no manifest.
+// syncStorage fetches and commits one exact snapshot, including identity-only changes.
 func syncStorage(ctx context.Context, cli *signalmeow.Client, key []byte) (*signalmeow.StorageUpdate, error) {
 	update, err := cli.FetchStorage(ctx, key, 0, nil)
 	if err != nil {
 		return nil, fmt.Errorf("fetch storage service: %w", err)
 	}
 
-	// Nothing to store, and SyncStorage would dereference its own nil update.
+	// No manifest yet: nothing to store.
 	if update == nil {
 		return nil, nil //nolint:nilnil // no manifest yet: synced, with nothing to store
 	}
 
-	cli.SyncStorage(ctx)
-
-	// SyncStorage gives up silently when ctx ends.
-	err = ctx.Err()
+	err = cli.ApplyStorage(ctx, update)
 	if err != nil {
 		return nil, fmt.Errorf("sync storage service: %w", err)
 	}
@@ -260,16 +251,9 @@ func syncStorage(ctx context.Context, cli *signalmeow.Client, key []byte) (*sign
 	return update, nil
 }
 
-// verifyStorageStored checks that the store holds what signalmeow's SyncStorage stores from
-// update: a recipient row for every contact record with an ACI, and the master key of every
-// GroupV2 record with a valid one. SyncStorage returns no error, so this is how Sync notices that
-// its fetch or the database update failed (ErrStorageNotStored). Only what signalmeow is known to
-// store is checked: it skips contact records with neither ACI nor PNI and group keys of the wrong
-// length, stores PNI-only contacts by PNI, and has no use for the other record types. Nothing is
-// created while checking. signalmeow deletes nothing, so a record the phone removed between the
-// two fetches only counts as missing if it was new in the first one (e.g. a group joined and left
-// in that second), which the next sync resolves; one added in between isn't checked. A nil update
-// (no manifest) has nothing to check.
+// verifyStorageStored checks contact/group persistence after ApplyStorage. Identity
+// reconciliation and its progress commit in that same transaction and return errors directly.
+// Invalid contacts/group keys are skipped as in signalmeow; nothing is created here.
 func verifyStorageStored(ctx context.Context, device *mstore.Device, update *signalmeow.StorageUpdate) error {
 	if update == nil {
 		return nil

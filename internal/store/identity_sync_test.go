@@ -31,6 +31,11 @@ func TestIdentitySyncUpgrade(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	err = data.IdentityTestSQL(t.Context(), `DROP TABLE gosignal_storage_identities`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	err = data.IdentityTestSQL(t.Context(), `DROP TABLE gosignal_identity_sync`)
 	if err != nil {
 		t.Fatal(err)
