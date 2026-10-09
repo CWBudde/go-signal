@@ -985,7 +985,8 @@ One **identity** object per typed identity whose key go-signal has stored, order
 Numbers and usernames select the ACI key; explicit `PNI:<uuid>` selects the separate PNI key.
 The account's own ACI and PNI are excluded. While connected, authenticated phone verification
 updates can change a known ACI key's trust. Unknown or changed keys are ignored; PNI trust is
-independent. Local trust decisions are not yet sent to the phone.
+independent. Local ACI trust decisions are queued for linked-device synchronization; PNI decisions
+stay on this device.
 
 | Field         | Type   | Description                                                                                                                                                                                                           |
 | ------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1037,8 +1038,11 @@ The **identity** object as in `identities list`, plus:
 ```
 
 The **identity** object (as in `identities list`) after trusting it. Trust and verification are
-local and independent for ACI and PNI keys. Incoming phone verification can update only a matching
-known ACI key; local decisions are not yet synchronized back to the phone.
+independent for ACI and PNI keys. An offline ACI trust command atomically saves local trust and a
+pending linked-device update. Its successful output means saved and queued, without confirming
+phone application. The next connection or `account sync` attempts delivery; failed updates remain
+queued for retry. PNI decisions stay local. Incoming phone verification can update only a matching
+known ACI key and supersedes any pending local decision for that key without echoing it.
 
 ## `mcp doctor`
 

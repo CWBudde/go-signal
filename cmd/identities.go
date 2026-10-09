@@ -19,8 +19,10 @@ on your phone to verify it.
 Recipients are E.164 numbers, ACIs, @usernames or explicit PNI:<uuid> identities. These commands
 don't connect, so a number only works once go-signal has looked it up (e.g. by sending to it).
 Numbers and usernames select the ACI identity; PNI:<uuid> selects the separate PNI key.
-Local trust changes stay on this device. Incoming phone verification updates apply only to a
-matching known ACI key; ACI verification does not change PNI trust.`,
+Local ACI trust changes are saved with a pending update for your linked devices. The next
+connection or "account sync" sends it; failures retain the update for retry. PNI trust stays local.
+Incoming phone verification updates apply only to a matching known ACI key; ACI verification
+does not change PNI trust.`,
 		Args: cobra.NoArgs,
 	}
 
@@ -108,7 +110,9 @@ func newIdentitiesTrustCmd(clients *clientOpener, printers *printerFactory) *cob
 		Short: "Trust the current identity key of a user, so that sending to them works again",
 		Long: `Trust the current identity key of a user. With --safety-number, the key is marked as
 verified if the number matches the current safety number (spaces are ignored); otherwise nothing
-changes and the command fails. Without it, the key is trusted unverified.`,
+changes and the command fails. Without it, the key is trusted unverified (already verified keys
+stay verified). The command works offline: ACI updates are queued for the next connection or
+"account sync". PNI trust stays on this device.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			printer, err := printers.printer(cmd.OutOrStdout())

@@ -440,8 +440,23 @@ appears on the phone.
         pass; fork and parent verification regressions pass ten race runs per backend,
         including real stale-session rollback/recovery and restart durability. Live phone
         interoperability remains unrun ([details](docs/maintenance.md)).
-  - [ ] Send local ACI trust decisions to linked devices, defining partial sync failure
-        and retry behavior without echoing incoming updates.
+  - [x] Send local ACI trust decisions to linked devices, defining partial sync failure
+        and retry behavior without echoing incoming updates. Migration 11 adds an account-local
+        outbox; trust, protocol key, stale-session cleanup and the pending decision commit
+        atomically. Offline trust commands stay offline; Connect, account sync and connected
+        trust operations attempt delivery. Failed or uncertain submissions retain local trust
+        and a durable retry, including after restart. Exact key/trust checks discard stale
+        decisions; unique tokens protect newer decisions from older send completion.
+        Authenticated incoming updates supersede pending local decisions in their transaction
+        without echo; PNI stays local. Account sync reports verification failures even when
+        contact/storage stages succeed, without advancing the successful sync time. A concurrent
+        phone downgrade cannot restore stale verification without a safety-number comparison.
+        Migration, account isolation, real legacy-session rollback/recovery, encrypted local
+        websocket refusal/retry/cancellation and persistence-failure regressions pass.
+        Full cgo/pure-Go/no-cgo checks and ten identity/verification race runs per backend pass.
+        Server acceptance is distinct from phone application; live interoperability remains
+        unrun and competing in-flight decisions have no total ordering
+        ([details](docs/maintenance.md#outgoing-identity-verification)).
   - [ ] Reconcile `ContactRecord` identity key/state with a freshness/conflict policy and
         transactional key, trust and session updates. ACI verification must not imply PNI trust.
 - [ ] Port `attest_svr2_bad_config` if SVR2 is ever needed.

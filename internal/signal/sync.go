@@ -72,7 +72,8 @@ type SyncResult struct {
 	ContactList bool
 }
 
-// Complete reports whether every part of the sync succeeded.
+// Complete reports whether the initial contact/storage stages succeeded. A pending identity
+// verification failure can still make Client.Sync return ErrSyncIncomplete.
 func (r SyncResult) Complete() bool {
 	return r.MasterKey && r.Storage && r.ContactList
 }

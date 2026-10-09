@@ -206,7 +206,11 @@ type Client interface { //nolint:interfacebloat // the one facade over signalmeo
 	// space ignored) is the current one, and otherwise nothing changes and it fails with
 	// ErrSafetyNumberMismatch (or ErrInvalidSafetyNumber). It fails with ErrUnknownIdentity when
 	// no key is stored for them. It works on the local store, also while another process is
-	// connected; that process sees the new trust level with its next send.
+	// connected; that process sees the new trust level with its next send. Local ACI trust and
+	// a pending linked-device update are committed atomically. An offline caller succeeds once
+	// queued; Connect and Sync retry pending updates. A connected caller also attempts a send:
+	// a sync error returns the updated Identity with the error, preserving local trust and the
+	// pending update. Server acceptance does not prove phone application. PNI stays local.
 	TrustIdentity(ctx context.Context, rcpt Recipient, safetyNumber string) (Identity, error)
 
 	// Groups fetches the state of every group whose master key the store holds (from a sync or

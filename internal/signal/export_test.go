@@ -4,6 +4,7 @@ package signal
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -170,4 +171,47 @@ func WrapOutgoing(msg *signalpb.DataMessage, editTarget uint64) *signalpb.Conten
 // FetchStickerWithHTTP exercises the bounded protocol fetch with a local HTTP client.
 func FetchStickerWithHTTP(ctx context.Context, ref StickerReference, client *http.Client) (StickerData, error) {
 	return fetchSticker(ctx, ref, client)
+}
+
+// FlushIdentityVerification exercises durable outgoing sync with an offline transport boundary.
+func FlushIdentityVerification(
+	ctx context.Context, client Client, send func(context.Context, *signalpb.SyncMessage) error,
+) error {
+	return client.(*meowClient).flushIdentityVerification(ctx, send) //nolint:forcetypeassert // test helper
+}
+
+// FinishSyncWithVerificationFailure exercises successful contact/storage sync with pending verification.
+func FinishSyncWithVerificationFailure(
+	ctx context.Context, client Client, res SyncResult, verificationErr error,
+) (SyncResult, error) {
+	meow := client.(*meowClient) //nolint:forcetypeassert // test helper
+
+	return meow.finishSync(ctx, res,
+		[]error{fmt.Errorf("%w: %w", errIdentityVerificationPending, verificationErr)}, SyncOptions{})
+}
+
+// TrustIdentityAfterSnapshot exposes the trust transaction boundary for a concurrent phone update.
+func TrustIdentityAfterSnapshot(
+	ctx context.Context, client Client, rcpt Recipient, between func(),
+) (TrustLevel, error) {
+	meow, device := meowOf(ctx, client)
+
+	identity, err := meow.identityOf(ctx, device, rcpt)
+	if err != nil {
+		return 0, err
+	}
+
+	level, err := trustLevelFor(device, identity, "")
+	if err != nil {
+		return 0, err
+	}
+
+	theirID, err := identityServiceID(rcpt)
+	if err != nil {
+		return 0, err
+	}
+
+	between()
+
+	return meow.trustIdentityLocally(ctx, device, identity, theirID, level, "")
 }

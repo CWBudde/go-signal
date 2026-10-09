@@ -60,6 +60,11 @@ func (c *meowClient) applyIdentityVerification(
 		if !applied {
 			return nil
 		}
+
+		err = c.data.DeleteIdentitySync(ctx, update.ACI.String())
+		if err != nil {
+			return fmt.Errorf("supersede local verification: %w", err)
+		}
 		// A legacy old-key session would otherwise overwrite the new trust decision on send.
 		_, err = removeStaleSessions(ctx, c.trust.sessions, libsignalgo.NewACIServiceID(update.ACI), update.IdentityKey)
 

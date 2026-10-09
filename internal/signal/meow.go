@@ -108,6 +108,9 @@ type meowClient struct {
 	// profileMu serializes own-profile reads and updates with cancellable waiting.
 	profileMu profileMutex
 
+	// identitySyncMu serializes outgoing verification flushes with cancellable waiting.
+	identitySyncMu profileMutex
+
 	// overridesMu serializes changes to the block overrides (see SetBlocked).
 	overridesMu sync.Mutex
 
@@ -211,6 +214,11 @@ func (c *meowClient) CheckLock(context.Context) error {
 }
 
 func (c *meowClient) Connect(ctx context.Context, opts ...ConnectOption) error {
+	if !c.begin(&c.sending) {
+		return ErrClosed
+	}
+	defer c.sending.Done()
+
 	if c.cancelLoops != nil {
 		return ErrAlreadyConnected
 	}
@@ -263,6 +271,11 @@ func (c *meowClient) Connect(ctx context.Context, opts ...ConnectOption) error {
 
 	c.cancelLoops = cancelLoops
 	c.supervise(supervisorCtx, statuses, sup)
+
+	err = c.syncPendingIdentityVerification(ctx)
+	if err != nil {
+		c.log.Warn("identity verification sync remains pending; retry account sync or reconnect", "error", err)
+	}
 
 	return nil
 }

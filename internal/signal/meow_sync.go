@@ -69,6 +69,11 @@ func (c *meowClient) runSync(ctx context.Context, cli *signalmeow.Client, opts S
 		problems []error
 	)
 
+	syncErr := c.syncPendingIdentityVerification(ctx)
+	if syncErr != nil {
+		problems = append(problems, fmt.Errorf("%w: %w", errIdentityVerificationPending, syncErr))
+	}
+
 	// Register before asking, so that a quick reply isn't missed.
 	contactList, stopWaiting := c.awaitContactList()
 	defer stopWaiting()
@@ -148,14 +153,22 @@ func (c *meowClient) finishSync(ctx context.Context, res SyncResult, problems []
 		return res, fmt.Errorf("sync: %w", err)
 	}
 
+	verificationPending := slices.ContainsFunc(problems, func(problem error) bool {
+		return errors.Is(problem, errIdentityVerificationPending)
+	})
+
+	defer opts.Report(SyncDone)
+
+	if verificationPending {
+		return res, fmt.Errorf("%w (pending identity verification): %w", ErrSyncIncomplete, syncErrors(problems))
+	}
+
 	if res.Complete() {
 		err = c.data.SetMeta(countCtx, lastSyncKey, time.Now().UTC().Format(time.RFC3339))
 		if err != nil {
 			c.log.Warn("record sync time", "error", err)
 		}
 	}
-
-	opts.Report(SyncDone)
 
 	if !res.Complete() {
 		return res, fmt.Errorf("%w (missing %s): %w",

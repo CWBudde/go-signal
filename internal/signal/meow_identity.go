@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 	"slices"
@@ -20,6 +21,8 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/encoding/protowire"
 )
+
+var errIdentityTrustChanged = errors.New("identity changed while trusting; compare the current safety number and retry")
 
 // fingerprintIterations and fingerprintVersion are what the Signal apps use for safety numbers
 // (NumericFingerprintGenerator(5200), version 2 with typed service IDs as identifiers).
@@ -51,8 +54,8 @@ const (
 // ACI and PNI identities are checked independently. Not covered, because signalmeow uses
 // its store directly there: the PNI key reported by sent sync (saveSyncPNIIdentityKey),
 // PNI signature checks and provisioning. Incoming Verified sync updates ACI trust only
-// for the exact known key; outgoing
-// verification and contact-storage identity reconciliation remain unimplemented.
+// for the exact known key. Local ACI decisions are queued for linked-device sync;
+// contact-storage identity reconciliation remains unimplemented.
 // The fork checks ACI sending trust before selecting sender-key recipients and when loading
 // the exact key for the encrypted envelope; excluded peers use the pairwise path.
 type identityTrust struct {
@@ -477,23 +480,78 @@ func (c *meowClient) TrustIdentity(ctx context.Context, rcpt Recipient, number s
 		return Identity{}, err
 	}
 
-	_, err = removeStaleSessions(ctx, []mstore.SessionStore{device.ACISessionStore, device.PNISessionStore},
-		theirID, identity.key)
+	level, err = c.trustIdentityLocally(ctx, device, identity, theirID, level, number)
 	if err != nil {
-		return Identity{}, fmt.Errorf("trust identity: %w", err)
-	}
-
-	rec := identity.record
-	rec.Key, rec.Trust, rec.PendingEvent = identity.key, level.String(), false
-
-	err = c.data.PutIdentity(ctx, rec)
-	if err != nil {
-		return Identity{}, fmt.Errorf("trust identity: %w", err)
+		return Identity{}, err
 	}
 
 	identity.Trust = level
 
+	if theirID.Type == libsignalgo.ServiceIDTypeACI {
+		err = c.syncPendingIdentityVerification(ctx)
+		if err != nil {
+			return identity.Identity, fmt.Errorf("identity trusted locally; verification sync pending; "+
+				"retry account sync or reconnect: %w", err)
+		}
+	}
+
 	return identity.Identity, nil
+}
+
+// trustIdentityLocally commits the current key, trust, session cleanup and ACI outbox together.
+func (c *meowClient) trustIdentityLocally(ctx context.Context, device *mstore.Device, identity storedIdentity,
+	theirID libsignalgo.ServiceID, level TrustLevel, number string,
+) (TrustLevel, error) {
+	err := device.DoDecryptionTxn(ctx, func(ctx context.Context) error {
+		current, readErr := c.identityOf(ctx, device, identity.Recipient)
+		if readErr != nil {
+			return readErr
+		}
+
+		if !bytes.Equal(current.key, identity.key) {
+			return errIdentityTrustChanged
+		}
+
+		if number == "" {
+			level = max(TrustUnverified, current.Trust)
+		}
+		// A refused new prekey can leave the protocol copy behind the facade record.
+		key, keyErr := libsignalgo.DeserializeIdentityKey(identity.key)
+		if keyErr != nil {
+			return fmt.Errorf("deserialize trusted identity: %w", keyErr)
+		}
+
+		_, saveErr := device.ACIIdentityStore.SaveIdentityKey(ctx, theirID, key)
+		if saveErr != nil {
+			return fmt.Errorf("save trusted protocol key: %w", saveErr)
+		}
+
+		current.record.Key, current.record.Trust, current.record.PendingEvent = identity.key, level.String(), false
+
+		saveErr = c.data.PutIdentity(ctx, current.record)
+		if saveErr != nil {
+			return fmt.Errorf("save local trust: %w", saveErr)
+		}
+
+		_, cleanupErr := removeStaleSessions(ctx, []mstore.SessionStore{device.ACISessionStore, device.PNISessionStore},
+			theirID, identity.key)
+		if cleanupErr != nil {
+			return cleanupErr
+		}
+
+		if theirID.Type == libsignalgo.ServiceIDTypePNI {
+			return nil
+		}
+
+		return c.data.QueueIdentitySync(ctx, store.IdentitySync{
+			ServiceID: theirID.String(), Key: identity.key, Trust: level.String(), Token: uuid.NewString(),
+		})
+	})
+	if err != nil {
+		return level, fmt.Errorf("trust identity: %w", err)
+	}
+
+	return level, nil
 }
 
 // trustLevelFor returns the level identity gets from TrustIdentity: verified if number is its

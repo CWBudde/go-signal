@@ -284,11 +284,58 @@ The broader Go CI runs
 failed pre-commit formatting on six files byte-identical to `.26`; none is a changed
 verification file. These are offline fixtures, not live phone interoperability evidence.
 
-Outgoing verification-state synchronization and `ContactRecord` identity reconciliation remain
-open. Storage reconciliation needs freshness/conflict handling rather than blindly importing
-keys or trust. The fork's sent-sync PNI key writes, PNI signature validation and provisioning
+`ContactRecord` identity reconciliation remains open. Storage reconciliation needs freshness/conflict
+handling rather than blindly importing keys or trust. The fork's sent-sync PNI key writes, PNI signature validation and provisioning
 still use its underlying store directly and bypass facade trust callbacks. Do not interpret a
 locally verified PNI as an ACI verification or phone-synchronized state.
+
+### Outgoing identity verification
+
+Local ACI `identities trust` decisions now save trust, the current protocol identity key,
+stale-session removal and a pending `gosignal_identity_sync` row in one transaction. This also
+covers keys first observed in a refused prekey bundle, whose protocol copy may still be old.
+Migration 11 creates the account-local outbox; there is one latest decision per ACI. A fresh token
+protects newer decisions from an older send's completion. PNI decisions remain local, and a
+mismatched safety number changes nothing. Offline identity commands retain their no-connection,
+no-account-lock behavior, including while another process is connected.
+
+Connect attempts a flush after starting receive supervision, with a 30-second deadline for the
+whole flush. A failed flush logs that it is still pending and leaves the connection usable.
+Connected TrustIdentity also attempts delivery; on failure it returns the persisted Identity and
+an error explaining the partial result. `account sync` explicitly retries pending updates and
+reports failures even when contact/storage stages complete, without advancing the successful
+sync time. A no-number trust operation uses the current transaction trust level, so an intervening
+phone downgrade cannot restore an earlier verification. An offline trust command succeeds after saving and queuing; use
+`account sync` or reconnect to send it. There is no periodic retry worker: a long-running receiver
+needs an explicit sync or a subsequent local trust operation to send decisions queued by another
+process after startup.
+
+Each flush rechecks the selected account's protocol key and the facade key/trust, and discards
+obsolete decisions. Authenticated incoming updates discard the superseded pending decision in
+their trust/session transaction; unknown or mismatched-key updates leave it alone. Receiving an
+update never queues a reply. Decisions already in flight cannot be recalled; verification sync
+has no per-decision timestamp, so competing devices have no total ordering. Contact storage
+reconciliation remains a separate freshness/conflict task.
+
+The existing `.27` fork is unchanged. Its `WrapSyncMessage` supplies random outer padding and
+sends the exact serialized key with DEFAULT for trusted-unverified or VERIFIED for verified to
+our other ACI devices. DEFAULT is distinct from the wire UNVERIFIED (blocked) state. This uses
+direct self sync; it does not send Java's optional peer null cover message. The Signal receiver
+accepts verification without that cover (see [Signal Android IdentityUtil](https://github.com/signalapp/Signal-Android/blob/main/app/src/main/java/org/thoughtcrime/securesms/util/IdentityUtil.java)). Transport success means server acceptance rather than
+confirmed phone application. The fork's self-send path collapses transport failures to
+`ErrSendFailed`; the facade preserves pending state on that error, cancellation or a failed
+completion write. A crash after acceptance can produce duplicate delivery on retry. This is an
+at-least-once submission contract, without a phone acknowledgment.
+
+Offline regressions cover migration from v10 with identity retention, selected-account queue
+filtering, transaction rollback/retry across the protocol key, trust and a real legacy session,
+PNI isolation, restart durability, stale facade/protocol keys, older-send/newer-token completion,
+and failed completion/supersession writes. A local websocket test exercises real encrypted self
+submission, server refusal, retry and cancellation after submission. Review regressions cover
+successful contact/storage stages with failed verification and a concurrent phone downgrade.
+`just check`, `just check-purego`, the no-cgo suite and ten identity/verification race runs on each
+backend pass. The existing `.27` dependency and libsignal tag are unchanged. Live phone
+interoperability is unrun; these fixtures prove durable retry and transport behavior only.
 
 ### 1. Rebase the mautrix fork
 
