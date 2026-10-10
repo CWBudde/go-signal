@@ -1,7 +1,8 @@
 # Offline signal-cli account import
 
 Date: 2026-10-10. Baseline: `37b7d60`, fork `v0.2609.0-purego.29`.
-Status: proposed design, awaiting user review. Implementation has not started.
+Status: design approved by the user on 2026-10-10. Stage 1 implementation-plan
+review is pending. Implementation has not started.
 The [format mapping](../../account-import.md) is the source contract; this document
 specifies the runtime changes needed to implement it. Neither document establishes
 Java-record interoperability or live account acceptance.

@@ -498,11 +498,14 @@ appears on the phone.
       and crash-safe publication as implementation gates. No importer, Java-record runtime
       compatibility or live send/receive support is claimed yet.
 - [ ] Implement the import without modifying the source or overwriting an existing account.
-      [Proposed importer design](docs/superpowers/specs/2026-10-10-account-import-design.md),
-      2026-10-10, awaiting user review before implementation. It separates Java compatibility
+      [Approved importer design](docs/superpowers/specs/2026-10-10-account-import-design.md),
+      approved 2026-10-10. It separates Java compatibility
       fixtures, durable allocators, storage-key lifecycle, privacy/typed blocking, shared
       registry/open recovery and the offline converter. Initial publication targets Linux;
-      source and destination restrictions are explicit. No implementation criterion is closed.
+      source and destination restrictions are explicit.
+      [Stage 1 implementation plan](docs/superpowers/plans/2026-10-10-account-import-compatibility.md)
+      is prepared and awaiting review: genuine Java 0.103.0 fixtures, strict record inspection
+      and persisted exchanges on both backends. No implementation criterion is closed.
 - [ ] Test fixtures and failure recovery; document limitations; verify live send/receive.
 
 **Done when:** an imported account sends and receives without re-linking.
