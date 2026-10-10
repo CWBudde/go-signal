@@ -1,6 +1,9 @@
 # IT-01: libsignalgo session clocks pass seconds instead of milliseconds
 
-Status: report prepared on 2026-10-09; upstream publication awaits owner approval.
+Status: prepared on 2026-10-09 and published as
+[mautrix/signal#674](https://github.com/mautrix/signal/issues/674) on 2026-10-10 with owner approval.
+Before publication, upstream main had advanced to `e73dca83e722522231fe5bec3511f6e95765e180`;
+the intervening commit changed only provisioning, leaving the three affected calls unchanged.
 Our pinned fork already contains the repair. This report does not change our dependency pins.
 
 ## Upstream report

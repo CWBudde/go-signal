@@ -344,9 +344,10 @@ appears on the phone.
       The proposed zkgroup/attestation scope, evidence and review boundaries are recorded in
       [docs/security-review.md](docs/security-review.md). No independent audit was commissioned;
       revisit when a reviewer and budget can be chosen. The internal review is not an audit.
-- [ ] Report IT-01 (cgo libsignalgo passes seconds where libsignal expects ms) to upstream mautrix.
-      [Report prepared](docs/upstream-it01.md) on 2026-10-09 against upstream main
-      `fc893ce` (libsignal v0.105.0); publication awaits owner approval. Offline native
+- [x] Report IT-01 (cgo libsignalgo passes seconds where libsignal expects ms) to upstream mautrix.
+      Filed [mautrix/signal#674](https://github.com/mautrix/signal/issues/674) on 2026-10-10;
+      [report and evidence](docs/upstream-it01.md) prepared against upstream main
+      `fc893ce` (libsignal v0.105.0), still affected at `e73dca8`. Offline native
       v0.102.2 reproductions isolate all three affected clock arguments; the existing
       repair passes ten cgo race runs and ten pure-Go runs. Current-upstream runtime
       validation and migration of incorrectly timestamped sessions remain untested.
