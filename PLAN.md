@@ -487,8 +487,16 @@ appears on the phone.
 
 ### Phase 16 — Import a signal-cli account
 
-- [ ] Map the signal-cli account format and session state to our store; identify supported source
+- [x] Map the signal-cli account format and session state to our store; identify supported source
       versions and incompatible data.
+      [Source-backed mapping](docs/account-import.md), 2026-10-10: initial target is v0.14.9
+      (registry 2, JSON 11, SQLite 31), registered LIVE linked devices only. The read-only
+      reference library matches that release; all seven protocol schemas and target tables
+      were inspected and checked. The map covers ACI/PNI keys, credentials, sessions, prekeys,
+      trust, sender keys, contacts, groups and privacy settings. It identifies allocator
+      watermarks, derived storage-key handling, libsignal 0.103.0-to-0.102.2 compatibility
+      and crash-safe publication as implementation gates. No importer, Java-record runtime
+      compatibility or live send/receive support is claimed yet.
 - [ ] Implement the import without modifying the source or overwriting an existing account.
 - [ ] Test fixtures and failure recovery; document limitations; verify live send/receive.
 
