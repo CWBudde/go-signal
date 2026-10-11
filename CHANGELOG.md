@@ -1,5 +1,59 @@
 # Changelog
 
+## [0.4.0](https://github.com/CWBudde/go-signal/compare/v0.3.0...v0.4.0) (2026-10-11)
+
+
+### Features
+
+* allocate durable poll vote counters ([1de06f9](https://github.com/CWBudde/go-signal/commit/1de06f9fe9f094dc2da31007bb9210f0874fa7e4))
+* apply incoming identity verification sync ([3984881](https://github.com/CWBudde/go-signal/commit/398488199044dbca052267fb64e64a6bfe588f13))
+* cache sticker packs and add MCP sticker tools ([1d22cd0](https://github.com/CWBudde/go-signal/commit/1d22cd047ebc8cfde02a1f1f9ed9bad57e0fb9df))
+* decline PNI group invitations ([f7f60ed](https://github.com/CWBudde/go-signal/commit/f7f60ed9995845a47f3f2b74bc477c1018498e69))
+* expose poll operations through MCP and daemon ([177c57c](https://github.com/CWBudde/go-signal/commit/177c57c230ee2d9c69b5e24085c2edced2137125))
+* **import:** establish Java protocol compatibility prerequisites ([9ab611c](https://github.com/CWBudde/go-signal/commit/9ab611cbbe474cffce429fe11a6270c582d9e4ac))
+* persist durable poll projections ([c287765](https://github.com/CWBudde/go-signal/commit/c2877656563c71564826063519d3f268e131e967))
+* receive text and media stories ([7b1f010](https://github.com/CWBudde/go-signal/commit/7b1f010e23491b29c2fc09745bdbd1ba1374a4fc))
+* reconcile contact storage identity verification ([3a30e8f](https://github.com/CWBudde/go-signal/commit/3a30e8f551e45f60e106bcef45b93642f0404e42))
+* refresh QR codes while linking ([480b2ba](https://github.com/CWBudde/go-signal/commit/480b2bae060fefaa72b0c39b821f97882fb62536))
+* report PNI group self-membership ([1ce9134](https://github.com/CWBudde/go-signal/commit/1ce91348939df120b2c267566b46b1a3bcf6a993))
+* revoke PNI group invitations ([0fbe92b](https://github.com/CWBudde/go-signal/commit/0fbe92bf3a042e293c6047bd05516b80cb9ed1b6))
+* send explicit viewed receipts ([7f1b467](https://github.com/CWBudde/go-signal/commit/7f1b46704c3eaeee413e9f4cb9f9bc22934907ca))
+* send private stories to synced audiences ([54f3b12](https://github.com/CWBudde/go-signal/commit/54f3b12c4093710138979c071c3b2f197ef3be0e))
+* send text and media stories to groups ([02bae86](https://github.com/CWBudde/go-signal/commit/02bae865dc38332fc9b45a5fdcf07fd8fba31be6))
+* show copyable timestamps in plain receive output ([0b13f16](https://github.com/CWBudde/go-signal/commit/0b13f1649ea3587306b5b82af640d7c792ebf0de))
+* show copyable timestamps in plain receive output ([e9154c0](https://github.com/CWBudde/go-signal/commit/e9154c0b2fd248ec4cb5a1034348f40a06066b6e))
+* show last complete account sync ([5c1d9cb](https://github.com/CWBudde/go-signal/commit/5c1d9cbd6b2a450cef70e91b535fc4c129f14a9e))
+* support PNI identity management ([6e3ce06](https://github.com/CWBudde/go-signal/commit/6e3ce0692b46d7d1e7d356421f1ac0f55d67847b))
+* support polls in direct chats ([13fd181](https://github.com/CWBudde/go-signal/commit/13fd1813bb137d95526d23b9ca24a316728ee828))
+* support text styles when sending messages ([5e6df28](https://github.com/CWBudde/go-signal/commit/5e6df288ae6d1f6cd5aacc0d8073d7cf20047b1f))
+* sync local ACI identity trust with linked devices ([cbc34cd](https://github.com/CWBudde/go-signal/commit/cbc34cd9cfe14dea4916887a3c8d98204d06607c))
+
+
+### Bug Fixes
+
+* enforce identity trust for group sender-key sends ([96aa6f1](https://github.com/CWBudde/go-signal/commit/96aa6f160fba2c500ccfcf9ed25be5e64bd50d22))
+* flush received message acknowledgements before shutdown ([0f1a11c](https://github.com/CWBudde/go-signal/commit/0f1a11cff33aa3741fa36cc585e3e04395e259d8))
+* pin receive key-check lifecycle repair ([51b5ac6](https://github.com/CWBudde/go-signal/commit/51b5ac67056e24084d379f6e38af1045d23a6378))
+* pin websocket lifecycle repairs and enforce regressions ([1bbf849](https://github.com/CWBudde/go-signal/commit/1bbf84940b955840477fcdb8ef725c3709334cea))
+* pin websocket shutdown race fix and enable race integration ([bed98c0](https://github.com/CWBudde/go-signal/commit/bed98c090e076549faa4dc28862dc401d86a65a4))
+* preserve disabled read receipts across restart ([335d68c](https://github.com/CWBudde/go-signal/commit/335d68c1989b73c9886450865d1a831a9b623f13))
+* stop receive supervision after key-check logout ([2d662bb](https://github.com/CWBudde/go-signal/commit/2d662bb0b306d552f12561308a7d7878aaa11593))
+
+
+### Documentation
+
+* design staged signal-cli account import ([6fd0a73](https://github.com/CWBudde/go-signal/commit/6fd0a731f9eed0d7a0ffe0f35bf3c2b4d35f18b8))
+* map signal-cli account import compatibility ([37b7d60](https://github.com/CWBudde/go-signal/commit/37b7d60d8e610f8fde937ca84cb27bba68adcd92))
+* plan Java account import compatibility ([4b89c4c](https://github.com/CWBudde/go-signal/commit/4b89c4c309579e9d05ea72323156fdd8ab2e400b))
+* prepare upstream libsignal session clock report ([4f08d8f](https://github.com/CWBudde/go-signal/commit/4f08d8fab079e5098a5b955d0a3a2b2fb676555d))
+* record completed account import compatibility plan ([3f64265](https://github.com/CWBudde/go-signal/commit/3f642655c451a2e594e1eac8d860a392078a5a22))
+* record live Ctrl-C ack check on both backends (Phase 11.1) ([966ff3b](https://github.com/CWBudde/go-signal/commit/966ff3b45b26a57e4a7ed3ab181502e1da14bef8))
+* record live link lifecycle and devices list results (Phase 11.1) ([78faffd](https://github.com/CWBudde/go-signal/commit/78faffdde3528ba9d014bf6586147289be9870c3))
+* record upstream session clock report publication ([a474a3d](https://github.com/CWBudde/go-signal/commit/a474a3df9e3da70287771d031c95d47dda52facc))
+* remove executed implementation plans ([27e7554](https://github.com/CWBudde/go-signal/commit/27e7554abe7671e0f21a7c4e71e65d2b091b80e5))
+* use a placeholder phone number in the README examples ([8568b2a](https://github.com/CWBudde/go-signal/commit/8568b2ab91754cc1fcfd5d8f31e2d8c3c1ff74d1))
+* use a placeholder phone number in the README examples ([1735c5a](https://github.com/CWBudde/go-signal/commit/1735c5ae194193bea4387e49672d18bc9a14bfab))
+
 ## [0.3.0](https://github.com/CWBudde/go-signal/compare/v0.2.1...v0.3.0) (2026-10-04)
 
 
