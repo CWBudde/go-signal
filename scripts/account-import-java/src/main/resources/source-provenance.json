@@ -1,0 +1,182 @@
+{
+  "reference_commit": "2a9a4b1f3cbb030e10f3bdeb26df7f666d44ccf3",
+  "release_equivalent_tag": "v0.14.9",
+  "sqlite_user_version": 31,
+  "json_version": 11,
+  "registry_version": 2,
+  "createSql_call_order": [
+    "RecipientStore",
+    "MessageSendLogStore",
+    "StickerStore",
+    "PreKeyStore",
+    "SignedPreKeyStore",
+    "KyberPreKeyStore",
+    "GroupStore",
+    "SessionStore",
+    "IdentityKeyStore",
+    "SenderKeyRecordStore",
+    "SenderKeySharedStore",
+    "KeyValueStore",
+    "CdsiStore",
+    "UnknownStorageIdStore"
+  ],
+  "tables": [
+    "recipient",
+    "message_send_log",
+    "message_send_log_content",
+    "sticker",
+    "pre_key",
+    "signed_pre_key",
+    "kyber_pre_key",
+    "group_v2",
+    "group_v2_member",
+    "group_v1",
+    "group_v1_member",
+    "session",
+    "identity",
+    "sender_key",
+    "sender_key_shared",
+    "key_value",
+    "cdsi",
+    "storage_id"
+  ],
+  "explicit_indexes": [
+    "mslc_timestamp_index",
+    "msl_recipient_index",
+    "msl_content_index"
+  ],
+  "schema_sha256": "f92f21c630d5c4eba2e06a316a085f05b0d5b633e0bfb2833a9d6bbf1cb9dd96",
+  "sources": [
+    {
+      "path": "reference/signal-cli/lib/src/main/java/org/asamk/signal/manager/storage/recipients/RecipientStore.java",
+      "createSql_line": 68,
+      "sha256": "9c999d7fa9e6c7aade11151b61454052ef092108fec6557e4b95513181ad2ed5"
+    },
+    {
+      "path": "reference/signal-cli/lib/src/main/java/org/asamk/signal/manager/storage/sendLog/MessageSendLogStore.java",
+      "createSql_line": 60,
+      "sha256": "6dcc586d3110cf3b830d3240087e33954551d6958cfd4b74fdaf10c4985327c5"
+    },
+    {
+      "path": "reference/signal-cli/lib/src/main/java/org/asamk/signal/manager/storage/stickers/StickerStore.java",
+      "createSql_line": 27,
+      "sha256": "66f512c125f283bb51c6187480b6f56ea95479cc5bca45b5f2bb98e25af5f1c2"
+    },
+    {
+      "path": "reference/signal-cli/lib/src/main/java/org/asamk/signal/manager/storage/prekeys/PreKeyStore.java",
+      "createSql_line": 29,
+      "sha256": "4b7d36f116f08e52e02f223e2304244c9f5b4952ea183f38d4049f3ab232e3ba"
+    },
+    {
+      "path": "reference/signal-cli/lib/src/main/java/org/asamk/signal/manager/storage/prekeys/SignedPreKeyStore.java",
+      "createSql_line": 32,
+      "sha256": "f719c44c2594fda3550b4249a479730f7bdd62193d23b7f0124403e0a838daed"
+    },
+    {
+      "path": "reference/signal-cli/lib/src/main/java/org/asamk/signal/manager/storage/prekeys/KyberPreKeyStore.java",
+      "createSql_line": 30,
+      "sha256": "09925471f07d46bf23e7214af47d1bb4cd8806d90c69220a635b2f0e9b344224"
+    },
+    {
+      "path": "reference/signal-cli/lib/src/main/java/org/asamk/signal/manager/storage/groups/GroupStore.java",
+      "createSql_line": 52,
+      "sha256": "1bb3e1c3d9c461a6a56ef6945ff8beba36e1741a358072cf1d0e4559edd46e10"
+    },
+    {
+      "path": "reference/signal-cli/lib/src/main/java/org/asamk/signal/manager/storage/sessions/SessionStore.java",
+      "createSql_line": 44,
+      "sha256": "308373c952bfc9fed681a07d1f780ddb88722a8edee8dc3aff0ba00723d0f815"
+    },
+    {
+      "path": "reference/signal-cli/lib/src/main/java/org/asamk/signal/manager/storage/identities/IdentityKeyStore.java",
+      "createSql_line": 37,
+      "sha256": "3ad31f8b38b241dea3c3f080801b4ca152e3eee6d175c9411b1bcb3225e3f4c1"
+    },
+    {
+      "path": "reference/signal-cli/lib/src/main/java/org/asamk/signal/manager/storage/senderKeys/SenderKeyRecordStore.java",
+      "createSql_line": 28,
+      "sha256": "9ab145b90799e53e3817ad2e0906f73cbe0cd7ec57d2bc180ec81f27f460bea6"
+    },
+    {
+      "path": "reference/signal-cli/lib/src/main/java/org/asamk/signal/manager/storage/senderKeys/SenderKeySharedStore.java",
+      "createSql_line": 27,
+      "sha256": "ee8e393a25f0272ab44f055ec0a3bf36ed1b75c4e4309e51b5c73e8b9074a5ac"
+    },
+    {
+      "path": "reference/signal-cli/lib/src/main/java/org/asamk/signal/manager/storage/keyValue/KeyValueStore.java",
+      "createSql_line": 24,
+      "sha256": "4363d843fd18dba8abf64f2267d1916dbcca291cc0346e534404b9960854fe8d"
+    },
+    {
+      "path": "reference/signal-cli/lib/src/main/java/org/asamk/signal/manager/storage/recipients/CdsiStore.java",
+      "createSql_line": 18,
+      "sha256": "c9a7abca93a367613333f186e36d648309d11838e1eb798729d2103c9af7ffc1"
+    },
+    {
+      "path": "reference/signal-cli/lib/src/main/java/org/asamk/signal/manager/storage/UnknownStorageIdStore.java",
+      "createSql_line": 17,
+      "sha256": "b9d8b3e5c37088f6a424751c39c45ad88defd32e057653894b1f51dfc07a957b"
+    },
+    {
+      "path": "reference/signal-cli/lib/src/main/java/org/asamk/signal/manager/storage/AccountDatabase.java",
+      "sha256": "54631db51762abdf486e6474c8165fdb0b52b23a20687f3136b8c84037b91f33"
+    },
+    {
+      "path": "reference/signal-cli/lib/src/main/java/org/asamk/signal/manager/storage/Database.java",
+      "sha256": "a26786b9e47531d33ff0a093dac496faac7836ee8cd454d9cd740c5bc23332e8"
+    },
+    {
+      "path": "reference/signal-cli/lib/src/main/java/org/asamk/signal/manager/storage/SignalAccount.java",
+      "sha256": "8d0b6a3106263de2c5275008a28216bd167ebcafacf26ce7fa7d41de1d2cfb79"
+    },
+    {
+      "path": "reference/signal-cli/lib/src/main/java/org/asamk/signal/manager/storage/Utils.java",
+      "sha256": "760933c53613dd623d5130d282d064b978acc13111c119dccc8118281567cc72"
+    },
+    {
+      "path": "reference/signal-cli/lib/src/main/java/org/asamk/signal/manager/storage/accounts/AccountsStore.java",
+      "sha256": "8ad0b55fda49b310c59bb16ae930942b4faf75d2c4bbd39661cbd046c045584b"
+    },
+    {
+      "path": "reference/signal-cli/lib/src/main/java/org/asamk/signal/manager/storage/accounts/AccountsStorage.java",
+      "sha256": "67e78b175700dd1f11e52a7ebb42b73f8ca743f35b8db1d4133b1e998f808a8f"
+    },
+    {
+      "path": "reference/signal-cli/lib/src/main/java/org/asamk/signal/manager/storage/configuration/ConfigurationStore.java",
+      "sha256": "e2c9c507bbfefc66757bd28ceb2e21d6fac4ff2d32cce01420e5bbe872ccd8d6"
+    },
+    {
+      "path": "reference/signal-cli/libsignal-version",
+      "sha256": "1d77d3b9bbe8b10ade713470ef6fa07e33be43b6baa3155b31bf82376bf6a5f6"
+    },
+    {
+      "path": "reference/signal-cli/gradle/libs.versions.toml",
+      "sha256": "1a6ceb1c7f5da436d3fbfde8f26cdf100a604f968a61f05bcee2eb8cb9e41434"
+    },
+    {
+      "path": "docs/account-import.md",
+      "sha256": "62a7fcd4457965b652a1ba1c87eabe61474d80375bd6a449e928c0e70c168106"
+    },
+    {
+      "path": "reference/signal-cli/lib/src/main/java/org/asamk/signal/manager/api/TrustLevel.java",
+      "sha256": "2c11fb1afd266e5b139a4254d748d56d16e26eae3a42c3c3764956bcde1cb10c"
+    },
+    {
+      "path": "reference/signal-cli/lib/src/main/java/org/asamk/signal/manager/api/RecipientIdentifier.java",
+      "sha256": "339739b217359a557223d501117c6be062f362717d08c74659c284a326f4b392"
+    },
+    {
+      "path": "reference/signal-cli/lib/src/main/java/org/asamk/signal/manager/storage/recipients/RecipientAddress.java",
+      "sha256": "d7de0bc1fe1235222f1416194d742c3e548d227eefa919fcb4417280f30fc670"
+    },
+    {
+      "path": "reference/signal-cli/lib/src/main/java/org/asamk/signal/manager/internal/PathConfig.java",
+      "sha256": "a05395882c8e7da789b8e950303ae55214c7dd742179cd2de84bed19a0bd6cb5"
+    }
+  ],
+  "limitations": [
+    "Read-only text extraction, not Java loader execution or fixture generation.",
+    "Schema is fresh current createDatabase shape; old migrated physical DDL can differ.",
+    "External UuidUtil implementation is absent from this source checkout."
+  ]
+}

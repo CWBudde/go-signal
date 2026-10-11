@@ -39,3 +39,6 @@ go.work.sum
 
 # Local MCP test setup (points at ./data/)
 /.mcp.json
+
+# Synthetic Java account-import harness build/cache output
+/scripts/account-import-java/target/
