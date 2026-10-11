@@ -97,6 +97,7 @@ test-diff:
     go test -race -count=1 -run '^TestDiff' ./internal/signal/
     go test -race -count=1 github.com/cwbudde/mautrix-signal/pkg/libsignalgo/...
     scripts/test-backend-switch.sh
+    scripts/test-account-import-compatibility.sh
     scripts/test-cdsi-integration.sh -race
     scripts/test-zkgroup-integration.sh -race
     scripts/test-websocket-lifecycle.sh -race
