@@ -1,6 +1,7 @@
 # signal-cli account import: format mapping
 
 This is the Phase 16 source and compatibility specification, reviewed on 2026-10-10.
+Stage 1 protocol compatibility was verified on 2026-10-11; see the results below.
 There is no import command yet. No source account has been imported or used on Signal's
 servers; the remaining Phase 16 implementation, fixtures and live acceptance are open.
 
@@ -24,7 +25,7 @@ equivalence, not runtime interoperability.
 | Registry version and entry shape            | [AccountsStore.java](../reference/signal-cli/lib/src/main/java/org/asamk/signal/manager/storage/accounts/AccountsStore.java), [AccountsStorage.java](../reference/signal-cli/lib/src/main/java/org/asamk/signal/manager/storage/accounts/AccountsStorage.java)                                                                            |
 | JSON version, loading and serialized fields | [SignalAccount.java](../reference/signal-cli/lib/src/main/java/org/asamk/signal/manager/storage/SignalAccount.java), constants at lines 119–120, loader at 549, `Storage` at 2117                                                                                                                                                         |
 | SQLite schema version and migrations        | [AccountDatabase.java](../reference/signal-cli/lib/src/main/java/org/asamk/signal/manager/storage/AccountDatabase.java), version 31 at line 36; [Database.java](../reference/signal-cli/lib/src/main/java/org/asamk/signal/manager/storage/Database.java), `PRAGMA user_version`                                                          |
-| Target device and protocol tables           | Fork [DeviceData](https://github.com/CWBudde/mautrix-signal/blob/7f2481fad0c11ad2b3917a4979bd70f70d3ed04b/pkg/signalmeow/store/device.go) and [schema 27](https://github.com/CWBudde/mautrix-signal/blob/7f2481fad0c11ad2b3917a4979bd70f70d3ed04b/pkg/signalmeow/store/upgrades/00-latest.sql), pinned by go.mod to `v0.2609.0-purego.29` |
+| Target device and protocol tables           | Fork [DeviceData](https://github.com/CWBudde/mautrix-signal/blob/7f2481fad0c11ad2b3917a4979bd70f70d3ed04b/pkg/signalmeow/store/device.go) and [schema 27](https://github.com/CWBudde/mautrix-signal/blob/7f2481fad0c11ad2b3917a4979bd70f70d3ed04b/pkg/signalmeow/store/upgrades/00-latest.sql), pinned by go.mod to `v0.2609.0-purego.30` |
 
 Candidate inputs are registered **LIVE linked devices** with `deviceId > 1`, valid nonzero
 ACI and PNI, both local identity pairs and registration IDs, an E.164 number and a nonempty
@@ -211,13 +212,49 @@ linked accounts require a fork/API extension accepting the derived key, or expli
 for the initial supported subset. No master key can be recovered by reversing the HMAC.
 Never invent a storage key or silently claim contact/group sync is available.
 
+## Stage 1 protocol compatibility corpus
+
+The standalone [Java harness](../scripts/account-import-java/) produces synthetic
+protocol records using `org.signal:libsignal-client:0.103.0`. Its source layout follows
+signal-cli v0.14.9: registry 2, account JSON 11 and SQLite 31. The committed
+[provenance](../internal/signal/accountimport/testdata/java-0.103.0/provenance.json)
+records artifact/JNI checksums, the actual loaded Linux amd64 testing JNI, generator
+sources, source codecs and Java 25.0.2/Maven 3.9.11. It includes a genuine incoming
+sender-key row with the source's 16-byte UUID BLOB encoding. No account loader or
+Signal server participates in generation.
+
+The compatibility runner restores whole records into real target account databases,
+closes them between steps and switches native v0.102.2 and pure-Go backends in both
+starting orders. Java continuation retains an independently seeded original Java
+peer, reopening its evolving state between replies. A separate branch exercises a
+Go-cloned peer; its generated state never replaces the retained Java peer.
+
+| Coverage                         | States / operations                                                                                                                                                                                                                                                                            |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Corpus exchange acceptance       | ACI and PNI; Java version-4 sessions with initial V1 negotiation and established V1 PQ; ordinary and last-resort queued prekey messages; current, archived-only and archived-plus-current states with skipped messages; replies and fresh prekey initiation toward retained Java receiver keys |
+| Group exchange acceptance        | Incoming sender keys and skipped group messages; fresh Go outbound key/distribution; Java distribution processing, group decryption and reply                                                                                                                                                  |
+| Persistence / failure assertions | Original record hashes and timestamps after reopening; optional EC ID 0; EC/ordinary-Kyber consumption and signed/last-resort retention; tamper/replay preservation; equal UUID values in distinct typed ACI/PNI store keys                                                                    |
+| Inspection unit tests only       | Encoded session version 3; empty V0, initial V1 allowing minimum V0 and downgraded V0 retaining a chain; expired pending sender usability; historical archived remote-identity differences; malformed, unknown, duplicate and bounded encodings                                                |
+
+The inspection-only cases do not establish Java exchange coverage for those encodings.
+All protocol material and credentials are invented. Format markers and passing
+deserialization do not admit arbitrary source accounts. Stage 1 passed on 2026-10-11
+with immutable `libsignal-go v0.7.1-cw.6` and `mautrix-signal v0.2609.0-purego.30`:
+12 scenarios in both starting orders, 264 actions and 48 real Java continuation legs.
+The [verification record](account-import-compatibility.md) includes release commits,
+checksums, command results and the complete ledger. The importer and live acceptance
+remain separate stages.
+
+See [the developer guide](dev.md#offline-java-account-import-compatibility) for the
+Java-free backend runner, required Java continuation mode and regeneration procedure.
+
 ## Implementation and acceptance gates
 
-The map is complete; functional version support remains contingent on the next two PLAN
-items. The initial supported subset must refuse inputs that hit an unresolved conversion
+The map and Stage 1 protocol prerequisite are complete; functional importer support
+remains contingent on the remaining Phase 16 PLAN items. The initial supported subset must refuse inputs that hit an unresolved conversion
 above. In particular, allocator persistence, storage-key handling, privacy/account-record
-construction and conflict protection, Java-produced record compatibility and safe filesystem publication must be
-resolved before an importer can be called supported.
+construction and conflict protection, account-level protocol validation and safe filesystem
+publication must be resolved before an importer can be called supported.
 
 The implementation should validate and convert offline into a private staging directory,
 then publish only after every required record passes. Keep secrets in 0700 directories

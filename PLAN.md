@@ -495,17 +495,23 @@ appears on the phone.
       were inspected and checked. The map covers ACI/PNI keys, credentials, sessions, prekeys,
       trust, sender keys, contacts, groups and privacy settings. It identifies allocator
       watermarks, derived storage-key handling, libsignal 0.103.0-to-0.102.2 compatibility
-      and crash-safe publication as implementation gates. No importer, Java-record runtime
-      compatibility or live send/receive support is claimed yet.
+      and crash-safe publication as implementation gates. Stage 1 synthetic protocol
+      compatibility is verified below; no importer or live send/receive support is claimed.
 - [ ] Implement the import without modifying the source or overwriting an existing account.
       [Approved importer design](docs/superpowers/specs/2026-10-10-account-import-design.md),
       approved 2026-10-10. It separates Java compatibility
       fixtures, durable allocators, storage-key lifecycle, privacy/typed blocking, shared
       registry/open recovery and the offline converter. Initial publication targets Linux;
       source and destination restrictions are explicit.
-      [Stage 1 implementation plan](docs/superpowers/plans/2026-10-10-account-import-compatibility.md)
-      is prepared and awaiting review: genuine Java 0.103.0 fixtures, strict record inspection
-      and persisted exchanges on both backends. No implementation criterion is closed.
+  - [x] Stage 1: genuine Java 0.103.0 corpus, strict nonmutating PQ/session inspection and
+        persisted native/pure-Go exchanges. Completed 2026-10-11 with immutable fork releases
+        `v0.7.1-cw.6` / `v0.2609.0-purego.30`; all required checks pass with `GOWORK=off`,
+        including 264 actions and 48 Java legs. [Verification and ledger](docs/account-import-compatibility.md);
+        [completed implementation plan](docs/superpowers/plans/2026-10-10-account-import-compatibility.md).
+  - [ ] Stage 2a: durable fork allocator reservations, ordinary/last-resort counts and
+        depleted/restart/failure/exhaustion acceptance; next prerequisite.
+  - [ ] Stage 2b: fork storage-key lifecycle, Java derivation fixtures and derived-only/
+        sync-update acceptance; next prerequisite.
 - [ ] Test fixtures and failure recovery; document limitations; verify live send/receive.
 
 **Done when:** an imported account sends and receives without re-linking.

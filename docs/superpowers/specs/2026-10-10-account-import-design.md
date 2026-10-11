@@ -1,11 +1,12 @@
 # Offline signal-cli account import
 
 Date: 2026-10-10. Baseline: `37b7d60`, fork `v0.2609.0-purego.29`.
-Status: design approved by the user on 2026-10-10. Stage 1 implementation-plan
-review is pending. Implementation has not started.
+Status: design and Stage 1 implementation plan approved by the user on 2026-10-10/11.
+Stage 1 completed on 2026-10-11: [release verification and ledger](../../account-import-compatibility.md).
+Stages 2a/2b are the next prerequisites.
 The [format mapping](../../account-import.md) is the source contract; this document
-specifies the runtime changes needed to implement it. Neither document establishes
-Java-record interoperability or live account acceptance.
+specifies the runtime changes needed to implement it. The Stage 1 record establishes synthetic offline Java-record interoperability for its
+tested matrix; production conversion and live account acceptance remain open.
 
 ## Intent and approach
 
@@ -293,11 +294,11 @@ are invented and have no real credentials. Commit fixture records as bounded enc
 data and schema/insert scripts; generated databases remain ignored. Java is needed only
 for reproducible fixture generation/interoperability checks, not release builds or import.
 
-Java and its dependency cache are absent in the current environment; the available older
-Java library is not 0.103.0 compatibility evidence. Establish the generator toolchain
-before closing stage 1. Test bidirectional continuation with Java 0.103.0, native v0.102.2
-and pure-Go, including persisted backend switching. Precomputed inbound ciphertext or
-successful deserialization alone cannot prove outbound/source compatibility.
+Stage 1 established a private Java 25.0.2/Maven 3.9.11 toolchain with the verified
+0.103.0 artifact and completed bidirectional Java/native v0.102.2/pure-Go exchanges,
+including persisted backend switching. Later format expansion needs equivalent evidence;
+precomputed inbound ciphertext or successful deserialization alone cannot prove outbound/
+source compatibility. No live source account was used.
 
 Run scoped race tests and pure-Go tests for each delivered stage, then `just fmt`,
 `just check`, `just check-purego`, `just test-fork`, `just test-diff` and untagged no-cgo

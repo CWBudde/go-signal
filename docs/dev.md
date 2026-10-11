@@ -170,6 +170,46 @@ integration suite (see "Integration tests").
 The procedure for a mautrix-signal bump (rebase the fork, port the drift, re-pin libsignal-go,
 move the submodule) is in [maintenance.md](maintenance.md).
 
+### Offline Java account-import compatibility
+
+The committed synthetic Java 0.103.0 corpus is exercised through real account SQLite
+stores by `just test-diff`, without Java. Run the dedicated backend-switch checks with:
+
+```sh
+scripts/test-account-import-compatibility.sh
+```
+
+For genuine Java continuation or regeneration, use Linux amd64, a Java 25 JDK, Maven,
+Python 3 and `flock`. Keep downloaded tools and the Maven cache in private scratch storage:
+
+```sh
+export GOSIGNAL_IMPORT_JAVA_HOME=/absolute/private/jdk-25
+export GOSIGNAL_IMPORT_MAVEN=/absolute/private/maven/bin/mvn
+export GOSIGNAL_IMPORT_MAVEN_CACHE=/absolute/private/maven-cache
+scripts/generate-account-import-fixtures.sh --self-test
+scripts/test-account-import-java-harness.sh
+GOSIGNAL_IMPORT_COMPAT_LEDGER=/absolute/private/acceptance.tsv \
+  scripts/test-account-import-compatibility.sh --java
+scripts/generate-account-import-fixtures.sh /absolute/private/new-corpus
+```
+
+The generator refuses an existing output path. Review regenerated invariants, source
+SQL integrity and provenance before promoting the complete directory; random keys and
+pending creation seconds change. Generated fixtures are excluded from treefmt because
+their emitted-file hashes are part of provenance. No database, JDK, JAR or Maven cache
+is committed. Java and Maven are unnecessary for builds and the eventual import command.
+
+The harness pins the exact Signal artifact, compiler/dependency plugins and Jackson.
+It checks the complete JAR, all embedded JNI resources, the UUID codec dependency and
+the actually mapped JNI library. The official loader selects the bundled testing JNI
+first; the recorded Linux amd64 selection is intentional. External JVM/JNI overrides
+are refused. Harness builds hold a lock through Java execution so simultaneous checks
+cannot remove active classes. Missing tools, altered source markers, failed or omitted exchange legs
+fail acceptance. The runner records every scenario, namespace, starting backend and
+Java leg in its TSV ledger, using separate stores for Go-cloned and retained Java peers.
+
+See [the compatibility boundary](account-import.md) for tested states and remaining stages.
+
 ## Coverage
 
 Run `just test-coverage` followed by `just coverage-report` to measure combined statement

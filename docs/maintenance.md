@@ -565,3 +565,30 @@ before tagging a release that contains the bump.
 
 Bumping the submodule changes the CI cache key, so the first `test-cgo` run afterwards does a
 full Rust build. The release workflow doesn't build Rust at all.
+
+## Account-import compatibility APIs
+
+The account-import prerequisites add two nonmutating fork APIs, introduced in
+`libsignal-go v0.7.1-cw.6` and `mautrix-signal v0.2609.0-purego.30`; see the
+[release verification](account-import-compatibility.md). `spqr.ValidateState`
+in libsignal-go recognizes supported serialized PQ states and classifies invalid,
+unsupported and over-limit encodings. The shim's shared `InspectSessionRecord`
+reports current and archived metadata independently of sender usability and identity
+trust. Both build variants use the same inspector. Review raw wire occurrences before
+protobuf decoding: duplicate fields must not hide future PQ data or versions, and
+integer overflow must not become a different supported value.
+
+Keep record limits at 1 MiB, archives at 40, receiver chains at 5, skipped keys per
+chain at 2,000 and recursion at 64 unless a separately reviewed contract changes them.
+Preserve optional zero IDs, signed pending IDs, pending creation seconds and signed/
+Kyber milliseconds. Pending Kyber ciphertext includes its type byte. Empty retired
+send keys are distinct from invalid empty active/receive PQ keys.
+
+An inspection pass establishes encoding support. A fork bump also needs the committed
+Java corpus, cross-backend persisted exchanges and the explicit Java continuation
+runner from [dev.md](dev.md#offline-java-account-import-compatibility). Never replace
+the retained Java peer with a Go-generated store, trim unsupported scenarios or change
+the native v0.102.2 pin to make this acceptance pass silently. Fixture provenance records
+the exact source-format revisions/hashes, generator bytes, Maven coordinates and
+checksums, and loaded JNI. New source encodings require fresh evidence and an updated
+compatibility matrix before importer admission can expand.
