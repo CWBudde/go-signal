@@ -221,8 +221,15 @@ GOWORK=off CGO_LDFLAGS="-L $PWD/third_party/lib" scripts/test-account-import-com
 All commands must exit 0. Keep the completed Java/backend ledger with the verification record and report exact tested combinations. A compatibility failure requires a separately reviewed fix or an explicit unresolved Stage 1 entry, never weaker acceptance.
 
 - [x] **Step 5: Document only verified results.** In `docs/account-import.md`, distinguish inspected encodings from exchange-tested states, list source/target artifact versions and the synthetic offline nature of the evidence. Add generator and both runner modes to `docs/dev.md`; document the two fork APIs/provenance in `docs/maintenance.md`. Record Stage 1 as a completed nested prerequisite under Phase 16 only after all evidence passes. Leave the parent importer implementation, fixture/failure/live acceptance and Phase 16 completion criteria unchecked. Identify Stages 2a/2b as the next prerequisites; no live phone/server support is established.
-- [ ] **Step 6: Run affected documentation checks and commit the pins/documentation/planning records:** `feat(import): establish Java protocol compatibility prerequisites`. Ship directly on main, verify remote synchronization and preserve unrelated changes. Mark this plan's completed steps as they land; unfinished or failed steps stay open.
+- [x] **Step 6: Run affected documentation checks and commit the pins/documentation/planning records:** `feat(import): establish Java protocol compatibility prerequisites`. Ship directly on main, verify remote synchronization and preserve unrelated changes. Mark this plan's completed steps as they land; unfinished or failed steps stay open.
 
-## Current handoff
+## Completed handoff
 
-The user approved the design and written Stage 1 plan on 2026-10-10/11. Strict fork validators, genuine Java fixtures and target SQLite exchange tests are implemented; both integrated matrices passed and immutable fork releases are pinned. Final release-graph acceptance passed all required commands, including 264 actions/48 Java legs; only the final documentation commit/shipping step remains. Work preserves direct main and uses scoped independent implementation/review agents. No production importer or live account acceptance is established.
+Stage 1 completed and shipped directly on main on 2026-10-11. The user approved the design
+and written plan on 2026-10-10/11. Parent commits `bf688b7`, `a4fd6a2` and `9ab611c`
+contain the genuine Java corpus, persisted exchange tests and immutable fork pins/records.
+All required release-graph checks passed with `GOWORK=off`; both complete Java matrices
+passed 264 actions and 48 Java legs. [Verification and ledger](../../account-import-compatibility.md)
+record the exact versions, tested combinations and review decisions. Stage 2a allocator
+reservations and Stage 2b storage-key lifecycle are next. The parent importer and live
+acceptance remain open. Unrelated changes and both submodule checkouts were preserved.
