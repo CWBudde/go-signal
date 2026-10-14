@@ -35,30 +35,40 @@ func (d *Dir) NewLinkStore(log zerolog.Logger) *LinkStore {
 
 // PutDevice locks and opens the account database for data.ACI, then stores data in it.
 func (l *LinkStore) PutDevice(ctx context.Context, data *store.DeviceData) error {
-	if l.store == nil {
-		aci := data.ACI.String()
-
-		lock, err := l.dir.Lock(aci)
-		if err != nil {
-			return err
-		}
-
-		opened, err := l.dir.OpenAccount(ctx, aci, l.log)
-		if err != nil {
-			_ = lock.Unlock()
-
-			return err
-		}
-
-		l.lock, l.store = lock, opened
+	_, err := l.open(ctx, data.ACI)
+	if err != nil {
+		return err
 	}
 
-	err := l.store.Devices.PutDevice(ctx, data)
+	err = l.store.Devices.PutDevice(ctx, data)
 	if err != nil {
 		return fmt.Errorf("store device: %w", err)
 	}
 
 	return nil
+}
+
+// StoreProvisionedDevice locks and opens the account database for data.ACI, then stores the
+// linked device and replaces the account's previous protocol state in one transaction. If
+// that fails, a database and lock opened by this call are released again.
+func (l *LinkStore) StoreProvisionedDevice(
+	ctx context.Context, data *store.DeviceData, keys store.ProvisioningPreKeys,
+) (*store.Device, error) {
+	opened, err := l.open(ctx, data.ACI)
+	if err != nil {
+		return nil, err
+	}
+
+	device, err := l.store.Devices.StoreProvisionedDevice(ctx, data, keys)
+	if err != nil {
+		if opened {
+			err = errors.Join(err, l.Close())
+		}
+
+		return nil, fmt.Errorf("store linked device: %w", err)
+	}
+
+	return device, nil
 }
 
 // DeviceByACI looks the device up in the database opened by PutDevice.
@@ -113,4 +123,28 @@ func (l *LinkStore) Close() error {
 	}
 
 	return errors.Join(errs...)
+}
+
+// open takes the account lock and opens the database for aci unless that already happened.
+// It reports whether this call opened them.
+func (l *LinkStore) open(ctx context.Context, aci uuid.UUID) (bool, error) {
+	if l.store != nil {
+		return false, nil
+	}
+
+	lock, err := l.dir.Lock(aci.String())
+	if err != nil {
+		return false, err
+	}
+
+	opened, err := l.dir.OpenAccount(ctx, aci.String(), l.log)
+	if err != nil {
+		_ = lock.Unlock()
+
+		return false, err
+	}
+
+	l.lock, l.store = lock, opened
+
+	return true, nil
 }

@@ -72,6 +72,9 @@ Affected fork tests passed on both backends. Contact transaction rollback is exe
 with the real cgo database; the pure-Go counterpart uses a controlled transaction fixture
 because the upstream dbutil SQLite dialect handling prevents that real-store fixture there.
 Phone acceptance remains unrun; offline tests do not verify rendering or expiry.
+(Since the allocator release below, the fork's store and refill tests register
+`modernc.org/sqlite` and use real file-backed databases on the pure-Go backend too; these
+older contact and timer fixtures keep their controlled pure-Go counterpart.)
 
 The current QR-refresh release is the immutable
 [`v0.2609.0-purego.17`](https://github.com/cwbudde/mautrix-signal/tree/v0.2609.0-purego.17)
@@ -449,6 +452,9 @@ lists or acknowledgements. Preserve sent-message/edit handler failure propagatio
 ordinary and edit content must use one retrieved revision for context and seconds, including
 zero, and clear the direct timer version. Exercise all these boundaries on both backends;
 retain the real cgo rollback test and record the controlled pure-Go fixture limitation.
+Keep the durable prekey allocators (`store/prekey_allocator.go`, upgrade v28,
+`StoreProvisionedDevice`) and their fork-only schema number; see
+[Durable prekey allocators](#durable-prekey-allocators) for renumbering upstream migrations.
 Keep the error-returning single-snapshot `ApplyStorage` boundary and its transactional
 `StorageUpdateHandler`. Preserve post-commit settings/contact publication, transaction-aware
 block-cache invalidation and the lock spanning storage transactions and settings publication;
@@ -565,6 +571,39 @@ before tagging a release that contains the bump.
 
 Bumping the submodule changes the CI cache key, so the first `test-cgo` run afterwards does a
 full Rust build. The release workflow doesn't build Rust at all.
+
+## Durable prekey allocators
+
+Phase 16 Stage 2a adds fork-owned allocator rows, `signalmeow_prekey_allocators`, one per
+account, local typed service ID (ACI or `PNI:<uuid>`) and kind (`ec`, `signed`, `kyber`;
+ordinary and last-resort Kyber keys share a counter). `ReservePreKeyIDs` commits a range in
+its own transaction before keys are generated and refuses an enclosing transaction;
+`SeedPreKeyAllocator` must join the caller's transaction, as the importer will;
+`StoreProvisionedDevice` replaces credentials, keys, sessions and allocators of a relinked
+account atomically. Generated IDs are `0..0xfffffe`: allocation refuses to wrap and the EC,
+Kyber, ACI and PNI refills fail independently. Missing allocator rows (a device created by
+plain `PutDevice`) fail closed with `ErrPreKeyAllocatorUninitialized`; nothing falls back to
+`MAX+1`. Transaction detection only sees transactions of the same root `dbutil.Database`;
+another handle's transaction shows up as a bounded `SQLITE_BUSY`.
+
+**Schema numbering.** The allocators are fork schema v28 with compatibility v28, so
+older binaries refuse upgraded databases. Fork-only versions so far: v28 (prekey
+allocators). Upstream's own future v28+ migrations must be renumbered after the fork's
+on rebase (upstream v28 becomes v29 and so on), and `00-latest.sql` must contain both. Never
+lower the compatibility floor: an older allocator-free binary would allocate used IDs again.
+
+The v28 migration seeds each existing device's current ACI and PNI scopes from retained
+maxima, with a unique retained signed/last-resort key as the active reference (several
+candidates leave it unknown); scopes of former PNIs are not seeded. Legacy IDs beyond the
+source range keep their real `MAX+1` and stop allocation rather than being truncated.
+A device whose stored PNI is nil (very old databases; provisioning always supplies one)
+gets no PNI scope, so its PNI refill fails closed on every key check and the loop keeps
+retrying every 5–30 minutes; relink such an account.
+Tests: `TestPreKeyAllocator*` and `TestProvisionedPreKey*` in `pkg/signalmeow/store` and
+`TestPreKeyRefill*` in `pkg/signalmeow` run on real SQLite for both drivers; the
+`aci-refill` and `pni-kyber-refill` key-check cases use the lifecycle test's fake stores; `scripts/test-prekey-allocators.sh` switches backends in go-signal
+([dev.md](dev.md#prekey-allocators-and-downgrades)). SQL stays PostgreSQL-compatible, but
+only SQLite is exercised. Release evidence: [account-import-allocators.md](account-import-allocators.md).
 
 ## Account-import compatibility APIs
 

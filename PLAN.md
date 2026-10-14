@@ -508,8 +508,16 @@ appears on the phone.
         `v0.7.1-cw.6` / `v0.2609.0-purego.30`; all required checks pass with `GOWORK=off`,
         including 264 actions and 48 Java legs. [Verification and ledger](docs/account-import-compatibility.md);
         [completed implementation plan](docs/superpowers/plans/2026-10-10-account-import-compatibility.md).
-  - [ ] Stage 2a: durable fork allocator reservations, ordinary/last-resort counts and
-        depleted/restart/failure/exhaustion acceptance; next prerequisite.
+  - [x] Stage 2a: durable fork allocator reservations, ordinary/last-resort counts and
+        depleted/restart/failure/exhaustion acceptance. Completed 2026-10-14 with immutable
+        fork release `v0.2609.0-purego.31`: schema v28 allocator rows (compatibility v28, so
+        older releases refuse upgraded databases), refill reserving each ordinary-only batch
+        before generation, atomic `StoreProvisionedDevice` (also via `LinkStore`) and a
+        transactional import seed. Missing rows fail closed. `scripts/test-prekey-allocators.sh`
+        (both starting orders, process abort after reservation) and all required checks pass
+        with `GOWORK=off`, including the unchanged 264-action/48-Java-leg ledger.
+        [Verification](docs/account-import-allocators.md);
+        [completed implementation plan](docs/superpowers/plans/2026-10-11-account-import-allocators.md).
   - [ ] Stage 2b: fork storage-key lifecycle, Java derivation fixtures and derived-only/
         sync-update acceptance; next prerequisite.
 - [ ] Test fixtures and failure recovery; document limitations; verify live send/receive.

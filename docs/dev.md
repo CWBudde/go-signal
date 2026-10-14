@@ -210,6 +210,30 @@ Java leg in its TSV ledger, using separate stores for Go-cloned and retained Jav
 
 See [the compatibility boundary](account-import.md) for tested states and remaining stages.
 
+### Prekey allocators and downgrades
+
+The fork allocates prekey IDs from durable per-scope positions (schema v28, see
+[maintenance.md](maintenance.md#durable-prekey-allocators)). `just test-diff` runs
+`scripts/test-prekey-allocators.sh`, which builds separate native (`-race`) and pure-Go store
+test binaries and alternates them over one temporary account database, starting with each
+backend. The sequence seeds sparse ACI and PNI scopes, reserves, stores and consumes EC and
+Kyber batches, kills one process right after a committed reservation and finally replays the
+action ledger: every reservation must start exactly where the previous one ended, active
+signed/last-resort references and last-resort keys must stay put. A missing, skipped or
+repeated action fails the runner. It needs no Signal credentials or server access.
+
+Upgrading is one-way. The first start of a release with the allocator schema migrates the
+account database to v28 with compatibility v28, and older releases then refuse it
+(`migrate signalmeow tables: unsupported database schema version`) instead of allocating
+already used IDs again. Going back to an older release therefore means starting the
+account over: while still on the new release, remove the local data with
+`go-signal account unlink` (or `--local-only` if the device is already gone), or delete
+`<data-dir>/<aci>/`, and only then link with the older release. Linking first does not
+work, because the older release cannot open the existing database after the server has
+already registered the new device, and its own `account unlink` can't open it either.
+The migration seeds existing accounts once from their retained keys (the old `MAX+1`
+behavior); IDs consumed and deleted before the upgrade cannot be reconstructed.
+
 ## Coverage
 
 Run `just test-coverage` followed by `just coverage-report` to measure combined statement

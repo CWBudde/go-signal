@@ -92,7 +92,7 @@ directly; older recipient-ID/UUID-based schemas are excluded rather than guessed
 | SQL `pre_key(account_id_type,key_id,public_key,private_key)`                                                               | Reconstruct `PreKeyRecord`; serialize into `signalmeow_pre_keys`, `is_signed=false`                                                | Preserve ID and key components; verify reconstructed public key. Do not treat a public-key blob as a serialized record.                                                                                                                                                                                                                                                          |
 | SQL `signed_pre_key`: same components plus `signature,timestamp`                                                           | Reconstruct `SignedPreKeyRecord`; same target table, `is_signed=true`                                                              | Preserve original signature and millisecond timestamp; verify signature against the corresponding local identity public key. Keep retained old keys needed for queued messages, not only the active ID.                                                                                                                                                                          |
 | SQL `kyber_pre_key(account_id_type,key_id,serialized,is_last_resort,stale_timestamp,timestamp)`                            | Deserialize the complete `KyberPreKeyRecord`; `signalmeow_kyber_pre_keys` including `is_last_resort`                               | Unlike EC prekeys, the source stores a serialized record. Validate supported KEM/key encoding and identity signature; compare record ID/timestamp with row metadata. Preserve last-resort classification; one-time consumption and repeated last-resort use need separate tests.                                                                                                 |
-| JSON next-ID and active-ID prekey metadata; SQL `stale_timestamp`                                                          | No equivalent allocator metadata in the current target schema                                                                      | Requires allocator work before general import is safe; see below. Stale timestamps are cleanup metadata, not permission to discard retained private keys.                                                                                                                                                                                                                        |
+| JSON next-ID and active-ID prekey metadata; SQL `stale_timestamp`                                                          | `signalmeow_prekey_allocators` (fork schema v28), seeded with the records through `SeedPreKeyAllocator`                            | Seed all three next IDs and both active references in the conversion transaction; see below. Stale timestamps are cleanup metadata, not permission to discard retained private keys.                                                                                                                                                                                             |
 | SQL `identity(address,identity_key,added_timestamp,trust_level)`                                                           | Both `signalmeow_identity_keys` and `gosignal_identities`                                                                          | Preserve exact typed identity and trust atomically. Source enum ordinals are 0 untrusted, 1 trusted-unverified, 2 trusted-verified; facade strings are `untrusted`, `trusted-unverified`, `trusted-verified`. Use protocol trust strings separately. Unknown enums fail closed. `added_timestamp` is the current key's recorded addition time; older key history is unavailable. |
 | SQL `sender_key(address,device_id,distribution_id,record,created_timestamp)`                                               | `signalmeow_sender_keys`, UUID distribution ID and deserialized `SenderKeyRecord`                                                  | Preserve incoming sender chains and skipped keys. Validate source UUID BLOB encoding; target record has no separate creation-time column.                                                                                                                                                                                                                                        |
 | SQL `sender_key_shared(address,device_id,distribution_id,timestamp)` and `group_v2.distribution_id`                        | Related to `signalmeow_outbound_sender_key_info`, but not a direct copy                                                            | Do not assume a remembered share proves current trust/eligibility. First import should leave outbound sharing metadata empty and rotate/re-distribute our outbound group keys; imported receive records remain usable. Verify that the first send cannot reuse an imported outbound key under a fresh distribution ID.                                                           |
@@ -116,17 +116,20 @@ For imported identities, `FirstSeen` and `ChangedAt` start unknown (zero),
 `added_timestamp` does not establish the first historical key or prove a change.
 Retaining that timestamp as source provenance must not relabel it as target history.
 
-### Prekey allocation gap
+### Prekey allocation
 
 The source saves `nextPreKeyId`, `nextSignedPreKeyId`, `activeSignedPreKeyId`,
 `nextKyberPreKeyId` and `activeLastResortKyberPreKeyId` independently of retained rows.
-Our fork's [prekey store](https://github.com/CWBudde/mautrix-signal/blob/7f2481fad0c11ad2b3917a4979bd70f70d3ed04b/pkg/signalmeow/store/prekey_store.go)
-computes the next EC and Kyber IDs as `MAX(key_id)+1`. After source consumption/deletion,
-that can be below the source's next ID. A sidecar that the allocator never reads would not
-solve reuse. Implementation must add durable allocator watermarks used by generation,
-define wrapping/exhaustion against the actual protocol ID range and test depleted/sparse
-stores, last-resort keys and restart. Reject unsupported rollover or inconsistent active
-references. Do not add dummy private-key rows or silently reset counters.
+The fork computed the next EC and Kyber IDs as `MAX(key_id)+1` until
+[Stage 2a](account-import-allocators.md); after source consumption/deletion, that can be
+below the source's next ID. Since `v0.2609.0-purego.31` the fork keeps durable allocator
+rows that refill reserves from ([maintenance.md](maintenance.md#durable-prekey-allocators)).
+The importer must seed them with the records in its conversion transaction: the seed
+refuses next IDs at or below retained maxima, active references to missing keys or to an
+ordinary Kyber key, and positions beyond `0xffffff`. An absent active reference is valid.
+Reject unsupported rollover. Do not add dummy private-key rows or silently reset counters.
+Source counters start at random offsets, so an imported account may sit close to the limit;
+how much headroom to require is a converter decision.
 
 Both stores delete used ordinary Kyber keys and retain last-resort keys. The reviewed Java
 `markKyberPreKeyUsed` has a TODO for last-resort signed-prekey/base-key reuse tracking;

@@ -40,3 +40,7 @@ func (s *Store) IdentityTestSQL(ctx context.Context, query string, args ...any) 
 
 	return nil
 }
+
+// SQLiteDriverForTest names the database/sql driver of this build, which identifies the
+// backend (cgo: mattn "sqlite3", libsignal_go: modernc "sqlite") in cross-backend tests.
+const SQLiteDriverForTest = sqliteDriver
