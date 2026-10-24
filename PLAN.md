@@ -518,8 +518,18 @@ appears on the phone.
         with `GOWORK=off`, including the unchanged 264-action/48-Java-leg ledger.
         [Verification](docs/account-import-allocators.md);
         [completed implementation plan](docs/superpowers/plans/2026-10-11-account-import-allocators.md).
-  - [ ] Stage 2b: fork storage-key lifecycle, Java derivation fixtures and derived-only/
-        sync-update acceptance; next prerequisite.
+  - [x] Stage 2b: fork storage-key lifecycle, Java derivation fixtures and derived-only/
+        sync-update acceptance. Completed 2026-10-24 with immutable fork release
+        `v0.2609.0-purego.32`: schema v29 derived storage key (compatibility v29), one
+        resolver for derived/master/pool forms that refuses invalid or disagreeing forms, typed
+        `FetchStorage`, and signal-cli's keys-sync superseding (pool, legacy derived field from
+        unknown fields), persisted before memory with redelivery on failure. Vectors from
+        signal-cli's `models-jvm` 154 regenerate byte-identically; all required checks pass
+        with `GOWORK=off`, including the unchanged 264-action/48-Java-leg ledger.
+        [Verification](docs/account-import-storage-keys.md);
+        [completed implementation plan](docs/superpowers/plans/2026-10-24-account-import-storage-keys.md).
+  - [ ] Stage 3: durable privacy guards, typed blocking and effective projection; next
+        prerequisite.
 - [ ] Test fixtures and failure recovery; document limitations; verify live send/receive.
 
 **Done when:** an imported account sends and receives without re-linking.

@@ -215,6 +215,12 @@ linked accounts require a fork/API extension accepting the derived key, or expli
 for the initial supported subset. No master key can be recovered by reversing the HMAC.
 Never invent a storage key or silently claim contact/group sync is available.
 
+Since `v0.2609.0-purego.32` the fork stores a derived key separately (`DerivedStorageKey`)
+and resolves every form through `ResolveStorageServiceKey`, refusing invalid or disagreeing
+forms. Java derivation vectors and the key-sync rules are recorded in
+[Stage 2b](account-import-storage-keys.md); the converter (Stage 5) must still refuse a
+source whose forms disagree.
+
 ## Stage 1 protocol compatibility corpus
 
 The standalone [Java harness](../scripts/account-import-java/) produces synthetic

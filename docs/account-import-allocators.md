@@ -4,7 +4,8 @@ Date: 2026-10-14. Status: Stage 2a complete.
 
 This records Phase 16 Stage 2a, durable prekey allocation in the mautrix-signal fork. It
 is an offline prerequisite: it does not add the converter, does not import an account and
-establishes no phone/server acceptance. Stage 2b (storage-key lifecycle) is next. Design:
+establishes no phone/server acceptance. Stage 2b (storage-key lifecycle) followed in
+[account-import-storage-keys.md](account-import-storage-keys.md). Design:
 [importer spec](superpowers/specs/2026-10-10-account-import-design.md), "Durable key
 allocation"; implementation and review rulings:
 [plan](superpowers/plans/2026-10-11-account-import-allocators.md).
