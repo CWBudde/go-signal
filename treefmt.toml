@@ -15,6 +15,7 @@ excludes = [
   ".release-please-manifest.json",
   # Java generator artifacts are checksummed as emitted; regenerate together.
   "internal/signal/accountimport/testdata/java-0.103.0/**",
+  "internal/signal/accountimport/testdata/java-storage-keys/**",
 ]
 
 ### Misc

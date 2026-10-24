@@ -1,0 +1,31 @@
+{
+  "version" : 1,
+  "cases" : [ {
+    "name" : "accountEntropyPool",
+    "accountEntropyPool" : "gosignalstoragekeyvectors0123456789abcdefghijklmnopqrstuvwxyz012",
+    "masterKey" : "W8PWfUAYDqzJ/H2aD2E30DAFmUvBaWYOsMcjufiuxQQ=",
+    "storageKey" : "e+2iFZlwIhofS0jem5XaBTc3+pMTZFHcXdyxVdM/2SE=",
+    "manifestVersion" : 7,
+    "manifestKey" : "Au6j/kg3VCQTds8sQofY16GwUpvEcofmkZT7DDKPa/Q=",
+    "itemID" : "QEFCQ0RFRkdISUpLTE1OTw==",
+    "itemKey" : "SmbjZkd3PGIseQwW49w9b3L6w576ahfmpaWfW1JYJSs="
+  }, {
+    "name" : "pinMasterKey",
+    "accountEntropyPool" : null,
+    "masterKey" : "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+    "storageKey" : "2f0j7pnBSK2Hn2JgkpcTnmo29BWxrXedI8aHsfptNtk=",
+    "manifestVersion" : 7,
+    "manifestKey" : "1yi6/EPZvZcsXboXDswvLFPwAKsNNHjnsmXSvwn1Zq4=",
+    "itemID" : "QEFCQ0RFRkdISUpLTE1OTw==",
+    "itemKey" : "59qhqyIVCZAZNsEEn57giNdoQNa44yH+ynL/ZVUKO/A="
+  }, {
+    "name" : "derivedStorageKey",
+    "accountEntropyPool" : null,
+    "masterKey" : null,
+    "storageKey" : "oKGio6SlpqeoqaqrrK2ur7CxsrO0tba3uLm6u7y9vr8=",
+    "manifestVersion" : 7,
+    "manifestKey" : "hCFneY6N7/w4pg7oZsRHm5oBZCV/EpMIAko27XoR09Y=",
+    "itemID" : "QEFCQ0RFRkdISUpLTE1OTw==",
+    "itemKey" : "SBNEQpwErJr2ZPdgXTzbzWNMg4g9YE0Q90Kxjw4JZfg="
+  } ]
+}

@@ -22,6 +22,12 @@ case "${1:-}" in
 	destination=$2
 	[[ -d $destination ]] || fail 'exchange directory does not exist'
 	;;
+--storage-keys)
+	[[ $# == 2 ]] || fail 'usage: generate-account-import-fixtures.sh --storage-keys <new-output-dir>'
+	action=storage-keys
+	destination=$2
+	[[ ! -e $destination && ! -L $destination ]] || fail 'output path already exists'
+	;;
 -* | '') fail 'usage: generate-account-import-fixtures.sh <new-output-dir>' ;;
 *)
 	[[ $# == 1 ]] || fail 'usage: generate-account-import-fixtures.sh <new-output-dir>'
@@ -81,6 +87,15 @@ for name, checksum in {
         with path.open('rb') as stream:
             if hashlib.file_digest(stream, 'sha256').hexdigest() != checksum:
                 sys.exit('account-import fixtures: UUID helper artifact checksum mismatch')
+for path, checksum in {
+    'com/github/turasa/models-jvm/2.15.3_unofficial_154/models-jvm-2.15.3_unofficial_154.jar': 'bc5e59e58513f91fec16945b532444c97aed74c2e5e3fe9b2ffef5505d33849f',
+    'org/jetbrains/kotlin/kotlin-stdlib/2.2.21/kotlin-stdlib-2.2.21.jar': '6558a3d233da56a20934b32159f9db5f86ed5816ef098f78a2c223dc6abb79dd',
+}.items():
+    path = cache / path
+    if path.exists():
+        with path.open('rb') as stream:
+            if hashlib.file_digest(stream, 'sha256').hexdigest() != checksum:
+                sys.exit('account-import fixtures: storage-key model artifact checksum mismatch')
 jar = cache / 'org/signal/libsignal-client/0.103.0/libsignal-client-0.103.0.jar'
 if not jar.exists():
     sys.exit(0)
