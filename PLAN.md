@@ -541,6 +541,10 @@ appears on the phone.
         [Verification](docs/account-import-privacy.md);
         [completed implementation plan](docs/superpowers/plans/2026-10-24-account-import-privacy.md).
   - [ ] Stage 4: shared registry/open protocol and recoverable publication; next prerequisite.
+        (2026-10-25) — partial: [implementation plan](docs/superpowers/plans/2026-10-25-account-import-publication.md)
+        drafted for review (registry lock, single select-open-lock with generation checks,
+        noncreating opens, `.imports/` staging, intent-based `renameat2` publication and
+        recovery); no code yet, four open questions.
 - [ ] Test fixtures and failure recovery; document limitations; verify live send/receive.
 
 **Done when:** an imported account sends and receives without re-linking.
