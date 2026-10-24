@@ -22,9 +22,9 @@ case "${1:-}" in
 	destination=$2
 	[[ -d $destination ]] || fail 'exchange directory does not exist'
 	;;
---storage-keys)
-	[[ $# == 2 ]] || fail 'usage: generate-account-import-fixtures.sh --storage-keys <new-output-dir>'
-	action=storage-keys
+--storage-keys | --account-overlay)
+	[[ $# == 2 ]] || fail "usage: generate-account-import-fixtures.sh $1 <new-output-dir>"
+	action=${1#--}
 	destination=$2
 	[[ ! -e $destination && ! -L $destination ]] || fail 'output path already exists'
 	;;
@@ -90,12 +90,15 @@ for name, checksum in {
 for path, checksum in {
     'com/github/turasa/models-jvm/2.15.3_unofficial_154/models-jvm-2.15.3_unofficial_154.jar': 'bc5e59e58513f91fec16945b532444c97aed74c2e5e3fe9b2ffef5505d33849f',
     'org/jetbrains/kotlin/kotlin-stdlib/2.2.21/kotlin-stdlib-2.2.21.jar': '6558a3d233da56a20934b32159f9db5f86ed5816ef098f78a2c223dc6abb79dd',
+    'com/github/turasa/signal-service-java/2.15.3_unofficial_154/signal-service-java-2.15.3_unofficial_154.jar': '2a35df8f47cf309f245897e74648a17878bf61ca818829ec4670b3f54b4da09b',
+    'com/squareup/wire/wire-runtime-jvm/6.0.0-alpha02/wire-runtime-jvm-6.0.0-alpha02.jar': '750aa2aac9e923b6388b57fecc53c526d10efee868395ac7f15ccbb95f781520',
+    'com/squareup/okio/okio-jvm/3.17.0/okio-jvm-3.17.0.jar': '3b13dcc3e1573047c2d507fc4f7fcb0bb0cbcd9d395da21d20e09406e2cd6a73',
 }.items():
     path = cache / path
     if path.exists():
         with path.open('rb') as stream:
             if hashlib.file_digest(stream, 'sha256').hexdigest() != checksum:
-                sys.exit('account-import fixtures: storage-key model artifact checksum mismatch')
+                sys.exit('account-import fixtures: storage model artifact checksum mismatch')
 jar = cache / 'org/signal/libsignal-client/0.103.0/libsignal-client-0.103.0.jar'
 if not jar.exists():
     sys.exit(0)

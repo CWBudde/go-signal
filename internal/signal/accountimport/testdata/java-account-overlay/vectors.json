@@ -1,0 +1,77 @@
+{
+  "version" : 1,
+  "cachedRecord" : "CiAQERITFBUWFxgZGhscHR4fICEiIyQlJicoKSorLC0uLxIISW52ZW50ZWQwAWABaAGKAgtpbnZlbnRlZC4wMQ==",
+  "cases" : [ {
+    "name" : "allAbsent",
+    "config" : {
+      "readReceipts" : null,
+      "typingIndicators" : null,
+      "unidentifiedDeliveryIndicators" : null,
+      "linkPreviews" : null,
+      "phoneNumberUnlisted" : null,
+      "phoneNumberSharingMode" : null
+    },
+    "selfProfileKey" : "ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8=",
+    "accountRecord" : "CiAgISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+PxIISW52ZW50ZWQwATgBQAFYAQ=="
+  }, {
+    "name" : "allFalse",
+    "config" : {
+      "readReceipts" : false,
+      "typingIndicators" : false,
+      "unidentifiedDeliveryIndicators" : false,
+      "linkPreviews" : false,
+      "phoneNumberUnlisted" : false,
+      "phoneNumberSharingMode" : "NOBODY"
+    },
+    "selfProfileKey" : "ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8=",
+    "accountRecord" : "CiAgISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+PxIISW52ZW50ZWRgAg=="
+  }, {
+    "name" : "allTrue",
+    "config" : {
+      "readReceipts" : true,
+      "typingIndicators" : true,
+      "unidentifiedDeliveryIndicators" : true,
+      "linkPreviews" : true,
+      "phoneNumberUnlisted" : true,
+      "phoneNumberSharingMode" : "EVERYBODY"
+    },
+    "selfProfileKey" : "ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8=",
+    "accountRecord" : "CiAgISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+PxIISW52ZW50ZWQwATgBQAFYAWABaAE="
+  }, {
+    "name" : "contactsSharing",
+    "config" : {
+      "readReceipts" : true,
+      "typingIndicators" : true,
+      "unidentifiedDeliveryIndicators" : true,
+      "linkPreviews" : true,
+      "phoneNumberUnlisted" : false,
+      "phoneNumberSharingMode" : "CONTACTS"
+    },
+    "selfProfileKey" : "ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8=",
+    "accountRecord" : "CiAgISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+PxIISW52ZW50ZWQwATgBQAFYAWAC"
+  }, {
+    "name" : "readReceiptsOnly",
+    "config" : {
+      "readReceipts" : false,
+      "typingIndicators" : null,
+      "unidentifiedDeliveryIndicators" : null,
+      "linkPreviews" : null,
+      "phoneNumberUnlisted" : null,
+      "phoneNumberSharingMode" : null
+    },
+    "selfProfileKey" : "ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8=",
+    "accountRecord" : "CiAgISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+PxIISW52ZW50ZWQ4AUABWAE="
+  }, {
+    "name" : "noSelfProfileKey",
+    "config" : {
+      "readReceipts" : null,
+      "typingIndicators" : null,
+      "unidentifiedDeliveryIndicators" : null,
+      "linkPreviews" : null,
+      "phoneNumberUnlisted" : null,
+      "phoneNumberSharingMode" : null
+    },
+    "selfProfileKey" : null,
+    "accountRecord" : "CiAQERITFBUWFxgZGhscHR4fICEiIyQlJicoKSorLC0uLxIISW52ZW50ZWQwATgBQAFYAQ=="
+  } ]
+}

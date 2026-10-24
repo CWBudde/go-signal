@@ -62,6 +62,40 @@
                 </exclusion>
             </exclusions>
         </dependency>
+        <!-- signal-cli v0.14.9's storage protobufs (Wire AccountRecord) and their runtime. -->
+        <dependency>
+            <groupId>com.github.turasa</groupId>
+            <artifactId>signal-service-java</artifactId>
+            <version>2.15.3_unofficial_154</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>*</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>com.squareup.wire</groupId>
+            <artifactId>wire-runtime-jvm</artifactId>
+            <version>6.0.0-alpha02</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>*</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>com.squareup.okio</groupId>
+            <artifactId>okio-jvm</artifactId>
+            <version>3.17.0</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>*</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
     </dependencies>
     <build>
         <plugins>

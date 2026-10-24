@@ -53,7 +53,7 @@ public final class ImportFixtures {
 
     public static void main(String[] args) throws Exception {
         if (!ImportFixtures.class.desiredAssertionStatus()) throw new IllegalStateException("enable Java assertions");
-        if (args.length == 2 && (args[0].equals("generate") || args[0].equals("storage-keys")) && Files.exists(Path.of(args[1])))
+        if (args.length == 2 && (args[0].equals("generate") || args[0].equals("storage-keys") || args[0].equals("account-overlay")) && Files.exists(Path.of(args[1])))
             throw new FileAlreadyExistsException(args[1]);
         if (args.length == 1 && args[0].equals("self-test")) {
             verifiedProvenance();
@@ -61,10 +61,11 @@ public final class ImportFixtures {
                 .invoke(null, (Object)new String[0]);
         } else if (args.length == 2 && args[0].equals("generate")) generate(Path.of(args[1]));
         else if (args.length == 2 && args[0].equals("storage-keys")) StorageKeyVectors.generate(Path.of(args[1]));
+        else if (args.length == 2 && args[0].equals("account-overlay")) AccountOverlayVectors.generate(Path.of(args[1]));
         else if (args.length == 2 && args[0].equals("continue")) {
             verifiedProvenance();
             continuePeer(Path.of(args[1]));
-        } else throw new IllegalArgumentException("expected self-test, generate <new-dir>, storage-keys <new-dir>, or continue <exchange-dir>");
+        } else throw new IllegalArgumentException("expected self-test, generate <new-dir>, storage-keys <new-dir>, account-overlay <new-dir>, or continue <exchange-dir>");
     }
 
     static ObjectNode verifiedProvenance() throws Exception {
