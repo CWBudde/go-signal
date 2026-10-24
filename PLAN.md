@@ -529,7 +529,9 @@ appears on the phone.
         [Verification](docs/account-import-storage-keys.md);
         [completed implementation plan](docs/superpowers/plans/2026-10-24-account-import-storage-keys.md).
   - [ ] Stage 3: durable privacy guards, typed blocking and effective projection; next
-        prerequisite.
+        prerequisite. (2026-10-24) — partial: implementation plan drafted
+        ([plan](docs/superpowers/plans/2026-10-24-account-import-privacy.md); schema v30 with
+        compatibility v30 approved); awaiting review before fork work.
 - [ ] Test fixtures and failure recovery; document limitations; verify live send/receive.
 
 **Done when:** an imported account sends and receives without re-linking.

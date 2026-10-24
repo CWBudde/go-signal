@@ -5,7 +5,8 @@ Status: design and Stage 1 implementation plan approved by the user on 2026-10-1
 Stage 1 completed on 2026-10-11: [release verification and ledger](../../account-import-compatibility.md).
 Stage 2a completed on 2026-10-14: [verification](../../account-import-allocators.md).
 Stage 2b completed on 2026-10-24: [verification](../../account-import-storage-keys.md).
-Stage 3 is the next prerequisite.
+Stage 3 is the next prerequisite; its [implementation plan](../plans/2026-10-24-account-import-privacy.md)
+was drafted on 2026-10-24 and awaits review.
 The [format mapping](../../account-import.md) is the source contract; this document
 specifies the runtime changes needed to implement it. The Stage 1 record establishes synthetic offline Java-record interoperability for its
 tested matrix; production conversion and live account acceptance remain open.
