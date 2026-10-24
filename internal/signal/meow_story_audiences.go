@@ -3,6 +3,7 @@
 package signal
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/cwbudde/mautrix-signal/pkg/signalmeow"
 	"github.com/cwbudde/mautrix-signal/pkg/signalmeow/protobuf/signalpb"
+	mstore "github.com/cwbudde/mautrix-signal/pkg/signalmeow/store"
 	"github.com/google/uuid"
 )
 
@@ -22,12 +24,19 @@ type storyContacts struct {
 	blocked     map[string]bool
 }
 
-func projectStoryAudiences(update *signalmeow.StorageUpdate, self string) (StoryAudiences, error) {
+// storyGuards are an imported account's protected blocked and profile sharing decisions by
+// ACI (see protectedStoryGuards). They replace the storage service's values.
+type storyGuards struct {
+	blocked     map[string]bool
+	whitelisted map[string]bool
+}
+
+func projectStoryAudiences(update *signalmeow.StorageUpdate, self string, guards storyGuards) (StoryAudiences, error) {
 	if update == nil || len(update.MissingRecords) != 0 {
 		return StoryAudiences{}, ErrStoryAudienceUnavailable
 	}
 
-	contacts, err := storyContactsFrom(update)
+	contacts, err := storyContactsFrom(update, guards)
 	if err != nil {
 		return StoryAudiences{}, err
 	}
@@ -65,7 +74,9 @@ func projectStoryAudiences(update *signalmeow.StorageUpdate, self string) (Story
 	return result, nil
 }
 
-func storyContactsFrom(update *signalmeow.StorageUpdate) (storyContacts, error) {
+// storyContactsFrom returns the story contacts of update with guards applied, including
+// guarded users the storage service has no record of.
+func storyContactsFrom(update *signalmeow.StorageUpdate, guards storyGuards) (storyContacts, error) {
 	contacts := storyContacts{connections: make(map[string]bool), blocked: make(map[string]bool)}
 
 	for _, record := range update.NewRecords {
@@ -92,11 +103,59 @@ func storyContactsFrom(update *signalmeow.StorageUpdate) (storyContacts, error) 
 		} // PNI-only contacts cannot receive ACI stories.
 
 		key := identifier.String()
-		contacts.blocked[key] = contacts.blocked[key] || storyContactUnavailable(contact)
-		contacts.connections[key] = contacts.connections[key] || storyContactConnection(contact)
+		contacts.blocked[key] = contacts.blocked[key] || storyContactUnavailable(contact, guards)
+		contacts.connections[key] = contacts.connections[key] || storyContactConnection(contact, guards)
 	}
 
+	contacts.addGuarded(guards)
+
 	return contacts, nil
+}
+
+// addGuarded adds the guarded users the storage service has no record of.
+func (c storyContacts) addGuarded(guards storyGuards) {
+	for key, blocked := range guards.blocked {
+		if _, ok := c.blocked[key]; !ok {
+			c.blocked[key] = blocked
+		}
+	}
+
+	for key, whitelisted := range guards.whitelisted {
+		if _, ok := c.connections[key]; !ok {
+			c.connections[key] = whitelisted
+		}
+	}
+}
+
+// protectedStoryGuards reads the protected blocked and profile sharing guards of ACIs from
+// guards (nil: none).
+func protectedStoryGuards(ctx context.Context, guards mstore.PrivacyGuardStore) (storyGuards, error) {
+	out := storyGuards{blocked: make(map[string]bool), whitelisted: make(map[string]bool)}
+	if guards == nil {
+		return out, nil
+	}
+
+	all, err := guards.PrivacyGuards(ctx)
+	if err != nil {
+		return storyGuards{}, fmt.Errorf("read privacy guards: %w", err)
+	}
+
+	for _, guard := range all {
+		if !guard.Protected || guard.Kind != mstore.PrivacyEntityACI {
+			continue
+		}
+
+		value := bytes.Equal(guard.Value, mstore.PrivacyBool(true))
+
+		switch guard.Field { //nolint:exhaustive // ACI guards protect only these two fields
+		case mstore.PrivacyFieldBlocked:
+			out.blocked[guard.ID.String()] = value
+		case mstore.PrivacyFieldWhitelisted:
+			out.whitelisted[guard.ID.String()] = value
+		}
+	}
+
+	return out, nil
 }
 
 func projectStoryList(
@@ -183,16 +242,23 @@ func (c *meowClient) StoryAudiences(ctx context.Context) (StoryAudiences, error)
 	cli := c.cli
 	c.cliMu.Unlock()
 
-	return c.freshStoryAudiences(ctx, c.connDevice.ACI.String(),
+	return c.freshStoryAudiences(ctx, c.connDevice,
 		func(ctx context.Context) (*signalmeow.StorageUpdate, error) {
 			return c.fetchStorage(c.zlog.WithContext(ctx), cli, 0)
 		})
 }
 
+// storeStoryAudiences projects and stores the story audiences of update for the account of
+// device, whose privacy guards apply.
 func (c *meowClient) storeStoryAudiences(
-	ctx context.Context, update *signalmeow.StorageUpdate, self string,
+	ctx context.Context, update *signalmeow.StorageUpdate, device *mstore.Device,
 ) (StoryAudiences, error) {
-	snapshot, err := projectStoryAudiences(update, self)
+	guards, err := protectedStoryGuards(ctx, device.PrivacyGuardStore)
+	if err != nil {
+		return StoryAudiences{}, err
+	}
+
+	snapshot, err := projectStoryAudiences(update, device.ACI.String(), guards)
 	if err != nil {
 		return StoryAudiences{}, err
 	}
@@ -222,25 +288,45 @@ func (c *meowClient) storeStoryAudiences(
 }
 
 func (c *meowClient) freshStoryAudiences(
-	ctx context.Context, self string, fetch func(context.Context) (*signalmeow.StorageUpdate, error),
+	ctx context.Context, device *mstore.Device, fetch func(context.Context) (*signalmeow.StorageUpdate, error),
 ) (StoryAudiences, error) {
 	update, err := fetch(ctx)
 	if err != nil {
 		return StoryAudiences{}, fmt.Errorf("story audiences: %w", err)
 	}
 
-	return c.storeStoryAudiences(ctx, update, self)
+	return c.storeStoryAudiences(ctx, update, device)
 }
 
-func storyContactUnavailable(contact *signalpb.ContactRecord) bool {
-	return contact.GetBlocked() || contact.GetHidden() || contact.GetUnregisteredAtTimestamp() != 0
+func storyContactUnavailable(contact *signalpb.ContactRecord, guards storyGuards) bool {
+	blocked, ok := guards.blocked[storyContactKey(contact)]
+	if !ok {
+		blocked = contact.GetBlocked()
+	}
+
+	return blocked || contact.GetHidden() || contact.GetUnregisteredAtTimestamp() != 0
 }
 
-func storyContactConnection(contact *signalpb.ContactRecord) bool {
-	return contact.GetWhitelisted() ||
+func storyContactConnection(contact *signalpb.ContactRecord, guards storyGuards) bool {
+	whitelisted, ok := guards.whitelisted[storyContactKey(contact)]
+	if !ok {
+		whitelisted = contact.GetWhitelisted()
+	}
+
+	return whitelisted ||
 		contact.GetSystemGivenName() != "" ||
 		contact.GetSystemFamilyName() != "" ||
 		contact.GetSystemNickname() != ""
+}
+
+// storyContactKey is the ACI of a story contact (see storyContactsFrom), as a string.
+func storyContactKey(contact *signalpb.ContactRecord) string {
+	identifier, err := signalmeow.ParseStringOrBinaryUUID(contact.GetAci(), contact.GetAciBinary())
+	if err != nil {
+		return ""
+	}
+
+	return identifier.String()
 }
 
 func storyListTargets(exclusions bool, connections, members map[string]bool) map[string]bool {

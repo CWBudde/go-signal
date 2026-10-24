@@ -3,6 +3,7 @@
 package signal
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"errors"
@@ -227,7 +228,7 @@ func (c *meowClient) SetBlocked(ctx context.Context, recipients []Recipient, blo
 		return err
 	}
 
-	return c.applyBlocked(ctx, c.connDevice.RecipientStore, update, targets, blocked,
+	return c.applyBlocked(ctx, c.connDevice, update, targets, blocked,
 		func(msg *signalpb.SyncMessage) error { return sendSyncMessage(ctx, cli, msg) })
 }
 
@@ -256,9 +257,11 @@ func (c *meowClient) fetchStorage(ctx context.Context, cli *signalmeow.Client, s
 // fetched: it sends the complete new blocked list with send and then updates the store. Unless
 // update has the complete blocked list (ErrBlockedListIncomplete), it sends and changes nothing.
 func (c *meowClient) applyBlocked(
-	ctx context.Context, recipients mstore.RecipientStore, update *signalmeow.StorageUpdate,
+	ctx context.Context, device *mstore.Device, update *signalmeow.StorageUpdate,
 	targets []blockTarget, blocked bool, send func(*signalpb.SyncMessage) error,
 ) error {
+	recipients := device.RecipientStore
+
 	seen, err := completeStorage(update)
 	if err != nil {
 		return err
@@ -284,15 +287,21 @@ func (c *meowClient) applyBlocked(
 		return fmt.Errorf("send blocked list to our other devices: %w", err)
 	}
 
-	return c.storeBlocked(ctx, recipients, seen, targets, blocked, now)
+	return c.storeBlocked(ctx, device, seen, targets, blocked, now)
 }
 
-// pendingBlockedList returns the blocked list of seen with the pending overrides applied that
-// seen doesn't supersede; the caller holds overridesMu.
+// pendingBlockedList returns the blocked list of seen with an imported account's protected
+// block decisions and then the pending overrides applied that seen doesn't supersede; the
+// caller holds overridesMu.
 func (c *meowClient) pendingBlockedList(
 	ctx context.Context, recipients mstore.RecipientStore, seen *storageSnapshot, now time.Time,
 ) (*blockedList, error) {
 	list := seen.list.clone()
+
+	err := protectBlocked(ctx, recipients, list, now)
+	if err != nil {
+		return nil, err
+	}
 
 	overrides, err := c.data.BlockOverrides(ctx)
 	if err != nil {
@@ -315,11 +324,61 @@ func (c *meowClient) pendingBlockedList(
 	return list, nil
 }
 
+// protectBlocked applies the protected block decisions of an imported account (its privacy
+// guards) to list: the effective values, including users the storage service has no record
+// of. A blocked PNI-only user is listed by number; without one it can't be listed
+// (ErrBlockedListIncomplete), since the phone unblocks whoever the list leaves out.
+func protectBlocked(ctx context.Context, recipients mstore.RecipientStore, list *blockedList, now time.Time) error {
+	store, ok := recipients.(mstore.PrivacyGuardStore)
+	if !ok {
+		return nil
+	}
+
+	guards, err := store.PrivacyGuards(ctx)
+	if err != nil {
+		return fmt.Errorf("read privacy guards: %w", err)
+	}
+
+	for _, guard := range guards {
+		if !guard.Protected || guard.Field != mstore.PrivacyFieldBlocked {
+			continue
+		}
+
+		err = list.protect(ctx, recipients, guard, now)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// protect applies a protected blocked guard to the list.
+func (l *blockedList) protect(
+	ctx context.Context, recipients mstore.RecipientStore, guard mstore.PrivacyGuard, now time.Time,
+) error {
+	blocked := bytes.Equal(guard.Value, mstore.PrivacyBool(true))
+
+	switch guard.Kind {
+	case mstore.PrivacyEntityACI:
+		if l.isBlocked(guard.ID) != blocked {
+			l.set(guard.ID, knownNumber(ctx, recipients, guard.ID, ""), blocked, now)
+		}
+	case mstore.PrivacyEntityPNI:
+		return l.setPNI(ctx, recipients, guard.ID, blocked)
+	case mstore.PrivacyEntityAccount:
+	}
+
+	return nil
+}
+
 // storeBlocked records the change in the store once the blocked list went out: an override,
 // tied to seen's version, where the storage service (seen) says otherwise, and the new state of
-// each user. Then it settles the other overrides against seen. The caller holds overridesMu.
+// each user, which re-arms an imported account's privacy guard for the user in the same
+// transaction (Device.SetRecipientBlocked). Then it settles the other overrides against seen.
+// The caller holds overridesMu.
 func (c *meowClient) storeBlocked(
-	ctx context.Context, recipients mstore.RecipientStore, seen *storageSnapshot, targets []blockTarget,
+	ctx context.Context, device *mstore.Device, seen *storageSnapshot, targets []blockTarget,
 	blocked bool, now time.Time,
 ) error {
 	for _, target := range targets {
@@ -339,13 +398,13 @@ func (c *meowClient) storeBlocked(
 			return fmt.Errorf("blocked list sent, but: %w", err)
 		}
 
-		err = setBlocked(ctx, recipients, target.aci, blocked)
+		_, err = device.SetRecipientBlocked(ctx, libsignalgo.NewACIServiceID(target.aci), blocked)
 		if err != nil {
 			return fmt.Errorf("blocked list sent, but: %w", err)
 		}
 	}
 
-	c.settleOverridesLocked(ctx, recipients, seen, now)
+	c.settleOverridesLocked(ctx, device.RecipientStore, seen, now)
 
 	return nil
 }
@@ -830,6 +889,36 @@ func (l *blockedList) addGroup(group *signalpb.GroupV2Record) error {
 	}
 
 	l.groups[string(groupID[:])] = 0
+
+	return nil
+}
+
+// setPNI blocks or unblocks the PNI-only user pni by the number the store has for them.
+func (l *blockedList) setPNI(ctx context.Context, recipients mstore.RecipientStore, pni uuid.UUID, blocked bool) error {
+	number := ""
+
+	if loader, ok := recipients.(recipientLoader); ok {
+		rcpt, err := loader.LoadRecipientByPNI(ctx, pni)
+		if err != nil {
+			return fmt.Errorf("load blocked user %s: %w", pni, err)
+		}
+
+		if rcpt != nil {
+			number = rcpt.E164
+		}
+	}
+
+	switch {
+	case number == "" && blocked:
+		return fmt.Errorf("%w: a blocked PNI-only user has no number", ErrBlockedListIncomplete)
+	case number == "":
+	case blocked:
+		if _, ok := l.numbers[number]; !ok {
+			l.numbers[number] = 0
+		}
+	default:
+		delete(l.numbers, number)
+	}
 
 	return nil
 }

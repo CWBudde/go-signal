@@ -422,7 +422,7 @@ func TestContactIdentityStoragePrivacyRollback(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	blocked, err := cli.Store.RecipientStore.IsBlocked(t.Context(), peer)
+	blocked, err := cli.Store.RecipientStore.IsBlocked(t.Context(), libsignalgo.NewACIServiceID(peer))
 	if err != nil || !blocked {
 		t.Fatal("fixture not blocked")
 	}
@@ -448,7 +448,8 @@ func TestContactIdentityStoragePrivacyRollback(t *testing.T) {
 
 	cli.StorageUpdateHandler = func(ctx context.Context, got *signalmeow.StorageUpdate) error {
 		// Read as a concurrent caller, outside the transaction context.
-		blocked, readErr := cli.Store.RecipientStore.IsBlocked(context.Background(), peer) //nolint:contextcheck
+		blocked, readErr := cli.Store.RecipientStore.IsBlocked( //nolint:contextcheck
+			context.Background(), libsignalgo.NewACIServiceID(peer))
 		if readErr != nil {
 			return fmt.Errorf("read committed block state: %w", readErr)
 		}
@@ -464,7 +465,7 @@ func TestContactIdentityStoragePrivacyRollback(t *testing.T) {
 		t.Fatal("invalid update succeeded")
 	}
 
-	blocked, err = cli.Store.RecipientStore.IsBlocked(t.Context(), peer)
+	blocked, err = cli.Store.RecipientStore.IsBlocked(t.Context(), libsignalgo.NewACIServiceID(peer))
 
 	loader, ok := cli.Store.RecipientStore.(interface {
 		LoadRecipientByACI(ctx context.Context, aci uuid.UUID) (*types.Recipient, error)
@@ -491,7 +492,7 @@ func TestContactIdentityStoragePrivacyRollback(t *testing.T) {
 		t.Fatal(retryErr)
 	}
 
-	blocked, err = cli.Store.RecipientStore.IsBlocked(t.Context(), peer)
+	blocked, err = cli.Store.RecipientStore.IsBlocked(t.Context(), libsignalgo.NewACIServiceID(peer))
 	if err != nil || blocked || cli.Store.AccountRecord.GetReadReceipts() {
 		t.Fatal("successful retry did not publish settings")
 	}

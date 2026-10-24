@@ -89,8 +89,8 @@ test-fork:
     CGO_ENABLED=0 scripts/test-cdsi-integration.sh
     CGO_ENABLED=0 scripts/test-zkgroup-integration.sh -tags libsignal_go
     CGO_ENABLED=0 scripts/test-websocket-lifecycle.sh -tags libsignal_go
-    CGO_ENABLED=0 go test -tags libsignal_go -count=1 -timeout 30s -run '^(TestKeyCheckLifecycle|TestDeliveryReceiptAfterAck|TestSenderKeyTrust|TestVerifiedSync|TestStorageUpdateHandler|TestPreKeyRefill|TestStorageKey)' github.com/cwbudde/mautrix-signal/pkg/signalmeow
-    CGO_ENABLED=0 go test -tags libsignal_go -count=1 -timeout 60s -run '^(TestPreKeyAllocator|TestProvisionedPreKey|TestStorageServiceKey)' github.com/cwbudde/mautrix-signal/pkg/signalmeow/store
+    CGO_ENABLED=0 go test -tags libsignal_go -count=1 -timeout 30s -run '^(TestKeyCheckLifecycle|TestDeliveryReceiptAfterAck|TestSenderKeyTrust|TestVerifiedSync|TestStorageUpdateHandler|TestPreKeyRefill|TestStorageKey|TestPrivacyGuard|TestWhitelistTwoWay)' github.com/cwbudde/mautrix-signal/pkg/signalmeow
+    CGO_ENABLED=0 go test -tags libsignal_go -count=1 -timeout 60s -run '^(TestPreKeyAllocator|TestProvisionedPreKey|TestStorageServiceKey|TestPrivacyGuard|TestTypedBlocking)' github.com/cwbudde/mautrix-signal/pkg/signalmeow/store
 
 # Differential tests (cgo): purego vs libsignal in go-signal, the shim's cgo side, signalmeow's zkgroup paths.
 
@@ -103,10 +103,10 @@ test-diff:
     scripts/test-zkgroup-integration.sh -race
     scripts/test-websocket-lifecycle.sh -race
     scripts/test-websocket-lifecycle.sh -tags libsignal_go -race
-    go test -race -count=1 -timeout 30s -run '^(TestKeyCheckLifecycle|TestDeliveryReceiptAfterAck|TestSenderKeyTrust|TestVerifiedSync|TestStorageUpdateHandler|TestPreKeyRefill|TestStorageKey)' github.com/cwbudde/mautrix-signal/pkg/signalmeow
-    go test -tags libsignal_go -race -count=1 -timeout 30s -run '^(TestKeyCheckLifecycle|TestDeliveryReceiptAfterAck|TestSenderKeyTrust|TestVerifiedSync|TestStorageUpdateHandler|TestPreKeyRefill|TestStorageKey)' github.com/cwbudde/mautrix-signal/pkg/signalmeow
-    go test -race -count=1 -timeout 60s -run '^(TestPreKeyAllocator|TestProvisionedPreKey|TestStorageServiceKey)' github.com/cwbudde/mautrix-signal/pkg/signalmeow/store
-    go test -tags libsignal_go -race -count=1 -timeout 60s -run '^(TestPreKeyAllocator|TestProvisionedPreKey|TestStorageServiceKey)' github.com/cwbudde/mautrix-signal/pkg/signalmeow/store
+    go test -race -count=1 -timeout 30s -run '^(TestKeyCheckLifecycle|TestDeliveryReceiptAfterAck|TestSenderKeyTrust|TestVerifiedSync|TestStorageUpdateHandler|TestPreKeyRefill|TestStorageKey|TestPrivacyGuard|TestWhitelistTwoWay)' github.com/cwbudde/mautrix-signal/pkg/signalmeow
+    go test -tags libsignal_go -race -count=1 -timeout 30s -run '^(TestKeyCheckLifecycle|TestDeliveryReceiptAfterAck|TestSenderKeyTrust|TestVerifiedSync|TestStorageUpdateHandler|TestPreKeyRefill|TestStorageKey|TestPrivacyGuard|TestWhitelistTwoWay)' github.com/cwbudde/mautrix-signal/pkg/signalmeow
+    go test -race -count=1 -timeout 60s -run '^(TestPreKeyAllocator|TestProvisionedPreKey|TestStorageServiceKey|TestPrivacyGuard|TestTypedBlocking)' github.com/cwbudde/mautrix-signal/pkg/signalmeow/store
+    go test -tags libsignal_go -race -count=1 -timeout 60s -run '^(TestPreKeyAllocator|TestProvisionedPreKey|TestStorageServiceKey|TestPrivacyGuard|TestTypedBlocking)' github.com/cwbudde/mautrix-signal/pkg/signalmeow/store
     scripts/test-prekey-allocators.sh
 
 # Opt-in integration suite against Signal's production servers, cgo then libsignal_go on the same

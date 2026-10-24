@@ -84,7 +84,7 @@ func ApplyBlocked(ctx context.Context, client Client, update *signalmeow.Storage
 		targets = append(targets, blockTarget{aci: uuid.MustParse(rcpt.ACI), number: rcpt.Number})
 	}
 
-	return meow.applyBlocked(ctx, device.RecipientStore, update, targets, blocked, send)
+	return meow.applyBlocked(ctx, device, update, targets, blocked, send)
 }
 
 // BlockOverrides returns the block overrides in client's store (see meowOf).

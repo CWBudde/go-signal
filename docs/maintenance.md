@@ -453,7 +453,9 @@ ordinary and edit content must use one retrieved revision for context and second
 zero, and clear the direct timer version. Exercise all these boundaries on both backends;
 retain the real cgo rollback test and record the controlled pure-Go fixture limitation.
 Keep the storage service key resolver (`store/storage_keys.go`, `storage_keys.go`, upgrade
-v29); see [Storage service keys](#storage-service-keys).
+v29); see [Storage service keys](#storage-service-keys). Keep the privacy guards, typed
+`IsBlocked` and the guarded recipient writes (`store/privacy_guards.go`, upgrade v30); see
+[Privacy guards](#privacy-guards).
 Keep the durable prekey allocators (`store/prekey_allocator.go`, upgrade v28,
 `StoreProvisionedDevice`) and their fork-only schema number; see
 [Durable prekey allocators](#durable-prekey-allocators) for renumbering upstream migrations.
@@ -590,8 +592,9 @@ another handle's transaction shows up as a bounded `SQLITE_BUSY`.
 
 **Schema numbering.** The allocators are fork schema v28 with compatibility v28, so
 older binaries refuse upgraded databases. Fork-only versions so far: v28 (prekey
-allocators), v29 (derived storage service key). Upstream's own future v28+ migrations must
-be renumbered after the fork's on rebase (upstream v28 becomes v30 and so on), and
+allocators), v29 (derived storage service key), v30 (privacy guards). Upstream's own future
+v28+ migrations must be renumbered after the fork's on rebase (upstream v28 becomes v31 and
+so on), and
 `00-latest.sql` must contain both. Never
 lower the compatibility floor: an older allocator-free binary would allocate used IDs again.
 
@@ -630,6 +633,42 @@ Tests: `TestStorageServiceKey*` in `pkg/signalmeow/store` and `TestStorageKey*` 
 `pkg/signalmeow` (both in `just test-fork`), with derivation vectors from signal-cli's own
 key models; go-signal checks the committed vectors file in `internal/signal/accountimport`.
 Release evidence: [account-import-storage-keys.md](account-import-storage-keys.md).
+
+## Privacy guards
+
+Since `v0.2609.0-purego.33` (schema v30, compatibility v30) the fork keeps durable privacy
+guards (`signalmeow_privacy_guards`) that protect an imported account's decisions: blocked
+and profile sharing of typed ACI/PNI users, read receipts, typing and sealed-sender
+indicators, link previews, the unlisted number, phone number sharing and our own profile key.
+Without guard rows (every account that wasn't imported) nothing is protected.
+
+- **Writes.** `StoreRecipient` applies protected values before every row write, which covers
+  `LoadAndUpdateRecipient`, merges, message requests, PNI messages, profile refresh and
+  backup import; `StoreProfileKey` keeps our protected key whatever the source (sent
+  transcripts, stories, groups, storage). Upstream writers added later are covered as long
+  as they go through these two functions.
+- **Storage.** `ApplyStorage` records each snapshot's raw values (`ObservePrivacyRemote`)
+  unless it is older than the stored manifest highwater (`storage_manifest_version`), then
+  writes. A guard is released only by a strictly newer snapshot than it was armed at whose
+  present record has the matching value; proto3 omitted booleans are false values, missing
+  records, unknown enums and absent keys never release, and there is no timeout. The device
+  and `Store.AccountRecord` get a projected copy (`ProjectAccountRecord`); the update handler
+  sees the raw snapshot. Guards, highwater, rows and the account record commit together, and
+  nothing is published after a failed commit. Profile sharing now follows storage both ways.
+- **Typed blocking.** `IsBlocked` takes a `libsignalgo.ServiceID` and looks a PNI up by the
+  PNI column; the block cache is keyed by service ID, and PNI-only rows persist blocked and
+  profile sharing. Blocked numbers and groups are not enforced on receive.
+- **Local commands.** `Device.SetRecipientBlocked` re-arms an existing guard with the new
+  value in the same transaction (go-signal's `contacts block`/`unblock`); it never creates
+  one. go-signal's block overrides stay separate and apply on top. go-signal's outgoing
+  blocked list and story audiences use the protected values, including imported users the
+  storage service has no record of.
+
+Tests: `TestPrivacyGuard*` and `TestTypedBlocking` in `pkg/signalmeow/store`,
+`TestPrivacyGuard*` and `TestWhitelistTwoWay` in `pkg/signalmeow` (all in `just test-fork`);
+go-signal's `TestSetBlockedRearmsGuard`, `TestBlockedListGuardedPNI`,
+`TestStoryAudiencesUseGuards` and the overlay vectors in `internal/signal/accountimport`.
+Release evidence: [account-import-privacy.md](account-import-privacy.md).
 
 ## Account-import compatibility APIs
 

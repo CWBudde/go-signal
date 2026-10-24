@@ -69,8 +69,9 @@ event counts as acked once it is read from the channel; unread events are redeli
   the fork `github.com/cwbudde/mautrix-signal` (own module path, so go.mod has no `replace` and
   `go install` works). Besides the `pkg/libsignalgo` adaptation, the fork deliberately adds
   invite preview/single-attempt joining, opt-in websocket credential log redaction, durable
-  prekey allocators (schema v28) and derived storage service keys (schema v29; older releases
-  refuse upgraded databases) (see `docs/maintenance.md`). Code that calls libsignal through cgo is `cgo && !libsignal_go` and gets a
+  prekey allocators (schema v28), derived storage service keys (schema v29) and privacy
+  guards with typed blocking (schema v30; older releases refuse upgraded databases)
+  (see `docs/maintenance.md`). Code that calls libsignal through cgo is `cgo && !libsignal_go` and gets a
   `libsignal_go` twin; tests that need real libsignal are `cgo && !libsignal_go`; `purego_diff_test.go`
   compares both implementations. Details in `docs/dev.md` ("Pure-Go backend").
 

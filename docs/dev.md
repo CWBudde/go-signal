@@ -223,8 +223,9 @@ signed/last-resort references and last-resort keys must stay put. A missing, ski
 repeated action fails the runner. It needs no Signal credentials or server access.
 
 Upgrading is one-way. The first start of a release with the allocator schema migrates the
-account database to v28 with compatibility v28 (v29 with the derived storage key, see
-[maintenance.md](maintenance.md#storage-service-keys)), and older releases then refuse it
+account database to v28 with compatibility v28 (v29 with the derived storage key, v30 with
+the privacy guards, see [maintenance.md](maintenance.md#storage-service-keys) and
+[Privacy guards](maintenance.md#privacy-guards)), and older releases then refuse it
 (`migrate signalmeow tables: unsupported database schema version`) instead of allocating
 already used IDs again. Going back to an older release therefore means starting the
 account over: while still on the new release, remove the local data with
