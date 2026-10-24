@@ -86,7 +86,7 @@ func (c *meowClient) runSync(ctx context.Context, cli *signalmeow.Client, opts S
 		problems = append(problems, fmt.Errorf("request contacts: %w", err))
 	}
 
-	key, err := c.masterKey(ctx, cli, opts)
+	key, err := c.storageKey(ctx, cli, opts)
 	if err != nil {
 		problems = append(problems, err)
 	}
@@ -96,7 +96,7 @@ func (c *meowClient) runSync(ctx context.Context, cli *signalmeow.Client, opts S
 
 		opts.Report(SyncFetchingStorage)
 
-		update, err := syncStorage(ctx, cli, key)
+		update, err := syncStorage(ctx, cli, *key)
 		if err != nil {
 			problems = append(problems, err)
 		} else {
@@ -175,17 +175,20 @@ func (c *meowClient) finishSync(ctx context.Context, res SyncResult, problems []
 	return res, nil
 }
 
-// masterKey returns the storage service key, asking the phone for it and waiting until it arrives
-// if it is unknown. It returns nil with the reason when it didn't arrive in time.
-func (c *meowClient) masterKey(ctx context.Context, cli *signalmeow.Client, opts SyncOptions) ([]byte, error) {
-	key, err := c.storedMasterKey(ctx)
-	if key != nil || err != nil {
+// storageKey returns the storage service key, asking the phone for the keys and waiting until
+// they arrive if it is unknown or the stored forms are unusable. It returns nil with the reason
+// when they didn't arrive in time.
+func (c *meowClient) storageKey(ctx context.Context, cli *signalmeow.Client, opts SyncOptions,
+) (*mstore.StorageServiceKey, error) {
+	key, err := c.storedStorageKey(ctx)
+	if storageKeyDecided(key, err) {
 		return key, err
 	}
 
 	opts.Report(SyncWaitingForKey)
 
-	// signalmeow asks once on connect already; ask again in case that got lost.
+	// signalmeow asks once on connect already; ask again in case that got lost. Keys sent in
+	// reply replace invalid or disagreeing forms.
 	err = cli.SendStorageMasterKeyRequest(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("request storage key: %w", err)
@@ -203,31 +206,49 @@ func (c *meowClient) masterKey(ctx context.Context, cli *signalmeow.Client, opts
 		case <-ticker.C:
 		}
 
-		key, err = c.storedMasterKey(ctx)
-		if key != nil || err != nil {
+		key, err = c.storedStorageKey(ctx)
+		if storageKeyDecided(key, err) {
 			return key, err
 		}
 	}
 }
 
-// storedMasterKey loads the storage service key from the device table; nil if it is unknown.
-// signalmeow writes the key into the shared device struct from its receive loop, so it is read
-// from the database instead.
-func (c *meowClient) storedMasterKey(ctx context.Context) ([]byte, error) {
+// storageKeyDecided reports whether a stored key lookup is final: a key, or an error other than
+// unusable forms, which keys sent by the phone may still replace.
+func storageKeyDecided(key *mstore.StorageServiceKey, err error) bool {
+	return key != nil || (err != nil && !errors.Is(err, errStorageKeyForms))
+}
+
+// errStorageKeyForms wraps stored storage key forms that are invalid or disagree.
+var errStorageKeyForms = errors.New("stored storage key")
+
+// storedStorageKey resolves the storage service key from the device table: a derived key, or
+// one derived from the master key or account entropy pool. It is nil if none is known, and
+// errStorageKeyForms if the stored forms are invalid or disagree. signalmeow writes the keys
+// into the shared device struct from its receive loop, so they are read from the database.
+func (c *meowClient) storedStorageKey(ctx context.Context) (*mstore.StorageServiceKey, error) {
 	device, err := c.data.DeviceByACI(ctx, c.connDevice.ACI)
 	if err != nil {
 		return nil, fmt.Errorf("load storage key: %w", err)
 	}
 
-	if device == nil || len(device.MasterKey) == 0 {
-		return nil, nil
+	if device == nil {
+		return nil, nil //nolint:nilnil // no device: the key is unknown
 	}
 
-	return device.MasterKey, nil
+	key, err := device.ResolveStorageServiceKey()
+	if errors.Is(err, mstore.ErrStorageServiceKeyUnknown) {
+		return nil, nil //nolint:nilnil // the key is unknown
+	} else if err != nil {
+		return nil, fmt.Errorf("%w: %w", errStorageKeyForms, err)
+	}
+
+	return &key, nil
 }
 
 // syncStorage fetches and commits one exact snapshot, including identity-only changes.
-func syncStorage(ctx context.Context, cli *signalmeow.Client, key []byte) (*signalmeow.StorageUpdate, error) {
+func syncStorage(ctx context.Context, cli *signalmeow.Client, key mstore.StorageServiceKey,
+) (*signalmeow.StorageUpdate, error) {
 	update, err := cli.FetchStorage(ctx, key, 0, nil)
 	if err != nil {
 		return nil, fmt.Errorf("fetch storage service: %w", err)

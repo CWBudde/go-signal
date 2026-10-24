@@ -452,6 +452,8 @@ lists or acknowledgements. Preserve sent-message/edit handler failure propagatio
 ordinary and edit content must use one retrieved revision for context and seconds, including
 zero, and clear the direct timer version. Exercise all these boundaries on both backends;
 retain the real cgo rollback test and record the controlled pure-Go fixture limitation.
+Keep the storage service key resolver (`store/storage_keys.go`, `storage_keys.go`, upgrade
+v29); see [Storage service keys](#storage-service-keys).
 Keep the durable prekey allocators (`store/prekey_allocator.go`, upgrade v28,
 `StoreProvisionedDevice`) and their fork-only schema number; see
 [Durable prekey allocators](#durable-prekey-allocators) for renumbering upstream migrations.
@@ -588,8 +590,9 @@ another handle's transaction shows up as a bounded `SQLITE_BUSY`.
 
 **Schema numbering.** The allocators are fork schema v28 with compatibility v28, so
 older binaries refuse upgraded databases. Fork-only versions so far: v28 (prekey
-allocators). Upstream's own future v28+ migrations must be renumbered after the fork's
-on rebase (upstream v28 becomes v29 and so on), and `00-latest.sql` must contain both. Never
+allocators), v29 (derived storage service key). Upstream's own future v28+ migrations must
+be renumbered after the fork's on rebase (upstream v28 becomes v30 and so on), and
+`00-latest.sql` must contain both. Never
 lower the compatibility floor: an older allocator-free binary would allocate used IDs again.
 
 The v28 migration seeds each existing device's current ACI and PNI scopes from retained
@@ -604,6 +607,29 @@ Tests: `TestPreKeyAllocator*` and `TestProvisionedPreKey*` in `pkg/signalmeow/st
 `aci-refill` and `pni-kyber-refill` key-check cases use the lifecycle test's fake stores; `scripts/test-prekey-allocators.sh` switches backends in go-signal
 ([dev.md](dev.md#prekey-allocators-and-downgrades)). SQL stays PostgreSQL-compatible, but
 only SQLite is exercised. Release evidence: [account-import-allocators.md](account-import-allocators.md).
+
+## Storage service keys
+
+Since `v0.2609.0-purego.32` (schema v29, compatibility v29) the device row stores a derived
+storage service key (`DerivedStorageKey`) next to the master key and the account entropy
+pool. `DeviceData.ResolveStorageServiceKey` uses the derived key as is, derives from the
+master key or pool, and refuses invalid forms and forms that disagree (including a master
+key that isn't the pool's); it never derives a derived key again. `FetchStorage` takes the
+typed `store.StorageServiceKey`, so a master key can't be passed by mistake.
+`SyncStorage`, the connect-time key request (sent while the key doesn't resolve), the
+connector and go-signal's `account sync` and blocked-list fetch all use the resolver.
+
+`SyncMessage.Keys` follows signal-cli. An entropy pool supersedes every older form and is
+stored with its master key. Otherwise the legacy derived `storageService` field, which
+Signal-Android's schema reserves, is read from the unknown fields (no fork-only protobuf
+change) and replaces the derived form, clearing a master key or pool that no longer leads to
+it. The update is persisted before the in-memory device changes; a failed write fails the
+handler, so the message is redelivered. Invalid key material is logged and dropped.
+
+Tests: `TestStorageServiceKey*` in `pkg/signalmeow/store` and `TestStorageKey*` in
+`pkg/signalmeow` (both in `just test-fork`), with derivation vectors from signal-cli's own
+key models; go-signal checks the committed vectors file in `internal/signal/accountimport`.
+Release evidence: [account-import-storage-keys.md](account-import-storage-keys.md).
 
 ## Account-import compatibility APIs
 

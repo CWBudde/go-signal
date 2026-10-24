@@ -235,7 +235,7 @@ func (c *meowClient) SetBlocked(ctx context.Context, recipients []Recipient, blo
 // the version since (0: fetch in any case). It returns nil if it does, or if there is no manifest.
 func (c *meowClient) fetchStorage(ctx context.Context, cli *signalmeow.Client, since uint64,
 ) (*signalmeow.StorageUpdate, error) {
-	key, err := c.storedMasterKey(ctx)
+	key, err := c.storedStorageKey(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -244,7 +244,7 @@ func (c *meowClient) fetchStorage(ctx context.Context, cli *signalmeow.Client, s
 		return nil, ErrStorageKeyUnknown
 	}
 
-	update, err := cli.FetchStorage(ctx, key, since, nil)
+	update, err := cli.FetchStorage(ctx, *key, since, nil)
 	if err != nil {
 		return nil, fmt.Errorf("read the blocked list from the storage service: %w", err)
 	}

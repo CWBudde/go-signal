@@ -10,6 +10,7 @@ import (
 	"github.com/cwbudde/mautrix-signal/pkg/signalmeow"
 	"github.com/cwbudde/mautrix-signal/pkg/signalmeow/events"
 	"github.com/cwbudde/mautrix-signal/pkg/signalmeow/protobuf/signalpb"
+	mstore "github.com/cwbudde/mautrix-signal/pkg/signalmeow/store"
 )
 
 // ConnectOffline sets client (from Open) up as Connect does for the selected account, without
@@ -81,10 +82,13 @@ func UnavailableGroup(ctx context.Context, client Client, id string, err error) 
 	return meow.unavailableGroup(ctx, id, err)
 }
 
-// StoredMasterKey runs storedMasterKey of client (see ConnectOffline).
-func StoredMasterKey(ctx context.Context, client Client) ([]byte, error) {
-	return client.(*meowClient).storedMasterKey(ctx) //nolint:forcetypeassert // test helper
+// StoredStorageKey runs storedStorageKey of client (see ConnectOffline).
+func StoredStorageKey(ctx context.Context, client Client) (*mstore.StorageServiceKey, error) {
+	return client.(*meowClient).storedStorageKey(ctx) //nolint:forcetypeassert // test helper
 }
+
+// ErrStorageKeyForms exposes errStorageKeyForms to the signal_test package.
+var ErrStorageKeyForms = errStorageKeyForms
 
 // OwnProfileKey runs ownProfileKey of client (see ConnectOffline).
 func OwnProfileKey(ctx context.Context, client Client) []byte {

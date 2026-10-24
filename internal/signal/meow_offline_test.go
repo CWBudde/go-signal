@@ -215,32 +215,66 @@ func TestGroupTitleCache(t *testing.T) {
 	}
 }
 
-func TestStoredMasterKey(t *testing.T) {
+func TestStoredStorageKey(t *testing.T) {
 	t.Parallel()
 
 	dataDir := seedAccount(t)
 	client := openOffline(t, dataDir)
 
-	key, err := signal.StoredMasterKey(t.Context(), client)
+	key, err := signal.StoredStorageKey(t.Context(), client)
 	if err != nil || key != nil {
-		t.Fatalf("master key before sync = %x, %v; want none", key, err)
+		t.Fatalf("storage key before sync = %x, %v; want none", key, err)
 	}
 
-	want := bytes.Repeat([]byte{7}, 32)
+	master := bytes.Repeat([]byte{7}, mstore.StorageServiceKeyLen)
 
-	withStore(t, dataDir, func(device *mstore.Device, data *store.Store) {
-		device.MasterKey = want
+	want, err := mstore.DeriveStorageServiceKey(master)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-		err := data.Devices.PutDevice(t.Context(), &device.DeviceData)
-		if err != nil {
-			t.Fatal(err)
+	derived := bytes.Repeat([]byte{9}, mstore.StorageServiceKeyLen)
+
+	for _, step := range []struct {
+		name            string
+		master, derived []byte
+		want            []byte
+		err             error
+	}{
+		// signalmeow stores the keys from its receive loop, so they are read from the database.
+		{name: "master key", master: master, want: want[:]},
+		{name: "derived only", derived: derived, want: derived},
+		{name: "disagreeing forms", master: master, derived: derived, err: mstore.ErrStorageServiceKeyConflict},
+	} {
+		withStore(t, dataDir, func(device *mstore.Device, data *store.Store) {
+			device.MasterKey, device.DerivedStorageKey = step.master, step.derived
+
+			err := data.Devices.PutDevice(t.Context(), &device.DeviceData)
+			if err != nil {
+				t.Fatal(err)
+			}
+		})
+
+		checkStoredStorageKey(t, client, step.name, step.want, step.err)
+	}
+}
+
+// checkStoredStorageKey compares StoredStorageKey with the wanted key, or with the wanted
+// unusable-forms error.
+func checkStoredStorageKey(t *testing.T, client signal.Client, name string, want []byte, wantErr error) {
+	t.Helper()
+
+	key, err := signal.StoredStorageKey(t.Context(), client)
+	if wantErr != nil {
+		if key != nil || !errors.Is(err, wantErr) || !errors.Is(err, signal.ErrStorageKeyForms) {
+			t.Errorf("%s: storage key = %x, %v; want %v", name, key, err, wantErr)
 		}
-	})
 
-	// signalmeow stores the key from its receive loop, so it is read from the database.
-	key, err = signal.StoredMasterKey(t.Context(), client)
-	if err != nil || !bytes.Equal(key, want) {
-		t.Errorf("master key = %x, %v; want %x", key, err, want)
+		return
+	}
+
+	if err != nil || key == nil || !bytes.Equal(key[:], want) {
+		t.Errorf("%s: storage key = %x, %v; want %x", name, key, err, want)
 	}
 }
 
