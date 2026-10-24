@@ -1,7 +1,34 @@
 # Privacy Guards Implementation Plan
 
-Status: **draft for review** (2026-10-24). No fork or go-signal code has been written for this stage.
-Decisions D2–D9 are proposals; D1 was approved on 2026-10-24.
+Status: **completed** (2026-10-24) with fork release `v0.2609.0-purego.33`; see the
+[verification record](../../account-import-privacy.md). The draft was reviewed by the user on
+2026-10-24. The open questions were answered with the proposed defaults, because the question
+timed out; the batch plan stating them and the deviations below was then approved. D1 was
+approved separately.
+
+## As implemented (deviations from the draft)
+
+- **No E164 or group guards (D1, D2).** signalmeow keeps no rows for number-only contacts,
+  so guards cover `account`, `aci` and `pni` only. The converter (Stage 5) must refuse
+  blocked number-only contacts and blocked groups. E164 and group blocks are not enforced on
+  receive.
+- **Enforcement at the store write layer (D3, D5).** Instead of routing each bypass writer
+  through a projector, `StoreRecipient` applies protected values before every row write, and
+  `StoreProfileKey` keeps a protected own key. That covers every current writer and any
+  later one using these functions. Storage application observes the raw values first,
+  which may release guards, then writes; the account record is projected onto a clone.
+- **Release compares the armed version (D4).** Each guard records the manifest version it
+  was armed at (`armed_version`) and the last observation (`observed_version`). A snapshot
+  older than the stored highwater is not observed at all (D3 answer: its unguarded fields
+  still apply).
+- **Re-arming only existing guards (D6).** `Device.SetRecipientBlocked` re-arms a guard only
+  where one exists, so accounts that weren't imported behave as before. The block overrides
+  stay and apply on top of the guards.
+- **Overlay vectors (D9).** signal-cli's account loader can't run without its account, so the
+  generator restates the `localToRemoteRecord` builder calls on signal-service-java's own
+  Wire `AccountRecord`; the provenance says so. `CONTACTS` sharing is refused in Go.
+
+The sections below are the reviewed draft, kept unchanged.
 
 **Goal:** Complete Phase 16 Stage 3. An imported account's blocking, profile sharing, account privacy settings and own profile key must survive the first and every later storage fetch, restart and bypass write until authenticated remote storage genuinely agrees, without the import sending anything to the phone.
 

@@ -528,10 +528,19 @@ appears on the phone.
         with `GOWORK=off`, including the unchanged 264-action/48-Java-leg ledger.
         [Verification](docs/account-import-storage-keys.md);
         [completed implementation plan](docs/superpowers/plans/2026-10-24-account-import-storage-keys.md).
-  - [ ] Stage 3: durable privacy guards, typed blocking and effective projection; next
-        prerequisite. (2026-10-24) — partial: implementation plan drafted
-        ([plan](docs/superpowers/plans/2026-10-24-account-import-privacy.md); schema v30 with
-        compatibility v30 approved); awaiting review before fork work.
+  - [x] Stage 3: durable privacy guards, typed blocking and effective projection. Completed
+        2026-10-24 with immutable fork release `v0.2609.0-purego.33`: schema v30 guards
+        (compatibility v30) for typed ACI/PNI blocking and profile sharing, the supported
+        account settings and the own profile key, applied to every recipient write and
+        released only by a strictly newer matching snapshot; projected account record, atomic
+        highwater, typed `IsBlocked`, two-way profile sharing, local block commands re-arming
+        guards, and effective blocked lists and story audiences. Java overlay vectors
+        (signal-service-java Wire records, labelled reimplementation of the overlay)
+        regenerate byte-identically; all required checks pass with `GOWORK=off`, including
+        the unchanged 264-action/48-Java-leg ledger.
+        [Verification](docs/account-import-privacy.md);
+        [completed implementation plan](docs/superpowers/plans/2026-10-24-account-import-privacy.md).
+  - [ ] Stage 4: shared registry/open protocol and recoverable publication; next prerequisite.
 - [ ] Test fixtures and failure recovery; document limitations; verify live send/receive.
 
 **Done when:** an imported account sends and receives without re-linking.

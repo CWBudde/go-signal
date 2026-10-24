@@ -198,6 +198,16 @@ matching and later changed snapshot; blocked state and explicit false receipts m
 survive rejected/older updates, both in SQLite and in the live caches. This is an
 implementation gate, not behavior the current stores already provide for imports.
 
+Stage 3 (2026-10-24, fork `v0.2609.0-purego.33`) provides the runtime half of this gate:
+durable privacy guards for typed ACI/PNI blocking and profile sharing, the supported account
+settings and our own profile key, applied to every recipient write and released only by a
+strictly newer matching snapshot ([verification](account-import-privacy.md)).
+`accountimport.AccountOverlay` and `AccountGuards` build the effective AccountRecord and its
+guards from the source configuration, checked against Java overlay vectors. The converter
+(Stage 5) still has to compare the source's local values and storage IDs to decide
+freshness, and must refuse blocked number-only contacts and blocked groups, which have no
+guard.
+
 ### Storage-key gap
 
 `SignalAccount.getOrCreateStorageKey` (lines 1730–1742) prefers the stored **derived**
