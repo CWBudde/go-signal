@@ -75,6 +75,14 @@ neither is an import collision guard. Publication needs destination-wide seriali
 crash recovery across the account-directory rename and registry replacement; a per-account
 lock and SQLite transaction alone do not make these two filesystem changes atomic.
 
+Stage 4 (2026-10-25) provides this publication path in `internal/store`
+([verification](account-import-publication.md)): a registry lock around every registry use,
+one select-open-lock step (`OpenRegistered`) that never creates a registered account, private
+staging under `.imports/` (`BeginImport`, `Build`) and intent-based publication with
+`renameat2(RENAME_NOREPLACE)` and recovery (`Publish`). It refuses any existing entry with the
+ACI, number or PNI and anything at the final path. Publication is Linux-only. The Stage 5
+converter supplies the `Build` callback.
+
 ## Account and protocol mapping
 
 Here `account_id` is always our local ACI. For source `account_id_type`, ACI is **0** and

@@ -540,11 +540,18 @@ appears on the phone.
         the unchanged 264-action/48-Java-leg ledger.
         [Verification](docs/account-import-privacy.md);
         [completed implementation plan](docs/superpowers/plans/2026-10-24-account-import-privacy.md).
-  - [ ] Stage 4: shared registry/open protocol and recoverable publication; next prerequisite.
-        (2026-10-25) — partial: [implementation plan](docs/superpowers/plans/2026-10-25-account-import-publication.md)
-        drafted for review (registry lock, single select-open-lock with generation checks,
-        noncreating opens, `.imports/` staging, intent-based `renameat2` publication and
-        recovery); no code yet, four open questions.
+  - [x] Stage 4: shared registry/open protocol and recoverable publication. Completed
+        2026-10-25 without a fork change: an `accounts.lock` registry lock around every registry
+        use, one select-open-lock step (`OpenRegistered`) with generation checks that never
+        creates a registered account and never migrates one held elsewhere, the client's
+        connect/unlink/link/logout moved onto it, `.imports/` staging with a durable intent and
+        Linux `renameat2(RENAME_NOREPLACE)` publication, and recovery before every registry use.
+        Subprocess race, stale-selection and per-boundary crash tests pass (also crashing with
+        one backend and recovering with the other); all required checks pass with `GOWORK=off`,
+        including the unchanged 264-action/48-Java-leg ledger.
+        [Verification](docs/account-import-publication.md);
+        [completed implementation plan](docs/superpowers/plans/2026-10-25-account-import-publication.md).
+  - [ ] Stage 5: offline converter, app/CLI/output and user guide; next prerequisite.
 - [ ] Test fixtures and failure recovery; document limitations; verify live send/receive.
 
 **Done when:** an imported account sends and receives without re-linking.

@@ -38,9 +38,13 @@ Layering, top to bottom:
   acceptance and leave. Full members, join requests and mutation permissions remain ACI-only.
 - `internal/signal/signaltest/`: in-memory fake `Client` (no cgo) that mimics account selection,
   the per-account lock and remote-unlink behaviour of the real client. Command tests use it.
-- `internal/store/`: data-dir layout (`accounts.json` registry, `<aci>/account.db` SQLite with
-  signalmeow's tables plus ours, `<aci>/lock` flock). Opening the DB needs cgo (mattn/go-sqlite3)
-  or the `libsignal_go` tag (modernc.org/sqlite), see `sqlite_cgo.go` / `sqlite_purego.go`.
+- `internal/store/`: data-dir layout (`accounts.json` registry guarded by the `accounts.lock`
+  flock, `<aci>/account.db` SQLite with signalmeow's tables plus ours, `<aci>/lock` flock,
+  `.imports/` staging, `.removed/`). Registered accounts are opened only via `OpenRegistered`
+  (select, check and lock in one step, never creating); every registry use first recovers
+  interrupted imports (`recovery.go`, Linux `renameat2` publication). Opening the DB needs cgo
+  (mattn/go-sqlite3) or the `libsignal_go` tag (modernc.org/sqlite), see `sqlite_cgo.go` /
+  `sqlite_purego.go`.
 - `internal/mcp/`: MCP server (`mcp serve`, official go-sdk) whose tools call `internal/app`.
   Stdout carries only JSON-RPC; the SDK's logs are demoted to debug. While it runs, `app.Inbox`
   receives events into the account's inbox table, which the message tools and resources read.

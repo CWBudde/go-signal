@@ -1,7 +1,46 @@
 # Registry Protocol and Publication Implementation Plan
 
-Status: **draft for review** (2026-10-25). Nothing here is implemented. The decisions are
-proposals; the open questions at the end need answers before work starts.
+Status: **completed** (2026-10-25); see the [verification record](../../account-import-publication.md).
+The user reviewed the draft on 2026-10-25 and accepted the proposed answers to all four open
+questions: store-only writes keep working through a noncreating, nonmigrating snapshot; link
+reuses an unregistered directory of its ACI; `accounts.json` stays at version 1; the crash
+hook is test-only. No fork change was needed.
+
+## As implemented (deviations from the draft)
+
+- **Creating helpers stay for link and tests (D4).** `Dir.Lock` and `OpenAccount` still create
+  the account directory, but only `LinkStore` (under the registry lock) and tests call them.
+  Registered accounts are opened only through `OpenRegistered`. Its connected mode creates a
+  missing lock file inside an existing account directory, since accounts seeded without ever
+  connecting have none; it never creates a directory or database.
+- **Snapshots migrate only under the account lock (D3).** If the account lock is free, a
+  snapshot takes it for the migration and then releases it. If it is held, the database must
+  already be at this build's versions (a newer compatible one is accepted), otherwise
+  `ErrAccountInUse`.
+- **Stale selection fails (D3).** A Connect or Unlink after the account was replaced is
+  `ErrAccountChanged`; after an unlink with nothing left to select it is `ErrNotLinked`. A new
+  command selects afresh.
+- **`MarkUnlinked` (D6)** is a registry-locked read-modify-write keyed by ACI, without a
+  generation check: its caller holds the account lock, so nothing else can unlink or relink the
+  account meanwhile.
+- **Unlinking missing data (D6).** `unlink --local-only`, or unlinking an account the server
+  already removed, drops the entry without a lock when its directory or database is gone.
+- **Marker before intent (D8).** The ownership marker is written before the intent, so a crash
+  between them leaves no intent and the attempt is cleaned up rather than needing manual
+  recovery.
+- **Recovery (D9)** logs and skips entries in `.imports/` that aren't attempt tokens, removes
+  an attempt directory that never got its owner lock if it is empty, and deletes leftovers in
+  `.removed/`. A refusal names the attempt and what disagrees, and blocks every registry
+  operation until resolved.
+- **Hook (D11).** The crash hook is a per-`Dir` field set from `export_test.go`, so parallel
+  tests don't share it. Tests that fork helper processes run sequentially: between fork and
+  exec, a child briefly shares the parent's flock descriptors, which can make a released lock
+  look held to a parallel test. Recovery then only skips the attempt until the next registry
+  use.
+- **Non-Unix.** The registry lock is best effort there, like the account lock, and publication
+  is refused (`ErrImportUnsupported`).
+
+The sections below are the reviewed draft, kept unchanged.
 
 **Goal:** Complete Phase 16 Stage 4. Every registry read and mutation, account selection, open
 and lock acquisition follows one protocol, so concurrent link, unlink, logout and import cannot
