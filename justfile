@@ -108,6 +108,7 @@ test-diff:
     go test -race -count=1 -timeout 60s -run '^(TestPreKeyAllocator|TestProvisionedPreKey|TestStorageServiceKey|TestPrivacyGuard|TestTypedBlocking)' github.com/cwbudde/mautrix-signal/pkg/signalmeow/store
     go test -tags libsignal_go -race -count=1 -timeout 60s -run '^(TestPreKeyAllocator|TestProvisionedPreKey|TestStorageServiceKey|TestPrivacyGuard|TestTypedBlocking)' github.com/cwbudde/mautrix-signal/pkg/signalmeow/store
     scripts/test-prekey-allocators.sh
+    scripts/test-account-publication.sh
 
 # Opt-in integration suite against Signal's production servers, cgo then libsignal_go on the same
 

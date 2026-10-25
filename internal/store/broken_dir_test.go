@@ -85,7 +85,13 @@ func TestAccountsFileNotWritable(t *testing.T) {
 
 	dir := openDir(t, io.Discard)
 
-	err := os.Chmod(dir.Path(), 0o500)
+	// The registry lock file exists before the directory becomes read-only.
+	_, err := dir.Accounts()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = os.Chmod(dir.Path(), 0o500)
 	if err != nil {
 		t.Fatal(err)
 	}

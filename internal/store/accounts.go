@@ -38,7 +38,150 @@ type accountsDoc struct {
 
 // Accounts returns the entries of accounts.json in link order; a missing file means none.
 func (d *Dir) Accounts() ([]AccountEntry, error) {
-	path := filepath.Join(d.path, accountsFile)
+	var accounts []AccountEntry
+
+	err := d.withRegistry(func(reg *registry) error {
+		var err error
+
+		accounts, err = reg.accounts()
+
+		return err
+	})
+
+	return accounts, err
+}
+
+// PutAccount adds entry to accounts.json, replacing an existing entry with the same ACI.
+func (d *Dir) PutAccount(entry AccountEntry) error {
+	return d.withRegistry(func(reg *registry) error {
+		accounts, err := reg.accounts()
+		if err != nil {
+			return err
+		}
+
+		replaced := false
+
+		for i := range accounts {
+			if accounts[i].ACI == entry.ACI {
+				accounts[i] = entry
+				replaced = true
+			}
+		}
+
+		if !replaced {
+			accounts = append(accounts, entry)
+		}
+
+		return reg.write(accounts)
+	})
+}
+
+// MarkUnlinked records that the account with the given ACI was found unlinked at unlinkedAt. An
+// earlier mark is kept, and a missing entry is not an error (the account may have been removed
+// meanwhile).
+func (d *Dir) MarkUnlinked(aci string, unlinkedAt time.Time) error {
+	return d.withRegistry(func(reg *registry) error {
+		accounts, err := reg.accounts()
+		if err != nil {
+			return err
+		}
+
+		for i := range accounts {
+			if accounts[i].ACI != aci || !accounts[i].UnlinkedAt.IsZero() {
+				continue
+			}
+
+			accounts[i].UnlinkedAt = unlinkedAt
+
+			return reg.write(accounts)
+		}
+
+		return nil
+	})
+}
+
+// RemoveAccount deletes the account with the given ACI: under the registry lock its
+// accounts.json entry, then it moves the directory aside, so that nothing selects or reopens
+// the account from then on; then it deletes the directory including the database. The caller
+// should hold the account's Lock, which stays valid until Unlock although its file is gone. A
+// missing entry or directory is not an error.
+func (d *Dir) RemoveAccount(aci string) error {
+	var removed string
+
+	err := d.withRegistry(func(reg *registry) error {
+		accounts, err := reg.accounts()
+		if err != nil {
+			return err
+		}
+
+		kept := slices.DeleteFunc(accounts, func(entry AccountEntry) bool { return entry.ACI == aci })
+
+		err = reg.write(kept)
+		if err != nil {
+			return err
+		}
+
+		removed, err = reg.moveAside(d.AccountDir(aci))
+
+		return err
+	})
+	if err != nil {
+		return err
+	}
+
+	if removed == "" {
+		return nil
+	}
+
+	err = os.RemoveAll(removed)
+	if err != nil {
+		return fmt.Errorf("remove account data: %w", err)
+	}
+
+	return nil
+}
+
+// moveAside moves path into removedDir and returns its new path, or "" if there is nothing at
+// path.
+func (reg *registry) moveAside(path string) (string, error) {
+	_, err := os.Lstat(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return "", nil
+	}
+
+	if err != nil {
+		return "", fmt.Errorf("remove account data: %w", err)
+	}
+
+	token, err := newToken()
+	if err != nil {
+		return "", err
+	}
+
+	parent := filepath.Join(reg.d.path, removedDir)
+
+	err = reg.d.mkdir(parent)
+	if err != nil {
+		return "", fmt.Errorf("remove account data: %w", err)
+	}
+
+	target := filepath.Join(parent, token)
+
+	err = os.Rename(path, target)
+	if err == nil {
+		err = syncDir(reg.d.path)
+	}
+
+	if err != nil {
+		return "", fmt.Errorf("remove account data: %w", err)
+	}
+
+	return target, nil
+}
+
+// accounts reads accounts.json.
+func (reg *registry) accounts() ([]AccountEntry, error) {
+	path := filepath.Join(reg.d.path, accountsFile)
 
 	raw, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -51,7 +194,7 @@ func (d *Dir) Accounts() ([]AccountEntry, error) {
 
 	info, err := os.Stat(path)
 	if err == nil {
-		d.checkPerm(path, info)
+		reg.d.checkPerm(path, info)
 	}
 
 	var doc accountsDoc
@@ -68,83 +211,14 @@ func (d *Dir) Accounts() ([]AccountEntry, error) {
 	return doc.Accounts, nil
 }
 
-// PutAccount adds entry to accounts.json, replacing an existing entry with the same ACI.
-func (d *Dir) PutAccount(entry AccountEntry) error {
-	accounts, err := d.Accounts()
-	if err != nil {
-		return err
-	}
-
-	replaced := false
-
-	for i := range accounts {
-		if accounts[i].ACI == entry.ACI {
-			accounts[i] = entry
-			replaced = true
-		}
-	}
-
-	if !replaced {
-		accounts = append(accounts, entry)
-	}
-
-	return d.writeAccounts(accounts)
-}
-
-// MarkUnlinked records that the account with the given ACI was found unlinked at unlinkedAt. An
-// earlier mark is kept, and a missing entry is not an error (the account may have been removed
-// meanwhile).
-func (d *Dir) MarkUnlinked(aci string, unlinkedAt time.Time) error {
-	accounts, err := d.Accounts()
-	if err != nil {
-		return err
-	}
-
-	for i := range accounts {
-		if accounts[i].ACI != aci || !accounts[i].UnlinkedAt.IsZero() {
-			continue
-		}
-
-		accounts[i].UnlinkedAt = unlinkedAt
-
-		return d.writeAccounts(accounts)
-	}
-
-	return nil
-}
-
-// RemoveAccount deletes the account with the given ACI: its accounts.json entry, then its
-// directory including the database. The caller should hold the account's Lock, which stays
-// valid until Unlock although its file is gone. A missing entry or directory is not an error.
-func (d *Dir) RemoveAccount(aci string) error {
-	accounts, err := d.Accounts()
-	if err != nil {
-		return err
-	}
-
-	kept := slices.DeleteFunc(accounts, func(entry AccountEntry) bool { return entry.ACI == aci })
-
-	err = d.writeAccounts(kept)
-	if err != nil {
-		return err
-	}
-
-	err = os.RemoveAll(d.AccountDir(aci))
-	if err != nil {
-		return fmt.Errorf("remove account data: %w", err)
-	}
-
-	return nil
-}
-
-// writeAccounts replaces accounts.json atomically (temp file + rename).
-func (d *Dir) writeAccounts(accounts []AccountEntry) error {
+// write replaces accounts.json atomically (temp file + rename) and durably.
+func (reg *registry) write(accounts []AccountEntry) error {
 	raw, err := json.MarshalIndent(accountsDoc{Version: accountsVersion, Accounts: accounts}, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode %s: %w", accountsFile, err)
 	}
 
-	tmp, err := os.CreateTemp(d.path, accountsFile+".*")
+	tmp, err := os.CreateTemp(reg.d.path, accountsFile+".*")
 	if err != nil {
 		return fmt.Errorf("write %s: %w", accountsFile, err)
 	}
@@ -161,12 +235,17 @@ func (d *Dir) writeAccounts(accounts []AccountEntry) error {
 	}
 
 	if err == nil {
-		err = os.Rename(tmp.Name(), filepath.Join(d.path, accountsFile))
+		err = os.Rename(tmp.Name(), filepath.Join(reg.d.path, accountsFile))
 	}
 
 	if err != nil {
 		_ = os.Remove(tmp.Name())
 
+		return fmt.Errorf("write %s: %w", accountsFile, err)
+	}
+
+	err = syncDir(reg.d.path)
+	if err != nil {
 		return fmt.Errorf("write %s: %w", accountsFile, err)
 	}
 

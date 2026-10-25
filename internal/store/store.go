@@ -31,7 +31,8 @@ type Store struct {
 }
 
 // OpenAccount opens (creating if needed) <data-dir>/<aci>/account.db and runs signalmeow's and
-// our migrations. It doesn't take the account lock; see Lock.
+// our migrations. It doesn't take the account lock; see Lock. Only linking (LinkStore) and
+// tests create accounts this way; registered accounts are opened with OpenRegistered.
 func (d *Dir) OpenAccount(ctx context.Context, aci string, log zerolog.Logger) (*Store, error) {
 	dir := d.AccountDir(aci)
 
@@ -56,26 +57,32 @@ func openDB(ctx context.Context, path string, log zerolog.Logger) (*Store, error
 		return nil, fmt.Errorf("open database: %w", err)
 	}
 
-	devices := store.NewStore(sqlDB, dbutil.ZeroLogger(log.With().Str("db_section", "signalmeow").Logger()))
+	opened := newStore(sqlDB, log)
 
-	err = devices.Upgrade(ctx)
+	err = opened.Devices.Upgrade(ctx)
 	if err != nil {
 		_ = sqlDB.Close()
 
 		return nil, fmt.Errorf("migrate signalmeow tables: %w", err)
 	}
 
-	own := sqlDB.Child(ourVersionTable, upgradeTable(),
-		dbutil.ZeroLogger(log.With().Str("db_section", "go-signal").Logger()))
-
-	err = own.Upgrade(ctx)
+	err = opened.own.Upgrade(ctx)
 	if err != nil {
 		_ = sqlDB.Close()
 
 		return nil, fmt.Errorf("migrate go-signal tables: %w", err)
 	}
 
-	return &Store{db: sqlDB, own: own, Devices: devices}, nil
+	return opened, nil
+}
+
+// newStore wraps the database sqlDB without migrating it.
+func newStore(sqlDB *dbutil.Database, log zerolog.Logger) *Store {
+	devices := store.NewStore(sqlDB, dbutil.ZeroLogger(log.With().Str("db_section", "signalmeow").Logger()))
+	own := sqlDB.Child(ourVersionTable, upgradeTable(),
+		dbutil.ZeroLogger(log.With().Str("db_section", "go-signal").Logger()))
+
+	return &Store{db: sqlDB, own: own, Devices: devices}
 }
 
 func upgradeTable() dbutil.UpgradeTable {

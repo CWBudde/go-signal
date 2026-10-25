@@ -25,6 +25,13 @@ var ErrDeviceUnlinked = errors.New("this device was unlinked from the account")
 // ErrAccountInUse means another go-signal process is connected as the same account.
 var ErrAccountInUse = store.ErrAccountInUse
 
+// ErrAccountChanged means the selected account was unlinked, relinked or imported again by
+// another process since this client opened it; running the command again selects it anew.
+var ErrAccountChanged = store.ErrAccountChanged
+
+// ErrAccountMissing means a registered account's directory or database is gone.
+var ErrAccountMissing = store.ErrAccountMissing
+
 // ErrNotConnected is returned by operations that need Connect first.
 var ErrNotConnected = errors.New("client is not connected")
 

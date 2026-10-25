@@ -65,10 +65,12 @@ type meowClient struct {
 	zlog zerolog.Logger
 	dir  *store.Dir
 
-	// data is the open database of the account dataACI; lock is held once connected or linked.
-	data    *store.Store
-	dataACI string
-	lock    *store.Lock
+	// data is the open database of the account dataACI, opened with the files generation; lock
+	// is held once connected or linked.
+	data       *store.Store
+	dataACI    string
+	generation store.Generation
+	lock       *store.Lock
 
 	// connDevice, ownACI and account belong to the connected account; they are set before the
 	// receive loops start.
@@ -235,16 +237,14 @@ func (c *meowClient) Connect(ctx context.Context, opts ...ConnectOption) error {
 		return UnlinkedError(acc)
 	}
 
-	device, err := c.device(ctx)
+	err = c.lockAccount(ctx, acc)
 	if err != nil {
 		return err
 	}
 
-	if c.lock == nil {
-		c.lock, err = c.dir.Lock(c.dataACI)
-		if err != nil {
-			return fmt.Errorf("%w: %s", err, device.Number)
-		}
+	device, err := c.device(ctx)
+	if err != nil {
+		return err
 	}
 
 	c.connDevice = device
@@ -528,7 +528,7 @@ func (c *meowClient) release() error {
 		errs = append(errs, c.lock.Unlock())
 	}
 
-	c.data, c.lock, c.dataACI = nil, nil, ""
+	c.data, c.lock, c.dataACI, c.generation = nil, nil, "", store.Generation{}
 
 	return errors.Join(errs...)
 }
@@ -578,12 +578,13 @@ func (c *meowClient) device(ctx context.Context) (*mstore.Device, error) {
 			return nil, err
 		}
 
-		c.data, err = c.dir.OpenAccount(ctx, acc.ACI, c.zlog)
+		// Without the account lock: another process may be connected as the account.
+		opened, err := c.dir.OpenRegistered(ctx, chooseAccount(acc), store.OpenSnapshot, store.Generation{}, c.zlog)
 		if err != nil {
 			return nil, fmt.Errorf("open account: %w", err)
 		}
 
-		c.dataACI = acc.ACI
+		c.data, c.dataACI, c.generation = opened.Store, acc.ACI, opened.Generation
 	}
 
 	aci, err := uuid.Parse(acc.ACI)
@@ -601,6 +602,50 @@ func (c *meowClient) device(ctx context.Context) (*mstore.Device, error) {
 	}
 
 	return device, nil
+}
+
+// lockAccount opens the selected account acc with its lock held, unless that is already the
+// case (after linking or connecting). The registry entry, the account's files and the lock are
+// checked in one step, and if acc was opened before, its files must still be the same: an
+// account unlinked, relinked or reimported meanwhile is store.ErrAccountChanged, never
+// recreated or connected under an obsolete lock.
+func (c *meowClient) lockAccount(ctx context.Context, acc Account) error {
+	if c.lock != nil && c.dataACI == acc.ACI {
+		return nil
+	}
+
+	var expect store.Generation
+	if c.dataACI == acc.ACI {
+		expect = c.generation
+	}
+
+	err := c.release()
+	if err != nil {
+		return err
+	}
+
+	opened, err := c.dir.OpenRegistered(ctx, chooseAccount(acc), store.OpenConnected, expect, c.zlog)
+	if err != nil {
+		return fmt.Errorf("%w: %s", err, acc.Number)
+	}
+
+	c.data, c.lock, c.dataACI, c.generation = opened.Store, opened.Lock, acc.ACI, opened.Generation
+
+	return nil
+}
+
+// chooseAccount selects acc again among the registry entries read by store.OpenRegistered; an
+// entry gone meanwhile is store.ErrAccountChanged.
+func chooseAccount(acc Account) func([]store.AccountEntry) (store.AccountEntry, error) {
+	return func(entries []store.AccountEntry) (store.AccountEntry, error) {
+		for _, entry := range entries {
+			if entry.ACI == acc.ACI {
+				return entry, nil
+			}
+		}
+
+		return store.AccountEntry{}, fmt.Errorf("%w: %s", store.ErrAccountChanged, acc.Number)
+	}
 }
 
 // selectAccount resolves opts.Account against accounts.json (see SelectAccount).

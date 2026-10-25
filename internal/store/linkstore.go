@@ -125,14 +125,25 @@ func (l *LinkStore) Close() error {
 	return errors.Join(errs...)
 }
 
-// open takes the account lock and opens the database for aci unless that already happened.
+// open takes the account lock and opens the database for aci unless that already happened. An
+// existing directory of aci is reused: relinking keeps working, also after a crashed link.
 // It reports whether this call opened them.
 func (l *LinkStore) open(ctx context.Context, aci uuid.UUID) (bool, error) {
 	if l.store != nil {
 		return false, nil
 	}
 
-	lock, err := l.dir.Lock(aci.String())
+	// Create the account directory under the registry lock, so that it can't race a removal
+	// or a publication of the same account.
+	var lock *Lock
+
+	err := l.dir.withRegistry(func(*registry) error {
+		var err error
+
+		lock, err = l.dir.Lock(aci.String())
+
+		return err
+	})
 	if err != nil {
 		return false, err
 	}

@@ -5,6 +5,8 @@ package store
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 )
 
 // Pragma returns the value of an SQLite pragma on the account database, for tests that check
@@ -44,3 +46,43 @@ func (s *Store) IdentityTestSQL(ctx context.Context, query string, args ...any) 
 // SQLiteDriverForTest names the database/sql driver of this build, which identifies the
 // backend (cgo: mattn "sqlite3", libsignal_go: modernc "sqlite") in cross-backend tests.
 const SQLiteDriverForTest = sqliteDriver
+
+// SetPublishHook makes d run hook after each publication step; an error stops the step there.
+func (d *Dir) SetPublishHook(hook func(step string) error) {
+	d.hook = hook
+}
+
+// Stage returns the directory of the import attempt.
+func (im *Import) Stage() string {
+	return im.stage
+}
+
+// Abandon releases the attempt's owner lock without cleaning up, as a crashed process would.
+func (im *Import) Abandon() {
+	_ = im.owner.Close()
+	im.owner = nil
+}
+
+// HoldRegistry takes d's registry lock and returns the function that releases it.
+func (d *Dir) HoldRegistry() (func(), error) {
+	file, err := os.OpenFile(filepath.Join(d.path, registryLockFile), os.O_RDWR|os.O_CREATE, filePerm)
+	if err != nil {
+		return nil, fmt.Errorf("open registry lock: %w", err)
+	}
+
+	err = tryLock(file)
+	if err != nil {
+		_ = file.Close()
+
+		return nil, fmt.Errorf("lock registry: %w", err)
+	}
+
+	return func() { _ = file.Close() }, nil
+}
+
+// PublishSteps returns the publication steps in order, as passed to the publish hook.
+func PublishSteps() []string {
+	return []string{
+		stepAllocated, stepBuilt, stepMarked, stepIntent, stepRenamed, stepSynced, stepRegistered, stepRetiring,
+	}
+}

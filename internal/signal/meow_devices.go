@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/cwbudde/go-signal/internal/store"
 	"github.com/cwbudde/mautrix-signal/pkg/libsignalgo"
 	"github.com/cwbudde/mautrix-signal/pkg/signalmeow/protobuf/signalpb"
 	mstore "github.com/cwbudde/mautrix-signal/pkg/signalmeow/store"
@@ -91,17 +92,18 @@ func (c *meowClient) Unlink(ctx context.Context, opts UnlinkOptions) (Account, e
 		return Account{}, err
 	}
 
-	// Open the account (which may switch databases) before taking its lock.
-	device, err := c.unlinkDevice(ctx, acc, opts)
+	removed, err := c.lockUnlinking(ctx, acc, opts)
 	if err != nil {
 		return Account{}, err
 	}
 
-	if c.lock == nil {
-		c.lock, err = c.dir.Lock(acc.ACI)
-		if err != nil {
-			return Account{}, fmt.Errorf("%w: %s", err, acc.Number)
-		}
+	if removed {
+		return acc, nil
+	}
+
+	device, err := c.unlinkDevice(ctx, acc, opts)
+	if err != nil {
+		return Account{}, err
 	}
 
 	if device != nil {
@@ -117,6 +119,23 @@ func (c *meowClient) Unlink(ctx context.Context, opts UnlinkOptions) (Account, e
 	}
 
 	return acc, nil
+}
+
+// lockUnlinking opens acc with its lock held for unlinking. An account whose data is already
+// gone has nothing to lock or to ask the server about: with LocalOnly, or when the server
+// already removed it, its entry is dropped and lockUnlinking reports true.
+func (c *meowClient) lockUnlinking(ctx context.Context, acc Account, opts UnlinkOptions) (bool, error) {
+	err := c.lockAccount(ctx, acc)
+	if !errors.Is(err, store.ErrAccountMissing) || (!opts.LocalOnly && !acc.Unlinked()) {
+		return false, err
+	}
+
+	err = c.dir.RemoveAccount(acc.ACI)
+	if err != nil {
+		return false, fmt.Errorf("remove account: %w", err)
+	}
+
+	return true, nil
 }
 
 // unlinkDevice loads the device to remove from the server, or returns nil when the server is

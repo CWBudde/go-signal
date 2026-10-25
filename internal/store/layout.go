@@ -43,6 +43,9 @@ func DefaultDir() string {
 type Dir struct {
 	path string
 	log  *slog.Logger
+
+	// hook, if set, runs after each publication step (see Dir.step); tests only.
+	hook func(step string) error
 }
 
 // OpenDir resolves path ("" means DefaultDir, a leading ~/ is expanded), creates it if needed
