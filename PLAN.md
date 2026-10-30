@@ -552,6 +552,10 @@ appears on the phone.
         [Verification](docs/account-import-publication.md);
         [completed implementation plan](docs/superpowers/plans/2026-10-25-account-import-publication.md).
   - [ ] Stage 5: offline converter, app/CLI/output and user guide; next prerequisite.
+        [Draft implementation plan](docs/superpowers/plans/2026-10-30-account-import-converter.md),
+        prepared 2026-10-30 for review before implementation. Source snapshot validation,
+        transactional conversion, checked publication, command/output and offline acceptance
+        are proposed; no importer implementation or live acceptance is claimed.
 - [ ] Test fixtures and failure recovery; document limitations; verify live send/receive.
 
 **Done when:** an imported account sends and receives without re-linking.
