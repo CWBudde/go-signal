@@ -10,7 +10,7 @@
 
 **Spec:** [Approved importer design](../specs/2026-10-10-account-import-design.md), especially “Command and package boundary”, “Source snapshot and conversion” and Stage 5; [source-format contract](../../account-import.md). Read both before implementation.
 
-**Status:** Draft for review, 2026-10-30; baseline `99a813a`, mautrix-signal `v0.2609.0-purego.33`, libsignal-go `v0.7.1-cw.6`. The user approved drafting this plan and a documentation PR, not converter implementation. Decisions below are proposals within the approved design; Stage 5 remains open.
+**Status:** Reviewed plan; the user approved the implementation decisions and execution of Task 1 on 2026-10-30. Task 1 is complete (`1e68b5a`); Task 2 is next, pending batch approval. Execution of Tasks 2–8 is not yet authorized. Baseline `99a813a`, mautrix-signal `v0.2609.0-purego.33`, libsignal-go `v0.7.1-cw.6`. Stage 5 remains open.
 
 ## Global Constraints
 
@@ -54,15 +54,15 @@
 
 Source details were checked against `SignalAccount.java`, `ConfigurationStore.java`, `MessageCache.java`, the protocol stores and the schema extraction in the committed corpus. The source retry flag defaults to true; message files live in `data/<path>.d/msg-cache/`; `storage-manifest-version` defaults to -1. Historical plan instructions to commit to `main` belonged to earlier stages; this batch uses a dedicated branch and PR.
 
-## Proposed implementation decisions
+## Reviewed implementation decisions
 
 - **D1 Public boundary.** Put backend-neutral request/result values and import error sentinels in `internal/signal/account_import.go`. `app.AccountImporter` consumes these values; `accountimport.Importer{}` implements it without importing `app`. Keep the live `signal.Client` interface unchanged.
 - **D2 Source selection.** A registry entry is initially eligible when it is LIVE and has valid registry number/ACI/path fields. Require exactly one such entry without a selector, then fully validate its JSON/SQL. Never skip an invalid selected account and silently choose another. Explicit E.164/ACI selection must be unique; duplicate selected identities/paths are errors. Require a nonempty `--source-dir`; expand destination `~/` and defaults consistently with existing store behavior before overlap checks.
 - **D3 Snapshot workspace.** Keep an importer-owned private workspace under the system temp directory, outside the source and destination account path, with a cleanup defer. Pin source directory/file descriptors. Use no-follow directory traversal, reject nonregular files before reading, and fingerprint file identity, length, mtime and streamed SHA-256. Record optional-file absence and bounded message-cache directory listings too. SQLite opens only the copied files.
 - **D4 Schema and parser.** Reject duplicate JSON members at every nesting level and trailing values. Require the reviewed v0.14.9 field/type contract; unknown fields require review rather than permissive interpretation. Compare SQLite schema semantically (tables, columns, declared types, constraints and required indexes), not by whitespace or object creation order. Reject unexpected executable schema objects. Check `typeof` for consumed values, strict booleans/enums, integrity and foreign-key consistency before conversion.
-- **D5 Freshness.** Treat the snapshot as unverified remote freshness: compare cached records, local fields and storage IDs for consistency, but arm every supported imported privacy value, including equal values (`AccountGuards(..., fresh=false)`). Use the validated SQL `storage-manifest-version` as `ArmedVersion`; absent/-1 becomes 0, other negatives or malformed values fail. Do not deserialize/copy the manifest file, install source storage IDs, or advance target storage highwater. A strictly newer authenticated matching snapshot is still required to release a guard. This conservative proposal avoids inventing a remote-freshness proof from a stopped local cache.
+- **D5 Freshness.** Treat the snapshot as unverified remote freshness: compare cached records, local fields and storage IDs for consistency, but arm every supported imported privacy value, including equal values (`AccountGuards(..., fresh=false)`). Use the validated SQL `storage-manifest-version` as `ArmedVersion`; absent/-1 becomes 0, other negatives or malformed values fail. Do not deserialize/copy the manifest file, install source storage IDs, or advance target storage highwater. A strictly newer authenticated matching snapshot is still required to release a guard. This conservative policy avoids inventing a remote-freshness proof from a stopped local cache.
 - **D6 Allocation and missing keys.** Require next IDs strictly above retained maxima and at most `0xffffff`; impose no additional arbitrary headroom. A position at the exclusive limit is preserved as exhausted, and normal refill refuses to wrap. Map source active-reference sentinel `-1` (or absence) to nil; preserve active ID 0 and reject other negatives. Require the three next-ID fields rather than deriving them from retained rows. All absent storage-key forms remain unknown; accept only `ErrStorageServiceKeyUnknown` in that case, never malformed or conflicting supplied forms. Explain that later key acquisition is a connected operation.
-- **D7 Final validation.** Add `PublishChecked(entry, validate)`; keep `Publish(entry)` as the existing unchecked wrapper for its callers. Under the registry lock, after recovery/collision checks and before marker/intent, call `validate`, which checks context and fully revalidates the pinned source and path bindings. Hash immediately before this section too. The final full hash can hold the registry lock for the duration of a 4 GiB read; another process may receive existing `ErrRegistryBusy`. This preserves the design's source check but needs explicit review of the lock-duration tradeoff, not a silent metadata-only shortcut.
+- **D7 Final validation.** Add `PublishChecked(entry, validate)`; keep `Publish(entry)` as the existing unchecked wrapper for its callers. Under the registry lock, after recovery/collision checks and before marker/intent, call `validate`, which checks context and fully revalidates the pinned source and path bindings. Hash immediately before this section too. The final full hash can hold the registry lock for the duration of a 4 GiB read; another process may receive existing `ErrRegistryBusy`. The user approved this lock-duration tradeoff to preserve the design's source check.
 - **D8 Error and output contract.** Add fixed import errors for invalid input, unsupported input, ambiguous selection and changed source; preserve cancellation and existing collision/recovery errors through `%w`/`errors.Join`. At the importer boundary, replace driver/parser diagnostics that contain source values with safe category/row context; no untrusted SQL values or raw paths from registry entries appear in errors. A published result means local publication only. Render failures leave that publication intact.
 - **D9 Exclusions.** Return a sorted fixed inventory, independent of cache presence: `attachments`, `avatars`, `cdsi-tokens`, `endorsements`, `message-history`, `outbound-sharing`, `source-only-metadata`, `stickers`, `storage-cache`, `unsupported-preferences`. These name unmapped categories; nondefault unsupported preferences and pending work still cause refusal. No scanning or counting unrelated image/history trees. Inbox, polls and pins start empty.
 
@@ -70,7 +70,7 @@ These choices do not authorize broader source support. If a required invariant c
 
 ## Files and interfaces
 
-All names in this section are proposed new interfaces unless marked existing. Tests stay in external `_test` packages; a narrowly scoped `export_test.go` may expose deterministic barriers and lowered test limits, following the repository pattern.
+Names in this section describe planned interfaces unless marked existing or delivered by a checked task. Task 1 supplies the DTOs, app boundary and importer entry points. Tests stay in external `_test` packages; a narrowly scoped `export_test.go` may expose deterministic barriers and lowered test limits, following the repository pattern.
 
 | Paths                                                                                                                                                       | Responsibility                                                                                |
 | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
@@ -135,11 +135,28 @@ func (*Printer) AccountImport(signal.AccountImportResult) error
 
 **Interfaces:** Produces the public boundary above. Add `signal.ErrInvalidAccountImport`, `ErrUnsupportedAccountImport`, `ErrAmbiguousAccountImport`, `ErrAccountImportSourceChanged`. The real implementation remains unexposed in the command tree until Task 7.
 
-- [ ] Write `TestImportAccount` with a recording importer: forward the exact three request strings and context once, return the exact result, wrap errors while preserving `errors.Is`, and never need `app.New` or a `signal.Client`. Reject an empty source directory before calling the importer.
-- [ ] Run `CGO_ENABLED=0 go test -count=1 -run '^TestImportAccount' ./internal/app/`; expect missing definitions before implementation.
-- [ ] Add the DTOs and standalone forwarding use case. In `!cgo && !libsignal_go`, implement `Importer.Import` to return `signal.ErrCGORequired` without accessing either supplied path. Real files use `cgo || libsignal_go`; non-Linux refuses before destination creation.
-- [ ] Add `TestAccountImportNoBackend` with inaccessible/nonexistent source/destination paths; verify the backend-required error and an unchanged filesystem. Run untagged no-cgo tests and compile the real boundary with `CGO_ENABLED=0 go test -tags libsignal_go -run '^$' ./internal/signal/accountimport/`; expect PASS.
-- [ ] Commit only this task's paths: `feat(import): define offline account import use case`.
+- [x] Write `TestImportAccount` with a recording importer: forward the exact three request strings and context once, return the exact result, wrap errors while preserving `errors.Is`, and never need `app.New` or a `signal.Client`. Reject an empty source directory before calling the importer.
+- [x] Run `CGO_ENABLED=0 go test -count=1 -run '^TestImportAccount' ./internal/app/`; expect missing definitions before implementation.
+- [x] Add the DTOs and standalone forwarding use case. In `!cgo && !libsignal_go`, implement `Importer.Import` to return `signal.ErrCGORequired` without accessing either supplied path. Real files use `cgo || libsignal_go`; non-Linux refuses before destination creation.
+- [x] Add `TestAccountImportNoBackend` with inaccessible/nonexistent source/destination paths; verify the backend-required error and an unchanged filesystem. Run untagged no-cgo tests and compile the real boundary with `CGO_ENABLED=0 go test -tags libsignal_go -run '^$' ./internal/signal/accountimport/`; expect PASS.
+- [x] Commit only this task's paths: `feat(import): define offline account import use case`.
+
+### Task 1 verification record (2026-10-30)
+
+Implemented in `1e68b5a`. The app preserves the supplied result even when wrapping an importer error, allowing later publication-aware handling. No live client is constructed. Until Task 6 integrates orchestration, the real-backend entry point deliberately returns `ErrNotImplemented` on Linux and `ErrUnsupportedAccountImport` elsewhere, with no filesystem access. The command remains unavailable until Task 7; this partial boundary cannot import an account.
+
+The app, no-backend and real-backend boundary tests first failed on missing definitions, then passed. `TestAccountImportBackendBoundary` also checks the temporary real-backend refusal against missing and inaccessible paths. Both entry points satisfy the app interface. Source conversion, no-network syscall acceptance and cross-backend converter continuation remain unimplemented.
+
+| Command                                                                                                                                   | Result                                                                               |
+| ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `CGO_ENABLED=0 go test -count=1 -run '^(TestImportAccount\|TestAccountImportNoBackend)' ./internal/app/ ./internal/signal/accountimport/` | PASS                                                                                 |
+| `CGO_ENABLED=0 go test -tags libsignal_go -count=1 -run '^TestAccountImportBackendBoundary' ./internal/signal/accountimport/`             | PASS (Linux)                                                                         |
+| `CGO_ENABLED=0 go test -tags libsignal_go -run '^$' ./internal/signal/accountimport/`                                                     | PASS                                                                                 |
+| `just fmt`, `just check`                                                                                                                  | PASS; lint 0 issues, all native race tests, libsignal version and module tidy checks |
+| `just check-purego`                                                                                                                       | PASS; vet, lint 0 issues, all pure-Go tests and AES assembly selection               |
+| `CGO_ENABLED=0 go test -count=1 ./...`                                                                                                    | PASS; includes backend refusal tests                                                 |
+
+`just check` passed before implementation and again after integration. Runs used `GOWORK=off`, `GOFLAGS=-p=1`, `JUST_TEMPDIR=/tmp` and temporary build directories under `~/.cache`; existing local HTTP tests required execution outside the socket-restricting sandbox. Native and pure-Go checks passed after correcting lint findings. No dependency, fixture, fork, store, command or output changes were required. No live operation ran.
 
 ## Task 2: Acquire a bounded, unchanged source snapshot
 
@@ -258,13 +275,13 @@ scripts/test-account-publication.sh
 
 `just test-diff` retains the existing protocol/backend/publication prerequisites and includes the converter runner after Task 6. The Stage 1 `--java` exchange evidence remains separate: this batch reuses its immutable material and does not claim new Java-generated protocol coverage. Live Signal tests are excluded and cannot be inferred from this ledger.
 
-For this documentation-only PR, run `just fmt`, `just check`, `git diff --check`, link/path checks and an inline source/API/spec coverage review. Record actual results in the PR; the implementation ledger above remains unfilled.
+For the original documentation-only draft, `just fmt`, `just check`, `git diff --check`, local link/path checks and inline source/API/spec review passed. The Task 1 record above covers the subsequent approved implementation batch. The Stage 5 acceptance ledger remains unfilled until conversion is integrated; passing boundary tests do not close it.
 
-## Decisions requiring plan review
+## Reviewed decisions (approved 2026-10-30)
 
-1. **Final source rehash:** D7 preserves the required check under the registry lock but can exceed its usual short critical section. Review that tradeoff before implementation; changing the check's strength requires a design amendment.
-2. **Conservative privacy freshness:** D5 arms equal as well as conflicting local values and does not decode the source manifest. Review this conservative protection policy and its consequence that release waits for a strictly newer matching remote snapshot.
-3. **Pending retry default:** the Java default means a source without an explicit false retry flag is refused even with an empty cache. This follows the approved no-pending-work boundary; confirm the guide makes the limitation clear without suggesting source mutation.
-4. **Exhaustion and unknown keys:** D6 preserves exhausted counters and absent key forms instead of adding an unapproved minimum headroom or inventing keys. Confirm that local import success remains distinct from a later connected operation's ability to replenish/sync.
+1. **Final source rehash:** D7 preserves the required check under the registry lock, accepting a potentially long critical section. Changing the check's strength requires a design amendment.
+2. **Conservative privacy freshness:** D5 arms equal as well as conflicting local values and does not decode the source manifest. Release waits for a strictly newer matching remote snapshot.
+3. **Pending retry default:** the Java default means a source without an explicit false retry flag is refused even with an empty cache. The guide must explain this limitation without suggesting source mutation.
+4. **Exhaustion and unknown keys:** D6 preserves exhausted counters and absent key forms without requiring additional headroom or inventing keys. Local import success remains distinct from a later connected operation's ability to replenish/sync.
 
-These are review points for the concrete plan, not permission to relax acceptance. No source account, server credentials or phone session is needed to implement Stage 5 as specified. Stage 6 still requires a separately arranged dedicated stopped source account, peer and phone observation.
+These decisions do not relax acceptance or authorize execution beyond Task 1. No source account, server credentials or phone session is needed to implement Stage 5 as specified. Stage 6 still requires a separately arranged dedicated stopped source account, peer and phone observation.
