@@ -552,6 +552,12 @@ appears on the phone.
         [Verification](docs/account-import-publication.md);
         [completed implementation plan](docs/superpowers/plans/2026-10-25-account-import-publication.md).
   - [ ] Stage 5: offline converter, app/CLI/output and user guide; next prerequisite.
+        [Reviewed implementation plan](docs/superpowers/plans/2026-10-30-account-import-converter.md),
+        decisions and Task 1 execution approved 2026-10-30. Task 1 is complete: backend-neutral
+        import types/errors, injected offline app use case and backend refusal entry points;
+        native race, pure-Go and untagged no-cgo suites pass. Snapshot validation, conversion,
+        checked publication, command/output and guide remain open; no usable importer or live
+        acceptance is claimed. Task 2 is next, pending batch approval.
 - [ ] Test fixtures and failure recovery; document limitations; verify live send/receive.
 
 **Done when:** an imported account sends and receives without re-linking.
