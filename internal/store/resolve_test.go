@@ -61,7 +61,7 @@ func TestOpenDirTilde(t *testing.T) {
 	}
 }
 
-func TestOpenDirRelative(t *testing.T) { //nolint:paralleltest // changes the working directory
+func TestOpenDirRelative(t *testing.T) {
 	wd := t.TempDir()
 	t.Chdir(wd)
 

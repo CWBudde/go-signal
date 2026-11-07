@@ -552,6 +552,15 @@ appears on the phone.
         [Verification](docs/account-import-publication.md);
         [completed implementation plan](docs/superpowers/plans/2026-10-25-account-import-publication.md).
   - [ ] Stage 5: offline converter, app/CLI/output and user guide; next prerequisite.
+        [Reviewed implementation plan](docs/superpowers/plans/2026-10-30-account-import-converter.md),
+        decisions and Task 1 execution approved 2026-10-30; Task 2 approved 2026-11-07.
+        Tasks 1–2 are complete: backend-neutral import types/errors, injected offline app use
+        case, backend refusal entry points and a bounded, nonmutating stopped-source reader.
+        Strict JSON/selection, descriptor/hash revalidation, WAL/SHM copies, path and physical
+        alias checks, cancellation and rooted cleanup pass native race and pure-Go tests;
+        full native/pure-Go/no-cgo checks pass. SQL validation, conversion, checked publication,
+        command/output and guide remain open; no usable importer or live acceptance is claimed.
+        Task 3 is next, pending batch approval.
 - [ ] Test fixtures and failure recovery; document limitations; verify live send/receive.
 
 **Done when:** an imported account sends and receives without re-linking.

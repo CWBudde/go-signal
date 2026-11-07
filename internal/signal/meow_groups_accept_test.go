@@ -226,17 +226,7 @@ func TestGroupAcceptFailures(t *testing.T) {
 				t.Fatal(got, err)
 			}
 
-			patches, fetches := 0, 0
-
-			for _, call := range harness.calls {
-				if call == "patch" {
-					patches++
-				}
-
-				if call == "fetch" {
-					fetches++
-				}
-			}
+			patches, fetches := acceptCallCounts(harness.calls)
 
 			if patches != testCase.patches || fetches != testCase.fetches || harness.calls[len(harness.calls)-1] != "invalidate" {
 				t.Fatal(harness.calls)
@@ -251,6 +241,21 @@ func TestGroupAcceptFailures(t *testing.T) {
 			}
 		})
 	}
+}
+
+func acceptCallCounts(calls []string) (int, int) {
+	patches, fetches := 0, 0
+
+	for _, call := range calls {
+		switch call {
+		case "patch":
+			patches++
+		case "fetch":
+			fetches++
+		}
+	}
+
+	return patches, fetches
 }
 
 func TestGroupAcceptStoredKeyBinding(t *testing.T) {

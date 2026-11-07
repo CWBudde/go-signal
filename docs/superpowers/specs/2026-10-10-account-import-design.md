@@ -8,6 +8,10 @@ Stage 2b completed on 2026-10-24: [verification](../../account-import-storage-ke
 Stage 3 completed on 2026-10-24: [verification](../../account-import-privacy.md).
 Stage 4 completed on 2026-10-25: [verification](../../account-import-publication.md).
 Stage 5 is the next prerequisite.
+Its [reviewed implementation plan](../plans/2026-10-30-account-import-converter.md) records
+the user-approved decisions and Task 1 completion on 2026-10-30: offline types, app boundary
+and backend refusal entry points. Execution of Tasks 2–8 needs separate batch approval;
+Stage 5 remains open and no usable converter or command is claimed.
 The [format mapping](../../account-import.md) is the source contract; this document
 specifies the runtime changes needed to implement it. The Stage 1 record establishes synthetic offline Java-record interoperability for its
 tested matrix; production conversion and live account acceptance remain open.

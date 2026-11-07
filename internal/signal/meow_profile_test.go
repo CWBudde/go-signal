@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -45,6 +44,7 @@ const (
 	profileAcceptedBody     = "accepted-body"
 	profileCachePersist     = "cache-persist"
 	profileVerificationRead = "verification-read"
+	profileReadyPath        = "/profile-cancellation-ready"
 )
 
 func TestUpdateOwnProfileOnce(t *testing.T) { //nolint:cyclop,funlen,gocognit,gocyclo,maintidx // failure matrix
@@ -483,8 +483,8 @@ func TestProfileRefreshCancellationLifecycle(t *testing.T) { //nolint:funlen // 
 		<-interrupted
 
 		select {
-		case <-returned:
-			t.Fatal("returned while callback running")
+		case err := <-returned:
+			t.Fatalf("returned while callback running: %v", err)
 		default:
 		}
 
@@ -637,32 +637,10 @@ func TestProfileNotificationCancellation(t *testing.T) {
 	}
 }
 
-// pausedProfileErr models a goroutine preempted after reading a nil context error,
-// immediately before pushOutgoing selects between cancellation and a ready writer.
-type pausedProfileErr struct {
-	context.Context //nolint:containedctx // implements a context decorator for a precise scheduling barrier
-
-	checked chan struct{}
-	release chan struct{}
-	first   atomic.Bool
-}
-
-func (ctx *pausedProfileErr) Err() error {
-	err := ctx.Context.Err()
-	if ctx.first.CompareAndSwap(false, true) {
-		close(ctx.checked)
-		<-ctx.release
-	}
-
-	return err //nolint:wrapcheck // context.Err must preserve the exact context sentinel
-}
-
-func newProfileCancellationSocket(
-	t *testing.T, received chan<- string,
-) (*web.SignalWebsocket, <-chan struct{}) {
+func profileCancellationHandler(t *testing.T, received chan<- string) http.HandlerFunc {
 	t.Helper()
 
-	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+	return func(writer http.ResponseWriter, request *http.Request) {
 		conn, err := websocket.Accept(writer, request, nil)
 		if err != nil {
 			t.Error(err)
@@ -678,10 +656,29 @@ func newProfileCancellationSocket(
 				return
 			}
 
-			received <- message.GetRequest().GetPath()
+			path := message.GetRequest().GetPath()
+			if path == profileReadyPath {
+				err = wspb.Write(request.Context(), conn,
+					web.CreateWSResponse(request.Context(), message.GetRequest().GetId(), http.StatusOK))
+				if err != nil {
+					return
+				}
+
+				continue
+			}
+
+			received <- path
 			// Deliberately withhold the response; cancellation must interrupt the read.
 		}
-	}))
+	}
+}
+
+func newProfileCancellationSocket(
+	t *testing.T, received chan<- string,
+) (*web.SignalWebsocket, <-chan struct{}) {
+	t.Helper()
+
+	server := httptest.NewServer(profileCancellationHandler(t, received))
 	t.Cleanup(server.Close)
 
 	localURL, err := url.Parse(server.URL)
@@ -715,7 +712,23 @@ func newProfileCancellationSocket(
 	t.Cleanup(func() { cancelSocket(); _ = socket.Close(); <-drained })
 	waitProfileSocket(t, connected)
 
+	// Connected is emitted before the reconnect callback and writer are installed.
+	// An answered request proves both are ready before the first cancellation.
+	readyProfileSocket(t, socket)
+
 	return socket, connected
+}
+
+func readyProfileSocket(t *testing.T, socket *web.SignalWebsocket) {
+	t.Helper()
+
+	readyCtx, cancelReady := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancelReady()
+
+	response, err := socket.SendRequest(readyCtx, http.MethodGet, profileReadyPath, nil, nil)
+	if err != nil || response.GetStatus() != http.StatusOK {
+		t.Fatalf("websocket readiness: response=%v error=%v", response, err)
+	}
 }
 
 func waitProfileSocket(t *testing.T, connected <-chan struct{}) {
@@ -728,78 +741,102 @@ func waitProfileSocket(t *testing.T, connected <-chan struct{}) {
 	}
 }
 
-//nolint:cyclop,contextcheck,funlen // actual transport and an intentional context decorator
+//nolint:cyclop,funlen // Real transport with explicit operation, interruption and cleanup barriers.
 func TestProfileCancellationInterruptsLateWebsocketRequest(t *testing.T) {
 	received := make(chan string, 64)
 	socket, connected := newProfileCancellationSocket(t, received)
-	completed := make(map[string]bool)
 
-	for attempt := range 64 {
-		ctx, cancel := context.WithCancel(t.Context())
-		late := &pausedProfileErr{Context: ctx, checked: make(chan struct{}), release: make(chan struct{})}
-		firstInterrupt := make(chan struct{}, 1)
-		finished := make(chan error, 1)
-		path := "/late-profile/" + strconv.Itoa(attempt)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
 
-		go func() {
-			finished <- signal.ProfileFollowUpWithCancel(ctx, func() {
-				socket.ForceReconnect()
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	firstInterrupt := make(chan struct{})
+	allowInterrupts := make(chan struct{})
+	releaseOperation := sync.OnceFunc(func() { close(release) })
+	releaseInterrupts := sync.OnceFunc(func() { close(allowInterrupts) })
+	finished := make(chan error, 1)
+	done := make(chan struct{})
 
-				select {
-				case firstInterrupt <- struct{}{}:
-				default:
-				}
-			}, func() error {
-				_, err := socket.SendRequest(late, http.MethodGet, path, nil, nil)
-				return fmt.Errorf("late websocket request: %w", err)
-			})
-		}()
+	var interrupts atomic.Int32
 
-		<-late.checked
-		cancel()
-		<-firstInterrupt
-		waitProfileSocket(t, connected)
-		close(late.release)
+	t.Cleanup(func() {
+		releaseOperation()
+		releaseInterrupts()
+
+		_ = socket.Close()
 
 		select {
-		case err := <-finished:
-			if !errors.Is(err, context.Canceled) {
-				t.Fatalf("cancellation=%v", err)
-			}
-			// Completion can race server observation. Retain proof that any delayed
-			// observation belongs to an attempt that has already returned canceled.
-			completed[path] = true
+		case <-done:
+		case <-time.After(3 * time.Second):
+			t.Error("profile operation did not finish during cleanup")
+		}
+	})
 
-			select {
-			case actual := <-received:
-				if !completed[actual] {
-					t.Fatalf("observation without canceled completion: %q", actual)
-				}
+	go func() {
+		defer close(done)
+
+		finished <- signal.ProfileFollowUpWithCancel(ctx, func() {
+			if interrupts.Add(1) == 1 {
+				socket.ForceReconnect()
+				close(firstInterrupt)
 
 				return
-			default:
-				continue
-			}
-		case actual := <-received:
-			if actual != path && !completed[actual] {
-				t.Fatalf("received unexpected late path %q", actual)
-			}
-		}
-
-		select {
-		case err := <-finished:
-			if !errors.Is(err, context.Canceled) {
-				t.Fatalf("late request cancellation=%v", err)
 			}
 
-			return
-		case <-time.After(time.Second):
-			// Release the one-shot implementation before failing so no request is leaked.
+			<-allowInterrupts
 			socket.ForceReconnect()
-			<-finished
-			t.Fatal("late websocket request survived the first cancellation interrupt")
-		}
+		}, func() error {
+			close(entered)
+			<-release
+			// Model a dependency request that ignores caller cancellation. It must
+			// enqueue after the first reconnect, so only repeated interrupts end it.
+			_, err := socket.SendRequest(context.WithoutCancel(ctx), http.MethodGet, "/late-profile", nil, nil)
+
+			return fmt.Errorf("late websocket request: %w", err)
+		})
+	}()
+
+	select {
+	case <-entered:
+	case <-time.After(3 * time.Second):
+		t.Fatal("profile operation never started")
 	}
 
-	t.Fatal("did not observe the dependency's ready-writer selection")
+	cancel()
+
+	select {
+	case <-firstInterrupt:
+	case <-time.After(3 * time.Second):
+		t.Fatal("cancellation did not interrupt the socket")
+	}
+
+	waitProfileSocket(t, connected)
+	releaseOperation()
+
+	select {
+	case actual := <-received:
+		if actual != "/late-profile" {
+			t.Fatalf("unexpected request path %q", actual)
+		}
+	case err := <-finished:
+		t.Fatalf("operation ended before repeated interruption: %v", err)
+	case <-time.After(3 * time.Second):
+		t.Fatal("late request was not observed on the reconnected socket")
+	}
+
+	releaseInterrupts()
+
+	select {
+	case err := <-finished:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("late request cancellation=%v", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("late websocket request survived repeated cancellation interrupts")
+	}
+
+	if interrupts.Load() < 2 {
+		t.Fatal("late request completed without repeated interruption")
+	}
 }
