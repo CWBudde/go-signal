@@ -159,16 +159,16 @@ func TestEventsSlowWriterDeadlineAndReaderIsolation(t *testing.T) {
 
 	req.Header.Set(authorizationHeader, "Bearer "+testToken)
 
-	completed := make(chan error, 1)
+	completed := make(chan struct{})
 
 	go func() {
-		resp, requestErr := http.DefaultClient.Do(req)
+		resp, _ := http.DefaultClient.Do(req)
 		if resp != nil {
 			_, _ = io.Copy(io.Discard, resp.Body)
 			_ = resp.Body.Close()
 		}
 
-		completed <- requestErr
+		close(completed)
 	}()
 
 	select {

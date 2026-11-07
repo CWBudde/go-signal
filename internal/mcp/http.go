@@ -78,7 +78,7 @@ func ServeHTTP(
 			_ = httpServer.Close()
 		}
 
-		<-served
+		<-served //nolint:errcheck // Cancellation waits for completion and intentionally ignores the serve error.
 
 		return nil
 	})

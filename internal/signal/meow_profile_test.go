@@ -483,8 +483,8 @@ func TestProfileRefreshCancellationLifecycle(t *testing.T) { //nolint:funlen // 
 		<-interrupted
 
 		select {
-		case <-returned:
-			t.Fatal("returned while callback running")
+		case err := <-returned:
+			t.Fatalf("returned while callback running: %v", err)
 		default:
 		}
 
@@ -796,8 +796,9 @@ func TestProfileCancellationInterruptsLateWebsocketRequest(t *testing.T) {
 		case <-time.After(time.Second):
 			// Release the one-shot implementation before failing so no request is leaked.
 			socket.ForceReconnect()
-			<-finished
-			t.Fatal("late websocket request survived the first cancellation interrupt")
+
+			err := <-finished
+			t.Fatalf("late websocket request survived the first cancellation interrupt: %v", err)
 		}
 	}
 
