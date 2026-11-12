@@ -553,14 +553,16 @@ appears on the phone.
         [completed implementation plan](docs/superpowers/plans/2026-10-25-account-import-publication.md).
   - [ ] Stage 5: offline converter, app/CLI/output and user guide; next prerequisite.
         [Reviewed implementation plan](docs/superpowers/plans/2026-10-30-account-import-converter.md),
-        decisions and Task 1 execution approved 2026-10-30; Task 2 approved 2026-11-07.
-        Tasks 1–2 are complete: backend-neutral import types/errors, injected offline app use
-        case, backend refusal entry points and a bounded, nonmutating stopped-source reader.
-        Strict JSON/selection, descriptor/hash revalidation, WAL/SHM copies, path and physical
-        alias checks, cancellation and rooted cleanup pass native race and pure-Go tests;
-        full native/pure-Go/no-cgo checks pass. SQL validation, conversion, checked publication,
-        command/output and guide remain open; no usable importer or live acceptance is claimed.
-        Task 3 is next, pending batch approval.
+        decisions and Task 1 execution approved 2026-10-30; Task 2 approved 2026-11-07;
+        Task 3 approved 2026-11-10 and completed 2026-11-12.
+        Tasks 1–3 are complete: offline app/backend boundaries, bounded nonmutating snapshots
+        and private-copy SQLite schema/type/integrity, configuration and supported-state validation.
+        Strict JSON/selection, source/alias revalidation, bounded typed SQL rows, pending-work
+        refusal and WAL-only reads pass native race and pure-Go tests; full checks pass with
+        CI golangci-lint 2.15.0 (0 issues). Both source send-log tables must be empty;
+        outbound-sharing history remains excluded. Fresh Task 3 review found no issues.
+        Conversion, checked publication, command/output and guide remain open;
+        no usable importer or live acceptance is claimed. Task 4 is next, pending batch approval.
 - [ ] Test fixtures and failure recovery; document limitations; verify live send/receive.
 
 **Done when:** an imported account sends and receives without re-linking.
