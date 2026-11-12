@@ -3,6 +3,16 @@
 package accountimport
 
 const (
+	sourceRecipientRows = 100_000
+	sourceGroupRows     = 10_000
+	sourceBlobBytes     = 1 << 20
+	sourceSchemaBytes   = 64 << 10
+
+	sourceProtocolRows     = 1_000_000
+	sourceUUIDBytes        = 16
+	sourceProfileKeyBytes  = 32
+	sourceGroupIDBytes     = 32
+	sourceGroupKeyBytes    = 32
 	snapshotJSONBytes      = 4 << 20
 	snapshotSQLBytes       = 4 << 30
 	snapshotDirectoryMode  = 0o700
@@ -14,12 +24,17 @@ const (
 )
 
 type snapshotLimits struct {
-	jsonBytes, sqlBytes int64
-	pathEntries         int
+	jsonBytes, sqlBytes                                            int64
+	pathEntries                                                    int
+	protocolRows, recipientRows, groupRows, blobBytes, schemaBytes int64
 }
 
 func defaultSnapshotLimits() snapshotLimits {
-	return snapshotLimits{jsonBytes: snapshotJSONBytes, sqlBytes: snapshotSQLBytes, pathEntries: snapshotPathEntries}
+	return snapshotLimits{
+		jsonBytes: snapshotJSONBytes, sqlBytes: snapshotSQLBytes, pathEntries: snapshotPathEntries,
+		protocolRows: sourceProtocolRows, recipientRows: sourceRecipientRows, groupRows: sourceGroupRows,
+		blobBytes: sourceBlobBytes, schemaBytes: sourceSchemaBytes,
+	}
 }
 
 type snapshotOptions struct {
