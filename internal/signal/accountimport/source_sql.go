@@ -118,6 +118,7 @@ func (source *sourceDB) validate(ctx context.Context, snap *snapshot) error {
 		func(ctx context.Context) error { return source.validatePending(ctx, snap) },
 		source.validateLimits, source.validateIntegrity, source.readConfiguration,
 		func(ctx context.Context) error { return source.validateRecords(ctx, snap) },
+		snap.revalidateCache,
 	}
 	for _, validate := range checks {
 		err := ctx.Err()
@@ -137,6 +138,13 @@ func (source *sourceDB) validate(ctx context.Context, snap *snapshot) error {
 }
 
 func (source *sourceDB) validatePending(ctx context.Context, snap *snapshot) error {
+	// The cache is outside the private SQL copy. Its recorded listing must still
+	// describe the source before interpreting it as evidence of no pending work.
+	err := snap.revalidateCache(ctx)
+	if err != nil {
+		return err
+	}
+
 	for _, entry := range snap.cache {
 		if entry.stat.Mode&unix.S_IFMT != unix.S_IFDIR {
 			return importError("pending cache", signal.ErrUnsupportedAccountImport)
